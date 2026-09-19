@@ -1,667 +1,1319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdBattle</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+<title>AdBattle</title>
 
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f4f5f7;
-      color: #1d1d1f;
-    }
+<style>
+* {
+    box-sizing: border-box;
+}
 
-    /* HEADER */
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f5f5f7;
+    color: #202124;
+}
 
-    header {
-      background: white;
-      border-bottom: 1px solid #ddd;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
+/* HEADER */
+
+header {
+    background: white;
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.topbar {
+    width: min(1200px, 94%);
+    margin: auto;
+    padding: 22px 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 25px;
+}
+
+.logo {
+    font-size: 1.8rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.logo span {
+    color: #654cff;
+}
+
+nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+nav button {
+    border: 0;
+    background: transparent;
+    padding: 11px 15px;
+    border-radius: 9px;
+
+    font-size: .95rem;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+nav button:hover {
+    background: #f1f1f3;
+}
+
+nav button.active {
+    background: #202124;
+    color: white;
+}
+
+nav .post-button {
+    background: #654cff;
+    color: white;
+    padding-left: 19px;
+    padding-right: 19px;
+}
+
+nav .post-button:hover {
+    background: #543bea;
+}
+
+/* HERO */
+
+.hero {
+    text-align: center;
+    padding: 55px 20px 35px;
+}
+
+.hero h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 5vw, 3.7rem);
+}
+
+.hero p {
+    max-width: 600px;
+    margin: 14px auto 0;
+
+    color: #6b6b6b;
+    font-size: 1.08rem;
+    line-height: 1.5;
+}
+
+/* GALLERY */
+
+.gallery {
+    width: min(1100px, 92%);
+    margin: auto;
+
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+
+    gap: 25px;
+    padding-bottom: 70px;
+}
+
+.card {
+    background: white;
+    border-radius: 17px;
+    overflow: hidden;
+
+    box-shadow: 0 3px 15px rgba(0,0,0,.07);
+
+    transition:
+        transform .2s ease,
+        box-shadow .2s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,.11);
+}
+
+.image-container {
+    position: relative;
+}
+
+.card img {
+    display: block;
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+}
+
+.rank {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+
+    background: rgba(0,0,0,.78);
+    color: white;
+
+    padding: 7px 11px;
+    border-radius: 20px;
+
+    font-size: .9rem;
+    font-weight: bold;
+}
+
+.caption {
+    padding: 19px;
+}
+
+.caption h2 {
+    margin: 0 0 8px;
+    font-size: 1.22rem;
+}
+
+.caption p {
+    margin: 0 0 18px;
+    color: #666;
+    line-height: 1.45;
+}
+
+/* STATS */
+
+.stats {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+
+    font-size: .9rem;
+}
+
+.like-count {
+    color: #666;
+}
+
+.money {
+    font-weight: bold;
+}
+
+/* ACTION BUTTONS */
+
+.action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+
+    margin-top: 15px;
+}
+
+.like-button,
+.support-button {
+    padding: 12px;
+
+    border-radius: 9px;
+
+    font-size: .95rem;
+    font-weight: 700;
+
+    cursor: pointer;
+}
+
+.like-button {
+    border: 1px solid #ccc;
+    background: white;
+    color: #222;
+}
+
+.like-button:hover {
+    background: #f5f5f5;
+}
+
+.like-button.liked {
+    background: #202124;
+    border-color: #202124;
+    color: white;
+}
+
+.support-button {
+    border: none;
+    background: #654cff;
+    color: white;
+}
+
+.support-button:hover {
+    background: #543bea;
+}
+
+/* SUPPORT AMOUNT BOX */
+
+.support-box {
+    margin-top: 14px;
+    padding: 17px;
+
+    background: #f6f6f8;
+    border-radius: 11px;
+}
+
+.support-question {
+    font-weight: 700;
+    margin-bottom: 11px;
+}
+
+.amount-entry {
+    display: flex;
+    align-items: center;
+
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 9px;
+
+    padding: 0 13px;
+    margin-bottom: 10px;
+}
+
+.amount-entry:focus-within {
+    border-color: #654cff;
+}
+
+.amount-entry span {
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+.amount-entry input {
+    width: 100%;
+
+    border: none;
+    outline: none;
+
+    padding: 12px 8px;
+
+    font-size: 1.2rem;
+    font-weight: bold;
+
+    background: transparent;
+}
+
+.confirm-support {
+    width: 100%;
+    padding: 12px;
+
+    border: none;
+    border-radius: 9px;
+
+    background: #654cff;
+    color: white;
+
+    font-weight: bold;
+    font-size: .95rem;
+
+    cursor: pointer;
+}
+
+.cancel-support {
+    width: 100%;
+    padding: 9px;
+
+    margin-top: 3px;
+
+    border: none;
+    background: transparent;
+
+    color: #777;
+
+    cursor: pointer;
+}
+
+/* POST AD */
+
+.submit-area {
+    display: none;
+
+    width: min(620px, 92%);
+    margin: 10px auto 70px;
+
+    background: white;
+
+    padding: 30px;
+    border-radius: 17px;
+
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+}
+
+.submit-area label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.submit-area input,
+.submit-area textarea {
+    width: 100%;
+
+    border: 1px solid #ccc;
+    border-radius: 9px;
+
+    padding: 13px;
+
+    margin-bottom: 18px;
+
+    font: inherit;
+}
+
+.submit-area textarea {
+    height: 110px;
+    resize: vertical;
+}
+
+.publish-button {
+    width: 100%;
+
+    padding: 13px;
+
+    border: none;
+    border-radius: 9px;
+
+    background: #654cff;
+    color: white;
+
+    font-size: 1rem;
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+/* PROFILE */
+
+.profile {
+    display: none;
+
+    width: min(1100px, 92%);
+    margin: 0 auto 70px;
+}
+
+.profile-header {
+    background: white;
+    padding: 25px;
+
+    border-radius: 16px;
+
+    box-shadow: 0 3px 15px rgba(0,0,0,.06);
+
+    margin-bottom: 25px;
+}
+
+.profile-header h2 {
+    margin: 0 0 6px;
+}
+
+.username {
+    color: #777;
+}
+
+.profile-tabs {
+    display: flex;
+    gap: 8px;
+
+    margin-top: 22px;
+    flex-wrap: wrap;
+}
+
+.profile-tabs button {
+    padding: 10px 18px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #eee;
+
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.profile-tabs button.active {
+    background: #202124;
+    color: white;
+}
+
+.profile-content {
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fit, minmax(280px, 1fr));
+
+    gap: 25px;
+}
+
+.empty-message {
+    grid-column: 1 / -1;
+
+    background: white;
+
+    padding: 45px 20px;
+
+    border-radius: 15px;
+
+    text-align: center;
+    color: #777;
+}
+
+/* MOBILE */
+
+@media (max-width: 760px) {
 
     .topbar {
-      width: min(1200px, 94%);
-      margin: auto;
-      height: 70px;
-
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-    }
-
-    .logo {
-      font-size: 1.7rem;
-      font-weight: 800;
-    }
-
-    .logo span {
-      color: #6c4cff;
+        flex-direction: column;
+        padding: 17px 0;
     }
 
     nav {
-      display: flex;
-      gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
     nav button {
-      border: 0;
-      background: transparent;
-      padding: 11px 16px;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      cursor: pointer;
+        padding: 9px 11px;
+        font-size: .88rem;
     }
-
-    nav button:hover {
-      background: #eee;
-    }
-
-    nav button.active {
-      background: #1d1d1f;
-      color: white;
-    }
-
-    .post-button {
-      background: #6c4cff !important;
-      color: white;
-    }
-
-    /* HERO */
 
     .hero {
-      text-align: center;
-      padding: 55px 20px 35px;
+        padding-top: 38px;
     }
 
-    .hero h1 {
-      margin: 0;
-      font-size: clamp(2.2rem, 6vw, 4rem);
-    }
-
-    .hero p {
-      color: #666;
-      font-size: 1.1rem;
-      margin: 14px auto 0;
-      max-width: 600px;
-      line-height: 1.5;
-    }
-
-    /* GALLERY */
-
-    .gallery {
-      width: min(1100px, 92%);
-      margin: auto;
-
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 25px;
-
-      padding-bottom: 70px;
-    }
-
-    .card {
-      background: white;
-      border-radius: 18px;
-      overflow: hidden;
-
-      box-shadow: 0 4px 16px rgba(0,0,0,.08);
-
-      transition:
-        transform .2s ease,
-        box-shadow .2s ease;
-    }
-
-    .card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 10px 25px rgba(0,0,0,.12);
-    }
-
-    .rank {
-      position: absolute;
-      margin: 12px;
-
-      background: rgba(0,0,0,.8);
-      color: white;
-
-      padding: 7px 11px;
-      border-radius: 20px;
-
-      font-weight: bold;
-    }
-
-    .image-container {
-      position: relative;
-    }
-
-    .card img {
-      width: 100%;
-      height: 300px;
-      object-fit: cover;
-      display: block;
-    }
-
-    .caption {
-      padding: 18px;
-    }
-
-    .caption h2 {
-      margin: 0 0 7px;
-      font-size: 1.25rem;
-    }
-
-    .caption p {
-      color: #666;
-      line-height: 1.45;
-      margin: 0 0 18px;
-    }
-
-    /* SUPPORT AREA */
-
-    .support-info {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-
-      border-top: 1px solid #eee;
-      padding-top: 15px;
-    }
-
-    .money {
-      font-weight: bold;
-      font-size: 1.05rem;
-    }
-
-    .likes {
-      color: #777;
-      font-size: .9rem;
-    }
-
-    .support-button {
-      width: 100%;
-      margin-top: 15px;
-
-      padding: 12px;
-
-      border: none;
-      border-radius: 10px;
-
-      background: #6c4cff;
-      color: white;
-
-      font-size: 1rem;
-      font-weight: bold;
-
-      cursor: pointer;
-    }
-
-    .support-button:hover {
-      opacity: .9;
-    }
-
-    .support-button.liked {
-      background: #e83e6f;
-    }
-
-    /* POST FORM */
-
-    .submit-area {
-      display: none;
-
-      width: min(600px, 92%);
-      margin: 20px auto 70px;
-
-      background: white;
-      padding: 30px;
-
-      border-radius: 18px;
-
-      box-shadow: 0 5px 20px rgba(0,0,0,.08);
-    }
-
-    .submit-area h2 {
-      margin-top: 0;
-    }
-
-    input,
-    textarea {
-      width: 100%;
-      padding: 13px;
-
-      border: 1px solid #ccc;
-      border-radius: 9px;
-
-      margin: 7px 0 17px;
-
-      font: inherit;
-    }
-
-    textarea {
-      height: 100px;
-      resize: vertical;
-    }
-
-    .submit-area button {
-      width: 100%;
-      padding: 13px;
-
-      border: none;
-      border-radius: 10px;
-
-      background: #1d1d1f;
-      color: white;
-
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    @media (max-width: 650px) {
-      .topbar {
-        height: auto;
-        padding: 15px 0;
+    .stats {
         flex-direction: column;
-      }
-
-      nav {
-        width: 100%;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
     }
-  </style>
+}
+</style>
 </head>
+
 
 <body>
 
 <header>
-  <div class="topbar">
 
-    <div class="logo">
-      Ad<span>Battle</span>
+<div class="topbar">
+
+    <div class="logo" onclick="showSupported()">
+        Ad<span>Battle</span>
     </div>
 
     <nav>
-      <button
-        id="supportedNav"
-        class="active"
-        onclick="showSupported()"
-      >
-        💰 Most Supported
-      </button>
 
-      <button
-        id="likesNav"
-        onclick="showLikes()"
-      >
-        ❤️ My Likes
-      </button>
+        <button
+            id="supportedNav"
+            class="active"
+            onclick="showSupported()"
+        >
+            ⚡ Most Supported
+        </button>
 
-      <button
-        class="post-button"
-        onclick="showPost()"
-      >
-        + Post an Ad
-      </button>
+        <button
+            id="likedNav"
+            onclick="showMostLiked()"
+        >
+            ♡ Most Liked
+        </button>
+
+        <button
+            class="post-button"
+            onclick="showPost()"
+        >
+            + POST AN AD
+        </button>
+
+        <button
+            id="profileNav"
+            onclick="showProfile()"
+        >
+            👤 Profile
+        </button>
+
     </nav>
 
-  </div>
+</div>
+
 </header>
 
 
-<section class="hero" id="hero">
+<section class="hero">
 
-  <h1 id="pageTitle">
-    The Internet's Ad Battle
-  </h1>
+    <h1 id="pageTitle">
+        The Internet's Ad Battle
+    </h1>
 
-  <p id="pageDescription">
-    Discover ads people actually like.
-    Support your favorites and see which ads rise to the top.
-  </p>
+    <p id="pageDescription">
+        Like the ads you enjoy.
+        Support the ones you really want people to see.
+    </p>
 
 </section>
 
 
-<main class="gallery" id="gallery">
-
-  <!-- AD 1 -->
-
-  <article
-    class="card"
-    data-liked="false"
-    data-support="482.75"
-  >
-
-    <div class="image-container">
-      <div class="rank">#1</div>
-
-      <img
-        src="https://picsum.photos/600/500?random=11"
-        alt="Advertisement"
-      >
-    </div>
-
-    <div class="caption">
-
-      <h2>Dogs Deserve Weekends Too</h2>
-
-      <p>
-        Scientists still haven't explained why
-        Monday applies to dogs.
-      </p>
-
-      <div class="support-info">
-        <div>
-          <div class="money">$482.75 supported</div>
-          <div class="likes">1,931 supporters</div>
-        </div>
-      </div>
-
-      <button
-        class="support-button"
-        onclick="supportAd(this)"
-      >
-        ❤️ Support for $0.25
-      </button>
-
-    </div>
-  </article>
+<main class="gallery" id="gallery"></main>
 
 
-  <!-- AD 2 -->
-
-  <article
-    class="card"
-    data-liked="false"
-    data-support="317.50"
-  >
-
-    <div class="image-container">
-      <div class="rank">#2</div>
-
-      <img
-        src="https://picsum.photos/600/500?random=22"
-        alt="Advertisement"
-      >
-    </div>
-
-    <div class="caption">
-
-      <h2>Absolutely Nothing For Sale</h2>
-
-      <p>
-        This advertisement has successfully
-        advertised absolutely nothing.
-      </p>
-
-      <div class="support-info">
-        <div>
-          <div class="money">$317.50 supported</div>
-          <div class="likes">1,270 supporters</div>
-        </div>
-      </div>
-
-      <button
-        class="support-button"
-        onclick="supportAd(this)"
-      >
-        ❤️ Support for $0.25
-      </button>
-
-    </div>
-  </article>
-
-
-  <!-- AD 3 -->
-
-  <article
-    class="card"
-    data-liked="false"
-    data-support="204.25"
-  >
-
-    <div class="image-container">
-      <div class="rank">#3</div>
-
-      <img
-        src="https://picsum.photos/600/500?random=33"
-        alt="Advertisement"
-      >
-    </div>
-
-    <div class="caption">
-
-      <h2>Please Look at This Rock</h2>
-
-      <p>
-        It's a pretty good rock.
-        That's the entire advertisement.
-      </p>
-
-      <div class="support-info">
-        <div>
-          <div class="money">$204.25 supported</div>
-          <div class="likes">817 supporters</div>
-        </div>
-      </div>
-
-      <button
-        class="support-button"
-        onclick="supportAd(this)"
-      >
-        ❤️ Support for $0.25
-      </button>
-
-    </div>
-  </article>
-
-
-  <!-- AD 4 -->
-
-  <article
-    class="card"
-    data-liked="false"
-    data-support="98.00"
-  >
-
-    <div class="image-container">
-      <div class="rank">#4</div>
-
-      <img
-        src="https://picsum.photos/600/500?random=44"
-        alt="Advertisement"
-      >
-    </div>
-
-    <div class="caption">
-
-      <h2>Your Ad Could Be Here</h2>
-
-      <p>
-        Make something interesting.
-        Let the internet decide whether it deserves attention.
-      </p>
-
-      <div class="support-info">
-        <div>
-          <div class="money">$98.00 supported</div>
-          <div class="likes">392 supporters</div>
-        </div>
-      </div>
-
-      <button
-        class="support-button"
-        onclick="supportAd(this)"
-      >
-        ❤️ Support for $0.25
-      </button>
-
-    </div>
-  </article>
-
-</main>
-
-
-<!-- POST AD -->
+<!-- POST AN AD -->
 
 <section class="submit-area" id="submitArea">
 
-  <h2>Post an Ad</h2>
+    <h2>Post an Ad</h2>
 
-  <label>Ad title</label>
-  <input
-    type="text"
-    placeholder="Give your ad a title"
-  >
+    <label>Title</label>
 
-  <label>Image URL</label>
-  <input
-    type="url"
-    placeholder="https://example.com/image.jpg"
-  >
+    <input
+        id="newTitle"
+        type="text"
+        placeholder="Give your ad a title"
+    >
 
-  <label>Caption</label>
-  <textarea
-    placeholder="What does your ad say?"
-  ></textarea>
+    <label>Image URL</label>
 
-  <button>
-    Continue to Payment →
-  </button>
+    <input
+        id="newImage"
+        type="url"
+        placeholder="https://example.com/image.jpg"
+    >
+
+    <label>Caption</label>
+
+    <textarea
+        id="newCaption"
+        placeholder="What does your ad say?"
+    ></textarea>
+
+    <button
+        class="publish-button"
+        onclick="postAd()"
+    >
+        + Post Ad
+    </button>
+
+</section>
+
+
+<!-- PROFILE -->
+
+<section class="profile" id="profile">
+
+    <div class="profile-header">
+
+        <h2>Profile</h2>
+
+        <div class="username">
+            @username
+        </div>
+
+        <div class="profile-tabs">
+
+            <button
+                id="myAdsTab"
+                class="active"
+                onclick="profileSection('myads')"
+            >
+                My Ads
+            </button>
+
+            <button
+                id="myLikesTab"
+                onclick="profileSection('liked')"
+            >
+                Liked
+            </button>
+
+            <button
+                id="mySupportedTab"
+                onclick="profileSection('supported')"
+            >
+                Supported
+            </button>
+
+        </div>
+
+    </div>
+
+    <div
+        class="profile-content"
+        id="profileContent"
+    ></div>
 
 </section>
 
 
 <script>
 
-  const cards =
-    document.querySelectorAll(".card");
+/* -----------------------------
+   SAMPLE DATABASE
+----------------------------- */
 
-  const gallery =
+let ads = [
+
+{
+    id: 1,
+    title: "Dogs Deserve Weekends Too",
+    caption:
+        "Scientists still haven't explained why Monday applies to dogs.",
+    image:
+        "https://picsum.photos/600/500?random=11",
+
+    likes: 1931,
+    support: 482.75,
+
+    liked: false,
+    userSupport: 0,
+    owner: false
+},
+
+{
+    id: 2,
+    title: "Absolutely Nothing For Sale",
+    caption:
+        "This advertisement has successfully advertised absolutely nothing.",
+    image:
+        "https://picsum.photos/600/500?random=22",
+
+    likes: 1270,
+    support: 317.50,
+
+    liked: false,
+    userSupport: 0,
+    owner: false
+},
+
+{
+    id: 3,
+    title: "Please Look at This Rock",
+    caption:
+        "It's a pretty good rock. That's the entire advertisement.",
+    image:
+        "https://picsum.photos/600/500?random=33",
+
+    likes: 817,
+    support: 204.25,
+
+    liked: false,
+    userSupport: 0,
+    owner: false
+},
+
+{
+    id: 4,
+    title: "The World's Most Average Advertisement",
+    caption:
+        "Not amazing. Not terrible. Just remarkably average.",
+    image:
+        "https://picsum.photos/600/500?random=44",
+
+    likes: 392,
+    support: 98,
+
+    liked: false,
+    userSupport: 0,
+    owner: false
+}
+
+];
+
+
+/* -----------------------------
+   ELEMENTS
+----------------------------- */
+
+const gallery =
     document.getElementById("gallery");
 
-  const submitArea =
+const submitArea =
     document.getElementById("submitArea");
 
-  const title =
+const profile =
+    document.getElementById("profile");
+
+const profileContent =
+    document.getElementById("profileContent");
+
+const pageTitle =
     document.getElementById("pageTitle");
 
-  const description =
+const pageDescription =
     document.getElementById("pageDescription");
 
 
-  function showSupported() {
+/* -----------------------------
+   CREATE AD CARD
+----------------------------- */
 
-    submitArea.style.display = "none";
-    gallery.style.display = "grid";
-
-    title.innerText =
-      "The Internet's Ad Battle";
-
-    description.innerText =
-      "Support the ads you like. The most supported ads rise to the top.";
-
-    cards.forEach(card => {
-      card.style.display = "block";
-    });
-
-    setActive("supportedNav");
-  }
-
-
-  function showLikes() {
-
-    submitArea.style.display = "none";
-    gallery.style.display = "grid";
-
-    title.innerText =
-      "My Likes ❤️";
-
-    description.innerText =
-      "The ads you've chosen to support.";
-
-    cards.forEach(card => {
-
-      if (card.dataset.liked === "true") {
-        card.style.display = "block";
-      }
-      else {
-        card.style.display = "none";
-      }
-
-    });
-
-    setActive("likesNav");
-  }
-
-
-  function showPost() {
-
-    gallery.style.display = "none";
-    submitArea.style.display = "block";
-
-    title.innerText =
-      "Post an Ad";
-
-    description.innerText =
-      "Put something interesting in front of the internet.";
-
-    document
-      .querySelectorAll("nav button")
-      .forEach(button =>
-        button.classList.remove("active")
-      );
-  }
-
-
-  function supportAd(button) {
+function createCard(ad, rank = null) {
 
     const card =
-      button.closest(".card");
+        document.createElement("article");
 
-    if (card.dataset.liked === "true") {
-      return;
+    card.className = "card";
+
+    card.innerHTML = `
+
+        <div class="image-container">
+
+            ${
+                rank
+                ? `<div class="rank">#${rank}</div>`
+                : ""
+            }
+
+            <img
+                src="${ad.image}"
+                alt="${escapeHTML(ad.title)}"
+            >
+
+        </div>
+
+        <div class="caption">
+
+            <h2>
+                ${escapeHTML(ad.title)}
+            </h2>
+
+            <p>
+                ${escapeHTML(ad.caption)}
+            </p>
+
+            <div class="stats">
+
+                <span class="like-count">
+                    ♡ ${ad.likes.toLocaleString()} likes
+                </span>
+
+                <span class="money">
+                    $${ad.support.toFixed(2)} supported
+                </span>
+
+            </div>
+
+            <div class="action-buttons">
+
+                <button
+                    class="like-button
+                    ${ad.liked ? "liked" : ""}"
+                    onclick="toggleLike(${ad.id})"
+                >
+                    ${ad.liked ? "♥ Liked" : "♡ Like"}
+                </button>
+
+                <button
+                    class="support-button"
+                    onclick="openSupport(${ad.id}, this)"
+                >
+                    ⚡ Support
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+    return card;
+}
+
+
+/* -----------------------------
+   MOST SUPPORTED
+----------------------------- */
+
+function showSupported() {
+
+    showGallery();
+
+    pageTitle.innerText =
+        "Most Supported";
+
+    pageDescription.innerText =
+        "The ads people have put the most support behind.";
+
+    setNav("supportedNav");
+
+    const sorted =
+        [...ads].sort(
+            (a,b) => b.support - a.support
+        );
+
+    renderGallery(sorted);
+}
+
+
+/* -----------------------------
+   MOST LIKED
+----------------------------- */
+
+function showMostLiked() {
+
+    showGallery();
+
+    pageTitle.innerText =
+        "Most Liked";
+
+    pageDescription.innerText =
+        "The ads the internet likes most.";
+
+    setNav("likedNav");
+
+    const sorted =
+        [...ads].sort(
+            (a,b) => b.likes - a.likes
+        );
+
+    renderGallery(sorted);
+}
+
+
+/* -----------------------------
+   RENDER GALLERY
+----------------------------- */
+
+function renderGallery(list) {
+
+    gallery.innerHTML = "";
+
+    list.forEach((ad,index) => {
+
+        gallery.appendChild(
+            createCard(ad,index + 1)
+        );
+
+    });
+}
+
+
+/* -----------------------------
+   LIKE
+----------------------------- */
+
+function toggleLike(id) {
+
+    const ad =
+        ads.find(ad => ad.id === id);
+
+    if (!ad) return;
+
+    if (ad.liked) {
+
+        ad.liked = false;
+        ad.likes--;
+
+    } else {
+
+        ad.liked = true;
+        ad.likes++;
+
     }
 
-    card.dataset.liked = "true";
-
-    button.innerText =
-      "❤️ Supported";
-
-    button.classList.add("liked");
-
-    /*
-      Eventually this is where we'll
-      send the user to the payment system.
-    */
-
-  }
+    refreshCurrentView();
+}
 
 
-  function setActive(id) {
+/* -----------------------------
+   SUPPORT
+----------------------------- */
+
+function openSupport(id, button) {
 
     document
-      .querySelectorAll("nav button")
-      .forEach(button =>
-        button.classList.remove("active")
-      );
+        .querySelectorAll(".support-box")
+        .forEach(box => box.remove());
+
+    const box =
+        document.createElement("div");
+
+    box.className = "support-box";
+
+    box.innerHTML = `
+
+        <div class="support-question">
+            How much would you like to support?
+        </div>
+
+        <div class="amount-entry">
+
+            <span>$</span>
+
+            <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="5.00"
+            >
+
+        </div>
+
+        <button class="confirm-support">
+            ⚡ Support
+        </button>
+
+        <button class="cancel-support">
+            Cancel
+        </button>
+    `;
+
+    button
+        .closest(".caption")
+        .appendChild(box);
+
+    const input =
+        box.querySelector("input");
+
+    const confirm =
+        box.querySelector(".confirm-support");
+
+    const cancel =
+        box.querySelector(".cancel-support");
+
+    input.focus();
+
+
+    input.addEventListener(
+        "input",
+        () => {
+
+            const amount =
+                parseFloat(input.value);
+
+            confirm.innerText =
+                amount > 0
+                ? `⚡ Support $${amount.toFixed(2)}`
+                : "⚡ Support";
+        }
+    );
+
+
+    input.addEventListener(
+        "keydown",
+        event => {
+
+            if (event.key === "Enter")
+                confirm.click();
+
+        }
+    );
+
+
+    confirm.onclick = () => {
+
+        const amount =
+            parseFloat(input.value);
+
+        if (!amount || amount <= 0) {
+            input.focus();
+            return;
+        }
+
+        const ad =
+            ads.find(ad => ad.id === id);
+
+        ad.support += amount;
+        ad.userSupport += amount;
+
+        /*
+          DEMO ONLY.
+
+          This does NOT charge money.
+
+          Later this is where Stripe
+          Checkout will be connected.
+        */
+
+        refreshCurrentView();
+    };
+
+
+    cancel.onclick = () =>
+        box.remove();
+}
+
+
+/* -----------------------------
+   POST AN AD
+----------------------------- */
+
+function showPost() {
+
+    gallery.style.display = "none";
+    profile.style.display = "none";
+    submitArea.style.display = "block";
+
+    pageTitle.innerText =
+        "Post an Ad";
+
+    pageDescription.innerText =
+        "Make something worth noticing.";
+
+    setNav(null);
+}
+
+
+function postAd() {
+
+    const title =
+        document
+        .getElementById("newTitle")
+        .value.trim();
+
+    const image =
+        document
+        .getElementById("newImage")
+        .value.trim();
+
+    const caption =
+        document
+        .getElementById("newCaption")
+        .value.trim();
+
+
+    if (!title || !image || !caption) {
+
+        alert(
+            "Please add a title, image and caption."
+        );
+
+        return;
+    }
+
+
+    ads.unshift({
+
+        id: Date.now(),
+
+        title,
+        image,
+        caption,
+
+        likes: 0,
+        support: 0,
+
+        liked: false,
+        userSupport: 0,
+
+        owner: true
+
+    });
+
 
     document
-      .getElementById(id)
-      .classList.add("active");
-  }
+        .getElementById("newTitle")
+        .value = "";
+
+    document
+        .getElementById("newImage")
+        .value = "";
+
+    document
+        .getElementById("newCaption")
+        .value = "";
+
+
+    showProfile();
+
+    profileSection("myads");
+}
+
+
+/* -----------------------------
+   PROFILE
+----------------------------- */
+
+function showProfile() {
+
+    gallery.style.display = "none";
+    submitArea.style.display = "none";
+    profile.style.display = "block";
+
+    pageTitle.innerText =
+        "Your Profile";
+
+    pageDescription.innerText =
+        "Your ads, likes and support.";
+
+    setNav("profileNav");
+
+    profileSection("myads");
+}
+
+
+function profileSection(section) {
+
+    document
+        .querySelectorAll(".profile-tabs button")
+        .forEach(button =>
+            button.classList.remove("active")
+        );
+
+
+    let list = [];
+
+
+    if (section === "myads") {
+
+        document
+            .getElementById("myAdsTab")
+            .classList.add("active");
+
+        list =
+            ads.filter(ad => ad.owner);
+
+    }
+
+
+    if (section === "liked") {
+
+        document
+            .getElementById("myLikesTab")
+            .classList.add("active");
+
+        list =
+            ads.filter(ad => ad.liked);
+
+    }
+
+
+    if (section === "supported") {
+
+        document
+            .getElementById("mySupportedTab")
+            .classList.add("active");
+
+        list =
+            ads.filter(
+                ad => ad.userSupport > 0
+            );
+
+    }
+
+
+    profileContent.innerHTML = "";
+
+
+    if (list.length === 0) {
+
+        let message =
+            "Nothing here yet.";
+
+        if (section === "myads")
+            message =
+                "You haven't posted an ad yet.";
+
+        if (section === "liked")
+            message =
+                "You haven't liked any ads yet.";
+
+        if (section === "supported")
+            message =
+                "You haven't supported any ads yet.";
+
+
+        profileContent.innerHTML = `
+
+            <div class="empty-message">
+                ${message}
+            </div>
+
+        `;
+
+        return;
+    }
+
+
+    list.forEach(ad => {
+
+        profileContent.appendChild(
+            createCard(ad)
+        );
+
+    });
+}
+
+
+/* -----------------------------
+   HELPERS
+----------------------------- */
+
+function showGallery() {
+
+    submitArea.style.display = "none";
+    profile.style.display = "none";
+    gallery.style.display = "grid";
+}
+
+
+function setNav(id) {
+
+    document
+        .querySelectorAll("nav button")
+        .forEach(button =>
+            button.classList.remove("active")
+        );
+
+    if (id) {
+
+        document
+            .getElementById(id)
+            .classList.add("active");
+
+    }
+}
+
+
+function refreshCurrentView() {
+
+    if (
+        document
+        .getElementById("supportedNav")
+        .classList
+        .contains("active")
+    ) {
+
+        showSupported();
+        return;
+    }
+
+
+    if (
+        document
+        .getElementById("likedNav")
+        .classList
+        .contains("active")
+    ) {
+
+        showMostLiked();
+        return;
+    }
+
+
+    if (
+        document
+        .getElementById("profileNav")
+        .classList
+        .contains("active")
+    ) {
+
+        showProfile();
+        return;
+    }
+
+}
+
+
+function escapeHTML(text) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent = text;
+
+    return div.innerHTML;
+}
+
+
+/* START */
+
+showSupported();
 
 </script>
 
