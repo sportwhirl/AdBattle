@@ -652,13 +652,37 @@ nav .post-button:hover {
 
 </section>
 
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
 <script>
+    
+const SUPABASE_URL =
+  "https://bmsrdzqprxvldltaislp.supabase.co";
 
-/* -----------------------------
-   SAMPLE DATABASE
------------------------------ */
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd";
 
+const db = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+async function testSupabase() {
+  const { data, error } = await db
+    .from("ads")
+    .select("*");
+
+  if (error) {
+    console.error("Supabase error:", error);
+    return;
+  }
+
+  console.log("Connected to Supabase!");
+  console.log("Ads:", data);
+}
+
+testSupabase();
+    
 let ads = [
 
 {
