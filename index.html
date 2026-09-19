@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Image Gallery</title>
- 
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdBattle</title>
+
   <style>
     * {
       box-sizing: border-box;
@@ -13,51 +13,133 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #222;
+      background: #f4f5f7;
+      color: #1d1d1f;
     }
+
+    /* HEADER */
 
     header {
+      background: white;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar {
+      width: min(1200px, 94%);
+      margin: auto;
+      height: 70px;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .logo {
+      font-size: 1.7rem;
+      font-weight: 800;
+    }
+
+    .logo span {
+      color: #6c4cff;
+    }
+
+    nav {
+      display: flex;
+      gap: 10px;
+    }
+
+    nav button {
+      border: 0;
+      background: transparent;
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    nav button:hover {
+      background: #eee;
+    }
+
+    nav button.active {
+      background: #1d1d1f;
+      color: white;
+    }
+
+    .post-button {
+      background: #6c4cff !important;
+      color: white;
+    }
+
+    /* HERO */
+
+    .hero {
       text-align: center;
-      padding: 40px 20px 25px;
+      padding: 55px 20px 35px;
     }
 
-    header h1 {
+    .hero h1 {
       margin: 0;
-      font-size: 2.5rem;
+      font-size: clamp(2.2rem, 6vw, 4rem);
     }
 
-    header p {
-      color: #777;
+    .hero p {
+      color: #666;
+      font-size: 1.1rem;
+      margin: 14px auto 0;
+      max-width: 600px;
+      line-height: 1.5;
     }
+
+    /* GALLERY */
 
     .gallery {
-      width: min(1200px, 92%);
+      width: min(1100px, 92%);
       margin: auto;
 
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 25px;
-      padding-bottom: 50px;
+
+      padding-bottom: 70px;
     }
 
     .card {
       background: white;
-      border-radius: 15px;
+      border-radius: 18px;
       overflow: hidden;
 
-      box-shadow:
-        0 4px 15px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 16px rgba(0,0,0,.08);
 
-      transition: transform 0.2s ease,
-                  box-shadow 0.2s ease;
+      transition:
+        transform .2s ease,
+        box-shadow .2s ease;
     }
 
     .card:hover {
-      transform: translateY(-5px);
+      transform: translateY(-4px);
+      box-shadow: 0 10px 25px rgba(0,0,0,.12);
+    }
 
-      box-shadow:
-        0 10px 25px rgba(0, 0, 0, 0.12);
+    .rank {
+      position: absolute;
+      margin: 12px;
+
+      background: rgba(0,0,0,.8);
+      color: white;
+
+      padding: 7px 11px;
+      border-radius: 20px;
+
+      font-weight: bold;
+    }
+
+    .image-container {
+      position: relative;
     }
 
     .card img {
@@ -69,18 +151,134 @@
 
     .caption {
       padding: 18px;
-      font-size: 1rem;
-      line-height: 1.5;
     }
 
     .caption h2 {
-      margin: 0 0 8px;
+      margin: 0 0 7px;
       font-size: 1.25rem;
     }
 
     .caption p {
-      margin: 0;
       color: #666;
+      line-height: 1.45;
+      margin: 0 0 18px;
+    }
+
+    /* SUPPORT AREA */
+
+    .support-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      border-top: 1px solid #eee;
+      padding-top: 15px;
+    }
+
+    .money {
+      font-weight: bold;
+      font-size: 1.05rem;
+    }
+
+    .likes {
+      color: #777;
+      font-size: .9rem;
+    }
+
+    .support-button {
+      width: 100%;
+      margin-top: 15px;
+
+      padding: 12px;
+
+      border: none;
+      border-radius: 10px;
+
+      background: #6c4cff;
+      color: white;
+
+      font-size: 1rem;
+      font-weight: bold;
+
+      cursor: pointer;
+    }
+
+    .support-button:hover {
+      opacity: .9;
+    }
+
+    .support-button.liked {
+      background: #e83e6f;
+    }
+
+    /* POST FORM */
+
+    .submit-area {
+      display: none;
+
+      width: min(600px, 92%);
+      margin: 20px auto 70px;
+
+      background: white;
+      padding: 30px;
+
+      border-radius: 18px;
+
+      box-shadow: 0 5px 20px rgba(0,0,0,.08);
+    }
+
+    .submit-area h2 {
+      margin-top: 0;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 13px;
+
+      border: 1px solid #ccc;
+      border-radius: 9px;
+
+      margin: 7px 0 17px;
+
+      font: inherit;
+    }
+
+    textarea {
+      height: 100px;
+      resize: vertical;
+    }
+
+    .submit-area button {
+      width: 100%;
+      padding: 13px;
+
+      border: none;
+      border-radius: 10px;
+
+      background: #1d1d1f;
+      color: white;
+
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 650px) {
+      .topbar {
+        height: auto;
+        padding: 15px 0;
+        flex-direction: column;
+      }
+
+      nav {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
     }
   </style>
 </head>
@@ -88,67 +286,384 @@
 <body>
 
 <header>
-  <h1>My Gallery</h1>
-  <p>Images, moments, and captions.</p>
+  <div class="topbar">
+
+    <div class="logo">
+      Ad<span>Battle</span>
+    </div>
+
+    <nav>
+      <button
+        id="supportedNav"
+        class="active"
+        onclick="showSupported()"
+      >
+        💰 Most Supported
+      </button>
+
+      <button
+        id="likesNav"
+        onclick="showLikes()"
+      >
+        ❤️ My Likes
+      </button>
+
+      <button
+        class="post-button"
+        onclick="showPost()"
+      >
+        + Post an Ad
+      </button>
+    </nav>
+
+  </div>
 </header>
 
-<main class="gallery">
 
-  <article class="card">
-    <img
-      src="https://picsum.photos/600/500?random=1"
-      alt="Gallery image"
-    />
+<section class="hero" id="hero">
+
+  <h1 id="pageTitle">
+    The Internet's Ad Battle
+  </h1>
+
+  <p id="pageDescription">
+    Discover ads people actually like.
+    Support your favorites and see which ads rise to the top.
+  </p>
+
+</section>
+
+
+<main class="gallery" id="gallery">
+
+  <!-- AD 1 -->
+
+  <article
+    class="card"
+    data-liked="false"
+    data-support="482.75"
+  >
+
+    <div class="image-container">
+      <div class="rank">#1</div>
+
+      <img
+        src="https://picsum.photos/600/500?random=11"
+        alt="Advertisement"
+      >
+    </div>
+
     <div class="caption">
-      <h2>First Image</h2>
+
+      <h2>Dogs Deserve Weekends Too</h2>
+
       <p>
-        Put your caption here. It can be funny,
-        descriptive, serious, or completely random.
+        Scientists still haven't explained why
+        Monday applies to dogs.
       </p>
+
+      <div class="support-info">
+        <div>
+          <div class="money">$482.75 supported</div>
+          <div class="likes">1,931 supporters</div>
+        </div>
+      </div>
+
+      <button
+        class="support-button"
+        onclick="supportAd(this)"
+      >
+        ❤️ Support for $0.25
+      </button>
+
     </div>
   </article>
 
-  <article class="card">
-    <img
-      src="https://picsum.photos/600/500?random=2"
-      alt="Gallery image"
-    />
+
+  <!-- AD 2 -->
+
+  <article
+    class="card"
+    data-liked="false"
+    data-support="317.50"
+  >
+
+    <div class="image-container">
+      <div class="rank">#2</div>
+
+      <img
+        src="https://picsum.photos/600/500?random=22"
+        alt="Advertisement"
+      >
+    </div>
+
     <div class="caption">
-      <h2>Second Image</h2>
+
+      <h2>Absolutely Nothing For Sale</h2>
+
       <p>
-        Another image with its own caption underneath.
+        This advertisement has successfully
+        advertised absolutely nothing.
       </p>
+
+      <div class="support-info">
+        <div>
+          <div class="money">$317.50 supported</div>
+          <div class="likes">1,270 supporters</div>
+        </div>
+      </div>
+
+      <button
+        class="support-button"
+        onclick="supportAd(this)"
+      >
+        ❤️ Support for $0.25
+      </button>
+
     </div>
   </article>
 
-  <article class="card">
-    <img
-      src="https://picsum.photos/600/500?random=3"
-      alt="Gallery image"
-    />
+
+  <!-- AD 3 -->
+
+  <article
+    class="card"
+    data-liked="false"
+    data-support="204.25"
+  >
+
+    <div class="image-container">
+      <div class="rank">#3</div>
+
+      <img
+        src="https://picsum.photos/600/500?random=33"
+        alt="Advertisement"
+      >
+    </div>
+
     <div class="caption">
-      <h2>Third Image</h2>
+
+      <h2>Please Look at This Rock</h2>
+
       <p>
-        Add as many of these cards as you want.
+        It's a pretty good rock.
+        That's the entire advertisement.
       </p>
+
+      <div class="support-info">
+        <div>
+          <div class="money">$204.25 supported</div>
+          <div class="likes">817 supporters</div>
+        </div>
+      </div>
+
+      <button
+        class="support-button"
+        onclick="supportAd(this)"
+      >
+        ❤️ Support for $0.25
+      </button>
+
     </div>
   </article>
 
-  <article class="card">
-    <img
-      src="https://picsum.photos/600/500?random=4"
-      alt="Gallery image"
-    />
+
+  <!-- AD 4 -->
+
+  <article
+    class="card"
+    data-liked="false"
+    data-support="98.00"
+  >
+
+    <div class="image-container">
+      <div class="rank">#4</div>
+
+      <img
+        src="https://picsum.photos/600/500?random=44"
+        alt="Advertisement"
+      >
+    </div>
+
     <div class="caption">
-      <h2>Fourth Image</h2>
+
+      <h2>Your Ad Could Be Here</h2>
+
       <p>
-        The layout automatically adapts to phones
-        and larger screens.
+        Make something interesting.
+        Let the internet decide whether it deserves attention.
       </p>
+
+      <div class="support-info">
+        <div>
+          <div class="money">$98.00 supported</div>
+          <div class="likes">392 supporters</div>
+        </div>
+      </div>
+
+      <button
+        class="support-button"
+        onclick="supportAd(this)"
+      >
+        ❤️ Support for $0.25
+      </button>
+
     </div>
   </article>
 
 </main>
+
+
+<!-- POST AD -->
+
+<section class="submit-area" id="submitArea">
+
+  <h2>Post an Ad</h2>
+
+  <label>Ad title</label>
+  <input
+    type="text"
+    placeholder="Give your ad a title"
+  >
+
+  <label>Image URL</label>
+  <input
+    type="url"
+    placeholder="https://example.com/image.jpg"
+  >
+
+  <label>Caption</label>
+  <textarea
+    placeholder="What does your ad say?"
+  ></textarea>
+
+  <button>
+    Continue to Payment →
+  </button>
+
+</section>
+
+
+<script>
+
+  const cards =
+    document.querySelectorAll(".card");
+
+  const gallery =
+    document.getElementById("gallery");
+
+  const submitArea =
+    document.getElementById("submitArea");
+
+  const title =
+    document.getElementById("pageTitle");
+
+  const description =
+    document.getElementById("pageDescription");
+
+
+  function showSupported() {
+
+    submitArea.style.display = "none";
+    gallery.style.display = "grid";
+
+    title.innerText =
+      "The Internet's Ad Battle";
+
+    description.innerText =
+      "Support the ads you like. The most supported ads rise to the top.";
+
+    cards.forEach(card => {
+      card.style.display = "block";
+    });
+
+    setActive("supportedNav");
+  }
+
+
+  function showLikes() {
+
+    submitArea.style.display = "none";
+    gallery.style.display = "grid";
+
+    title.innerText =
+      "My Likes ❤️";
+
+    description.innerText =
+      "The ads you've chosen to support.";
+
+    cards.forEach(card => {
+
+      if (card.dataset.liked === "true") {
+        card.style.display = "block";
+      }
+      else {
+        card.style.display = "none";
+      }
+
+    });
+
+    setActive("likesNav");
+  }
+
+
+  function showPost() {
+
+    gallery.style.display = "none";
+    submitArea.style.display = "block";
+
+    title.innerText =
+      "Post an Ad";
+
+    description.innerText =
+      "Put something interesting in front of the internet.";
+
+    document
+      .querySelectorAll("nav button")
+      .forEach(button =>
+        button.classList.remove("active")
+      );
+  }
+
+
+  function supportAd(button) {
+
+    const card =
+      button.closest(".card");
+
+    if (card.dataset.liked === "true") {
+      return;
+    }
+
+    card.dataset.liked = "true";
+
+    button.innerText =
+      "❤️ Supported";
+
+    button.classList.add("liked");
+
+    /*
+      Eventually this is where we'll
+      send the user to the payment system.
+    */
+
+  }
+
+
+  function setActive(id) {
+
+    document
+      .querySelectorAll("nav button")
+      .forEach(button =>
+        button.classList.remove("active")
+      );
+
+    document
+      .getElementById(id)
+      .classList.add("active");
+  }
+
+</script>
 
 </body>
 </html>
