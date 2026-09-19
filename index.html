@@ -191,10 +191,22 @@ nav .post-button:hover {
 
 .like-count {
     color: #666;
+    font-weight: normal;
 }
 
 .money {
+    font-weight: normal;
+}
+
+/* Highlight whichever metric the current leaderboard uses */
+
+.gallery.show-support .money {
     font-weight: bold;
+}
+
+.gallery.show-likes .like-count {
+    font-weight: bold;
+    color: #202124;
 }
 
 /* ACTION BUTTONS */
@@ -822,7 +834,10 @@ function createCard(ad, rank = null) {
 function showSupported() {
 
     showGallery();
-
+    
+    gallery.classList.remove("show-likes");
+    gallery.classList.add("show-support");
+    
     pageTitle.innerText =
         "Most Supported";
 
@@ -847,6 +862,9 @@ function showSupported() {
 function showMostLiked() {
 
     showGallery();
+
+    gallery.classList.remove("show-support");
+    gallery.classList.add("show-likes");
 
     pageTitle.innerText =
         "Most Liked";
