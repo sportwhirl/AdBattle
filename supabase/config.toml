@@ -1,0 +1,16 @@
+project_id = "adbattle"
+
+[functions.create-checkout-session]
+verify_jwt = true
+
+[functions.create-wallet-checkout]
+verify_jwt = true
+
+[functions.support-from-wallet]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.settle-wallet-support]
+verify_jwt = false
