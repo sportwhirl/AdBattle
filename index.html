@@ -1544,88 +1544,53 @@ function showPost() {
 }
 
 
-function postAd() {
+async function postAd() {
 
-    const title =
-        document
-            .getElementById(
-                "newTitle"
-            )
-            .value
-            .trim();
-
-    const image =
-        document
-            .getElementById(
-                "newImage"
-            )
-            .value
-            .trim();
-
-    const caption =
-        document
-            .getElementById(
-                "newCaption"
-            )
-            .value
-            .trim();
-
-
-    if (
-        !title ||
-        !image ||
-        !caption
-    ) {
-
-        alert(
-            "Please add a title, image and caption."
-        );
-
+    if (!currentUser) {
+        showLogin();
         return;
     }
 
+    const title =
+        document.getElementById("newTitle").value.trim();
 
-    ads.unshift({
+    const image =
+        document.getElementById("newImage").value.trim();
 
-        id: Date.now(),
+    const caption =
+        document.getElementById("newCaption").value.trim();
 
-        title,
-        image,
-        caption,
+    if (!title || !image || !caption) {
+        alert("Please add a title, image and caption.");
+        return;
+    }
 
-        likes: 0,
-        support: 0,
+    const { data, error } = await db
+        .from("ads")
+        .insert({
+            user_id: currentUser.id,
+            title: title,
+            caption: caption,
+            image_url: image
+        })
+        .select()
+        .single();
 
-        liked: false,
-        userSupport: 0,
+    if (error) {
+        console.error(error);
+        alert("Couldn't post the ad: " + error.message);
+        return;
+    }
 
-        owner: true
+    document.getElementById("newTitle").value = "";
+    document.getElementById("newImage").value = "";
+    document.getElementById("newCaption").value = "";
 
-    });
+    alert("Ad posted!");
 
-
-    document
-        .getElementById(
-            "newTitle"
-        )
-        .value = "";
-
-    document
-        .getElementById(
-            "newImage"
-        )
-        .value = "";
-
-    document
-        .getElementById(
-            "newCaption"
-        )
-        .value = "";
-
+    await loadAds();
 
     showProfile();
-
-    profileSection("myads");
 }
 
 
@@ -1884,7 +1849,43 @@ function escapeHTML(text) {
     return div.innerHTML;
 }
 
+async function loadAds() {
 
+    const { data, error } = await db
+        .from("ads")
+        .select("*")
+        .order("created_at", {
+            ascending: false
+        });
+
+    if (error) {
+        console.error(
+            "Couldn't load ads:",
+            error
+        );
+        return;
+    }
+
+    ads = data.map(ad => ({
+        id: ad.id,
+
+        title: ad.title,
+        caption: ad.caption || "",
+        image: ad.image_url,
+
+        likes: ad.likes || 0,
+        support:
+            Number(ad.support_total) || 0,
+
+        liked: false,
+        userSupport: 0,
+
+        owner:
+            currentUser
+                ? ad.user_id === currentUser.id
+                : false
+    }));
+}
 /* ========================================
    START
 ======================================== */
@@ -1892,6 +1893,8 @@ function escapeHTML(text) {
 async function startApp() {
 
     await checkUser();
+
+    await loadAds();
 
     showSupported();
 
