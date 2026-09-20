@@ -500,6 +500,52 @@ nav .post-button:hover {
     line-height: 1.4;
 }
 
+/* PAYMENTS */
+
+.payments-card {
+    margin-top: 22px;
+    padding: 18px;
+    border: 1px solid #e5e5e5;
+    border-radius: 12px;
+    background: #fafafa;
+}
+
+.payments-card h3 {
+    margin: 0 0 6px;
+}
+
+.payments-card p {
+    margin: 0 0 12px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.payment-status {
+    margin-bottom: 12px;
+    font-size: .92rem;
+    font-weight: 700;
+    color: #555;
+}
+
+.setup-payments-button {
+    padding: 11px 16px;
+    border: none;
+    border-radius: 9px;
+    background: #654cff;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.setup-payments-button:hover {
+    background: #543bea;
+}
+
+.setup-payments-button:disabled {
+    opacity: .65;
+    cursor: wait;
+}
+
 /* PROFILE */
 
 .profile {
@@ -741,6 +787,29 @@ nav .post-button:hover {
             Log Out
         </button>
 
+        <div class="payments-card">
+            <h3>Payments</h3>
+
+            <p>
+                Connect Stripe to receive support from your ads.
+            </p>
+
+            <div
+                class="payment-status"
+                id="paymentStatus"
+            >
+                Checking payment setup...
+            </div>
+
+            <button
+                class="setup-payments-button"
+                id="setupPaymentsButton"
+                onclick="setupPayments()"
+            >
+                Set Up Payments
+            </button>
+        </div>
+
         <div class="profile-tabs">
             <button
                 id="myAdsTab"
@@ -880,6 +949,12 @@ const pageTitle =
 
 const pageDescription =
     document.getElementById("pageDescription");
+
+const paymentStatus =
+    document.getElementById("paymentStatus");
+
+const setupPaymentsButton =
+    document.getElementById("setupPaymentsButton");
 
 const editOverlay =
     document.getElementById("editOverlay");
@@ -1875,6 +1950,144 @@ function showPost() {
 }
 
 /* ========================================
+   STRIPE CONNECT
+======================================== */
+
+async function loadPaymentStatus() {
+    if (!currentUser) {
+        return;
+    }
+
+    paymentStatus.innerText =
+        "Checking payment setup...";
+
+    setupPaymentsButton.disabled =
+        false;
+
+    const {
+        data,
+        error
+    } = await db
+        .from("creator_accounts")
+        .select(
+            "stripe_account_id, onboarding_complete, charges_enabled, payouts_enabled"
+        )
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+
+    if (error) {
+        console.error(
+            "Couldn't load payment status:",
+            error
+        );
+
+        paymentStatus.innerText =
+            "Couldn't check payment status.";
+
+        setupPaymentsButton.innerText =
+            "Set Up Payments";
+
+        return;
+    }
+
+    if (!data) {
+        paymentStatus.innerText =
+            "Payments are not set up yet.";
+
+        setupPaymentsButton.innerText =
+            "Set Up Payments";
+
+        return;
+    }
+
+    if (
+        data.onboarding_complete &&
+        data.charges_enabled &&
+        data.payouts_enabled
+    ) {
+        paymentStatus.innerText =
+            "✓ Payments enabled";
+
+        setupPaymentsButton.innerText =
+            "Payment Settings";
+
+        return;
+    }
+
+    paymentStatus.innerText =
+        "Payment setup started.";
+
+    setupPaymentsButton.innerText =
+        "Continue Payment Setup";
+}
+
+async function setupPayments() {
+    if (!currentUser) {
+        showLogin();
+        return;
+    }
+
+    const originalText =
+        setupPaymentsButton.innerText;
+
+    setupPaymentsButton.disabled =
+        true;
+
+    setupPaymentsButton.innerText =
+        "Opening Stripe...";
+
+    try {
+        const {
+            data,
+            error
+        } = await db.functions.invoke(
+            "create-connect-account",
+            {
+                body: {}
+            }
+        );
+
+        if (error) {
+            console.error(
+                "Connect function error:",
+                error
+            );
+
+            throw new Error(
+                data?.error ||
+                error.message ||
+                "Couldn't start Stripe setup."
+            );
+        }
+
+        if (!data?.url) {
+            throw new Error(
+                data?.error ||
+                "Stripe did not return an onboarding link."
+            );
+        }
+
+        window.location.href =
+            data.url;
+
+    } catch (error) {
+        console.error(error);
+
+        alert(
+            error instanceof Error
+                ? error.message
+                : "Couldn't start Stripe setup."
+        );
+
+        setupPaymentsButton.disabled =
+            false;
+
+        setupPaymentsButton.innerText =
+            originalText;
+    }
+}
+
+/* ========================================
    PROFILE
 ======================================== */
 
@@ -1896,6 +2109,8 @@ function showProfile() {
         "Your ads, likes and support.";
 
     setNav("profileNav");
+
+    loadPaymentStatus();
 
     profileSection("myads");
 }
@@ -2175,7 +2390,19 @@ async function startApp() {
     await checkUser();
     await loadAds();
 
-    showSupported();
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    if (
+        currentUser &&
+        params.has("stripe")
+    ) {
+        showProfile();
+    } else {
+        showSupported();
+    }
 
     console.log(
         "AdBattle connected to Supabase."
