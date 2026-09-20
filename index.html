@@ -510,7 +510,31 @@ nav .post-button:hover {
     text-align: center;
     color: #777;
 }
+/* DELETE AD BUTTON */
 
+.delete-ad-button {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 9px;
+
+    color: #777;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.delete-ad-button:hover {
+    border-color: #d33;
+    color: #d33;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 760px) {
 /* MOBILE */
 
 @media (max-width: 760px) {
@@ -1193,6 +1217,15 @@ function createCard(ad, rank = null) {
 
             </div>
 
+            ${ad.owner ? `
+    <button
+        class="delete-ad-button"
+        onclick="deleteAd(${ad.id})"
+    >
+        Delete Ad
+    </button>
+` : ""}
+
         </div>
     `;
 
@@ -1657,6 +1690,79 @@ async function postAd() {
 
 
     /* RELOAD REAL ADS */
+
+    await loadAds();
+
+    showProfile();
+
+    profileSection("myads");
+}
+
+async function deleteAd(id) {
+
+    if (!currentUser) return;
+
+    const ad = ads.find(ad => ad.id === id);
+
+    if (!ad || !ad.owner) return;
+
+    const confirmed = confirm(
+        `Delete "${ad.title}"? This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+
+    /* DELETE DATABASE RECORD */
+
+    const { error: deleteError } = await db
+        .from("ads")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", currentUser.id);
+
+    if (deleteError) {
+        console.error(deleteError);
+        alert("Couldn't delete the ad: " + deleteError.message);
+        return;
+    }
+
+
+    /* DELETE IMAGE FROM STORAGE */
+
+    try {
+
+        const marker =
+            "/storage/v1/object/public/ad-images/";
+
+        if (ad.image.includes(marker)) {
+
+            const imagePath =
+                decodeURIComponent(
+                    ad.image.split(marker)[1]
+                );
+
+            const { error: imageError } =
+                await db.storage
+                    .from("ad-images")
+                    .remove([imagePath]);
+
+            if (imageError) {
+                console.error(
+                    "Image cleanup failed:",
+                    imageError
+                );
+            }
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Image cleanup failed:",
+            error
+        );
+    }
+
 
     await loadAds();
 
