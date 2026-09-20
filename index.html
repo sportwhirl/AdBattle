@@ -1347,6 +1347,11 @@ async function toggleLike(id) {
 
     if (!ad) return;
 
+    if (ad.owner) {
+    alert("You can't like your own ad.");
+    return;
+}
+
     if (ad.liked) {
         const { error } = await db
             .from("likes")
