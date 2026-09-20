@@ -1527,39 +1527,6 @@ function openSupport(id, button) {
 /* ========================================
    POST AD
 ======================================== */
-
-function showPost() {
-
-    if (!currentUser) {
-
-        showLogin();
-
-        document
-            .getElementById(
-                "authMessage"
-            )
-            .innerText =
-                "Create an account or log in to post an ad.";
-
-        return;
-    }
-
-
-    hideAll();
-
-    submitArea.style.display =
-        "block";
-
-    pageTitle.innerText =
-        "Post an Ad";
-
-    pageDescription.innerText =
-        "Make something worth noticing.";
-
-    setNav(null);
-}
-
-
 async function postAd() {
 
     if (!currentUser) {
@@ -1697,35 +1664,37 @@ async function postAd() {
 
     profileSection("myads");
 }
-
-
-/* ========================================
-   PROFILE
-======================================== */
-
-function showProfile() {
+function showPost() {
 
     if (!currentUser) {
+
         showLogin();
+
+        document
+            .getElementById(
+                "authMessage"
+            )
+            .innerText =
+                "Create an account or log in to post an ad.";
+
         return;
     }
 
 
     hideAll();
 
-    profile.style.display =
+    submitArea.style.display =
         "block";
 
     pageTitle.innerText =
-        "Your Profile";
+        "Post an Ad";
 
     pageDescription.innerText =
-        "Your ads, likes and support.";
+        "Make something worth noticing.";
 
-    setNav("profileNav");
-
-    profileSection("myads");
+    setNav(null);
 }
+
 
 
 function profileSection(section) {
