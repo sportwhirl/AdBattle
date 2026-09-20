@@ -226,6 +226,13 @@ nav .post-button:hover {
     color: white;
 }
 
+.like-button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    background: #f3f3f3;
+    color: #777;
+}
+
 .support-button {
     border: none;
     background: #654cff;
@@ -546,6 +553,99 @@ nav .post-button:hover {
     cursor: wait;
 }
 
+
+
+/* IMMUTABLE ADS + MODERATION */
+
+.post-lock-notice {
+    margin: 14px 0 18px;
+    padding: 12px 14px;
+    border: 1px solid #e2e2e2;
+    border-radius: 10px;
+    background: #fafafa;
+    font-size: .9rem;
+    line-height: 1.45;
+    color: #555;
+}
+
+.moderation-badge {
+    display: inline-block;
+    margin: 0 0 10px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #f1f1f1;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.moderation-badge.approved {
+    background: #e9f8ee;
+}
+
+.moderation-badge.pending_scan {
+    background: #fff4d8;
+}
+
+.moderation-badge.rejected,
+.moderation-badge.removed {
+    background: #fdecec;
+}
+
+/* PROMOTION ALLOCATION */
+
+.promotion-allocation {
+    margin: 18px 0 20px;
+    padding: 16px;
+    border: 1px solid #e2e2e2;
+    border-radius: 11px;
+    background: #fafafa;
+}
+
+.promotion-allocation h3 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+}
+
+.promotion-allocation p {
+    margin: 0 0 14px;
+    color: #666;
+    font-size: .9rem;
+    line-height: 1.45;
+}
+
+.promotion-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+}
+
+.promotion-field label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: .88rem;
+}
+
+.promotion-field input {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.promotion-total {
+    margin-top: 12px;
+    font-weight: 700;
+}
+
+.promotion-total.invalid {
+    color: #b42318;
+}
+
+@media (max-width: 600px) {
+    .promotion-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* PROFILE */
 
 .profile {
@@ -770,17 +870,70 @@ nav .post-button:hover {
         accept="image/jpeg,image/png,image/webp,image/gif"
     >
 
+
+    <div class="promotion-allocation">
+        <h3>Promotion budget</h3>
+
+        <p>
+            Every Support is fixed at 1% AdBattle, 9% creator,
+            and 90% promotion. Choose where that 90% promotion
+            budget should run. These percentages must total 100%.
+        </p>
+
+        <div class="promotion-grid">
+            <div class="promotion-field">
+                <label for="newYoutubePct">YouTube %</label>
+                <input id="newYoutubePct" type="number" min="0" max="100" step="1" value="20"
+                    oninput="updatePromotionTotal('new')">
+            </div>
+
+            <div class="promotion-field">
+                <label for="newInstagramPct">Instagram %</label>
+                <input id="newInstagramPct" type="number" min="0" max="100" step="1" value="20"
+                    oninput="updatePromotionTotal('new')">
+            </div>
+
+            <div class="promotion-field">
+                <label for="newTiktokPct">TikTok %</label>
+                <input id="newTiktokPct" type="number" min="0" max="100" step="1" value="20"
+                    oninput="updatePromotionTotal('new')">
+            </div>
+
+            <div class="promotion-field">
+                <label for="newSnapchatPct">Snapchat %</label>
+                <input id="newSnapchatPct" type="number" min="0" max="100" step="1" value="20"
+                    oninput="updatePromotionTotal('new')">
+            </div>
+
+            <div class="promotion-field">
+                <label for="newFacebookPct">Facebook %</label>
+                <input id="newFacebookPct" type="number" min="0" max="100" step="1" value="20"
+                    oninput="updatePromotionTotal('new')">
+            </div>
+        </div>
+
+        <div class="promotion-total" id="newPromotionTotal">
+            Total: 100%
+        </div>
+    </div>
+
     <label>Caption</label>
     <textarea
         id="newCaption"
         placeholder="What does your ad say?"
     ></textarea>
 
+    <div class="post-lock-notice">
+        <strong>Final after posting:</strong>
+        the image, text, and promotion percentages cannot be edited or deleted after submission.
+        The ad is scanned before it becomes public or can receive Support.
+    </div>
+
     <button
         class="publish-button"
         onclick="postAd()"
     >
-        + Post Ad
+        + Submit Ad
     </button>
 </section>
 
@@ -858,62 +1011,6 @@ nav .post-button:hover {
     ></div>
 </section>
 
-<!-- EDIT AD -->
-
-<div class="edit-overlay" id="editOverlay">
-    <div class="edit-panel">
-        <h2>Edit Ad</h2>
-
-        <label>Title</label>
-        <input
-            id="editTitle"
-            type="text"
-            placeholder="Ad title"
-        >
-
-        <label>Caption</label>
-        <textarea
-            id="editCaption"
-            placeholder="Ad caption"
-        ></textarea>
-
-        <label>Replace image (optional)</label>
-        <input
-            id="editImage"
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-        >
-
-        <button
-            class="edit-save-button"
-            onclick="saveAdEdits()"
-        >
-            Save Changes
-        </button>
-
-        <button
-            class="edit-cancel-button"
-            onclick="closeEditAd()"
-        >
-            Cancel
-        </button>
-
-        <div class="danger-zone">
-            <strong>Delete this ad</strong>
-            <p>
-                This permanently removes the ad and its uploaded image.
-            </p>
-
-            <button
-                class="delete-ad-button"
-                onclick="deleteCurrentAd()"
-            >
-                Delete Ad
-            </button>
-        </div>
-    </div>
-</div>
-
 <!-- SUPABASE LIBRARY -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -973,19 +1070,119 @@ const paymentStatus =
 const setupPaymentsButton =
     document.getElementById("setupPaymentsButton");
 
-const editOverlay =
-    document.getElementById("editOverlay");
 
-const editTitle =
-    document.getElementById("editTitle");
+const PROMOTION_PLATFORMS = [
+    ["youtube", "Youtube"],
+    ["instagram", "Instagram"],
+    ["tiktok", "Tiktok"],
+    ["snapchat", "Snapchat"],
+    ["facebook", "Facebook"]
+];
 
-const editCaption =
-    document.getElementById("editCaption");
+function defaultPromotionAllocation() {
+    return {
+        youtube: 20,
+        instagram: 20,
+        tiktok: 20,
+        snapchat: 20,
+        facebook: 20
+    };
+}
 
-const editImage =
-    document.getElementById("editImage");
+function getPromotionAllocation(prefix) {
+    const allocation = {};
 
-let editingAdId = null;
+    for (const [key, idName] of PROMOTION_PLATFORMS) {
+        const input =
+            document.getElementById(
+                `${prefix}${idName}Pct`
+            );
+
+        const value =
+            Number(input?.value);
+
+        allocation[key] =
+            Number.isFinite(value)
+                ? Math.min(
+                    100,
+                    Math.max(0, value)
+                )
+                : 0;
+    }
+
+    return allocation;
+}
+
+function promotionAllocationTotal(allocation) {
+    return Object.values(allocation)
+        .reduce(
+            (sum, value) =>
+                sum + Number(value || 0),
+            0
+        );
+}
+
+function updatePromotionTotal(prefix) {
+    const allocation =
+        getPromotionAllocation(prefix);
+
+    const total =
+        promotionAllocationTotal(allocation);
+
+    const totalElement =
+        document.getElementById(
+            `${prefix}PromotionTotal`
+        );
+
+    if (!totalElement) return;
+
+    totalElement.innerText =
+        `Total: ${total}%`;
+
+    totalElement.classList.toggle(
+        "invalid",
+        Math.abs(total - 100) > 0.001
+    );
+}
+
+function validatePromotionAllocation(prefix) {
+    const allocation =
+        getPromotionAllocation(prefix);
+
+    const total =
+        promotionAllocationTotal(allocation);
+
+    if (Math.abs(total - 100) > 0.001) {
+        alert(
+            "Your YouTube, Instagram, TikTok, Snapchat and Facebook percentages must total 100%."
+        );
+
+        return null;
+    }
+
+    return allocation;
+}
+
+function setPromotionAllocation(prefix, allocation) {
+    const safe = {
+        ...defaultPromotionAllocation(),
+        ...(allocation || {})
+    };
+
+    for (const [key, idName] of PROMOTION_PLATFORMS) {
+        const input =
+            document.getElementById(
+                `${prefix}${idName}Pct`
+            );
+
+        if (input) {
+            input.value =
+                Number(safe[key] ?? 0);
+        }
+    }
+
+    updatePromotionTotal(prefix);
+}
 
 /* ========================================
    AUTH
@@ -1173,7 +1370,7 @@ db.auth.onAuthStateChange(
    CREATE CARD
 ======================================== */
 
-function createCard(ad, rank = null, showOwnerControls = false) {
+function createCard(ad, rank = null) {
     const card =
         document.createElement("article");
 
@@ -1204,6 +1401,24 @@ function createCard(ad, rank = null, showOwnerControls = false) {
                 ${escapeHTML(ad.caption)}
             </p>
 
+            ${
+                ad.owner
+                    ? `
+                        <div class="moderation-badge ${escapeHTML(ad.moderationStatus)}">
+                            ${escapeHTML(
+                                ad.moderationStatus === "pending_scan"
+                                    ? "Pending safety review"
+                                    : ad.moderationStatus === "approved"
+                                        ? "Approved"
+                                        : ad.moderationStatus === "rejected"
+                                            ? "Rejected"
+                                            : "Removed"
+                            )}
+                        </div>
+                    `
+                    : ""
+            }
+
             <div class="stats">
                 <span class="like-count">
                     ♡ ${ad.likes.toLocaleString()} likes
@@ -1219,31 +1434,31 @@ function createCard(ad, rank = null, showOwnerControls = false) {
                 <button
                     class="like-button ${ad.liked ? "liked" : ""}"
                     onclick="toggleLike(${ad.id})"
+                    ${ad.owner ? "disabled" : ""}
+                    title="${ad.owner ? "You can't like your own ad." : ""}"
                 >
-                    ${ad.liked ? "♥ Liked" : "♡ Like"}
+                    ${
+                        ad.owner
+                            ? "♡ Your Ad"
+                            : (ad.liked ? "♥ Liked" : "♡ Like")
+                    }
                 </button>
 
                 <button
                     class="support-button"
                     onclick="openSupport(${ad.id}, this)"
+                    ${ad.moderationStatus !== "approved" ? "disabled" : ""}
+                    title="${ad.moderationStatus !== "approved" ? "Support opens after safety approval." : ""}"
                 >
-                    ⚡ Support
+                    ${
+                        ad.moderationStatus === "approved"
+                            ? "⚡ Support"
+                            : "Awaiting approval"
+                    }
                 </button>
 
             </div>
 
-            ${
-                ad.owner && showOwnerControls
-                    ? `
-                        <button
-                            class="edit-ad-button"
-                            onclick="openEditAd(${ad.id})"
-                        >
-                            Edit Ad
-                        </button>
-                    `
-                    : ""
-            }
 
         </div>
     `;
@@ -1270,9 +1485,11 @@ function showSupported() {
     setNav("supportedNav");
 
     const sorted =
-        [...ads].sort(
-            (a, b) => b.support - a.support
-        );
+        ads
+            .filter(ad => ad.moderationStatus === "approved")
+            .sort(
+                (a, b) => b.support - a.support
+            );
 
     renderGallery(sorted);
 }
@@ -1296,9 +1513,11 @@ function showMostLiked() {
     setNav("likedNav");
 
     const sorted =
-        [...ads].sort(
-            (a, b) => b.likes - a.likes
-        );
+        ads
+            .filter(ad => ad.moderationStatus === "approved")
+            .sort(
+                (a, b) => b.likes - a.likes
+            );
 
     renderGallery(sorted);
 }
@@ -1346,6 +1565,11 @@ async function toggleLike(id) {
         ads.find(ad => ad.id === id);
 
     if (!ad) return;
+
+    if (ad.owner) {
+        alert("You can't like your own ad.");
+        return;
+    }
 
     if (ad.liked) {
         const { error } = await db
@@ -1398,6 +1622,19 @@ function openSupport(id, button) {
             .innerText =
                 "Log in to support ads.";
 
+        return;
+    }
+
+    const ad =
+        ads.find(ad => ad.id === id);
+
+    if (
+        !ad ||
+        ad.moderationStatus !== "approved"
+    ) {
+        alert(
+            "This ad is not approved for Support yet."
+        );
         return;
     }
 
@@ -1600,6 +1837,13 @@ async function postAd() {
     const imageFile =
         imageInput.files[0];
 
+    const promotionAllocation =
+        validatePromotionAllocation("new");
+
+    if (!promotionAllocation) {
+        return;
+    }
+
     if (!title || !caption || !imageFile) {
         alert(
             "Please add a title, image and caption."
@@ -1671,7 +1915,9 @@ async function postAd() {
             user_id: currentUser.id,
             title,
             caption,
-            image_url: imageUrl
+            image_url: imageUrl,
+            promotion_allocation:
+                promotionAllocation
         });
 
     if (adError) {
@@ -1699,314 +1945,16 @@ async function postAd() {
     document.getElementById("newCaption").value = "";
     imageInput.value = "";
 
-    await loadAds();
-
-    showProfile();
-    profileSection("myads");
-}
-
-/* ========================================
-   EDIT AD
-======================================== */
-
-function openEditAd(id) {
-    if (!currentUser) return;
-
-    const ad =
-        ads.find(ad => ad.id === id);
-
-    if (!ad || !ad.owner) {
-        alert("You can only edit your own ads.");
-        return;
-    }
-
-    editingAdId = id;
-
-    editTitle.value =
-        ad.title;
-
-    editCaption.value =
-        ad.caption;
-
-    editImage.value = "";
-
-    editOverlay.style.display =
-        "block";
-}
-
-function closeEditAd() {
-    editOverlay.style.display =
-        "none";
-
-    editingAdId = null;
-    editImage.value = "";
-}
-
-async function saveAdEdits() {
-    if (!currentUser || editingAdId === null) {
-        return;
-    }
-
-    const ad =
-        ads.find(ad => ad.id === editingAdId);
-
-    if (!ad || !ad.owner) {
-        alert("You can only edit your own ads.");
-        return;
-    }
-
-    const title =
-        editTitle.value.trim();
-
-    const caption =
-        editCaption.value.trim();
-
-    const replacementImage =
-        editImage.files[0];
-
-    if (!title || !caption) {
-        alert("Please add a title and caption.");
-        return;
-    }
-
-    let newImageUrl =
-        ad.image;
-
-    let newImagePath =
-        null;
-
-    if (replacementImage) {
-        if (
-            replacementImage.size >
-            10 * 1024 * 1024
-        ) {
-            alert(
-                "Please choose an image smaller than 10 MB."
-            );
-            return;
-        }
-
-        const rawExtension =
-            replacementImage.name.includes(".")
-                ? replacementImage.name.split(".").pop()
-                : "jpg";
-
-        const extension =
-            rawExtension
-                .toLowerCase()
-                .replace(/[^a-z0-9]/g, "") || "jpg";
-
-        newImagePath =
-            `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-
-        const {
-            error: uploadError
-        } = await db.storage
-            .from("ad-images")
-            .upload(
-                newImagePath,
-                replacementImage,
-                {
-                    cacheControl: "3600",
-                    upsert: false
-                }
-            );
-
-        if (uploadError) {
-            console.error(
-                "Replacement image upload failed:",
-                uploadError
-            );
-
-            alert(
-                "Couldn't upload the new image: " +
-                uploadError.message
-            );
-
-            return;
-        }
-
-        const {
-            data: publicUrlData
-        } = db.storage
-            .from("ad-images")
-            .getPublicUrl(newImagePath);
-
-        newImageUrl =
-            publicUrlData.publicUrl;
-    }
-
-    const {
-        error: updateError
-    } = await db
-        .from("ads")
-        .update({
-            title,
-            caption,
-            image_url: newImageUrl
-        })
-        .eq("id", editingAdId)
-        .eq("user_id", currentUser.id);
-
-    if (updateError) {
-        console.error(
-            "Couldn't update ad:",
-            updateError
-        );
-
-        if (newImagePath) {
-            await db.storage
-                .from("ad-images")
-                .remove([newImagePath]);
-        }
-
-        alert(
-            "Couldn't save changes: " +
-            updateError.message
-        );
-
-        return;
-    }
-
-    /*
-        If the user replaced the image and the old image
-        is one of our Supabase Storage images, remove it.
-    */
-    if (
-        replacementImage &&
-        ad.image
-    ) {
-        try {
-            const marker =
-                "/storage/v1/object/public/ad-images/";
-
-            if (ad.image.includes(marker)) {
-                const oldImagePath =
-                    decodeURIComponent(
-                        ad.image.split(marker)[1]
-                    );
-
-                const {
-                    error: oldImageError
-                } = await db.storage
-                    .from("ad-images")
-                    .remove([oldImagePath]);
-
-                if (oldImageError) {
-                    console.error(
-                        "Old image cleanup failed:",
-                        oldImageError
-                    );
-                }
-            }
-        } catch (error) {
-            console.error(
-                "Old image cleanup failed:",
-                error
-            );
-        }
-    }
-
-    closeEditAd();
+    setPromotionAllocation(
+        "new",
+        defaultPromotionAllocation()
+    );
 
     await loadAds();
 
-    showProfile();
-    profileSection("myads");
-}
-
-async function deleteCurrentAd() {
-    if (editingAdId === null) return;
-
-    const id =
-        editingAdId;
-
-    closeEditAd();
-
-    await deleteAd(id);
-}
-
-/* ========================================
-   DELETE AD
-======================================== */
-
-async function deleteAd(id) {
-    if (!currentUser) return;
-
-    const ad =
-        ads.find(ad => ad.id === id);
-
-    if (!ad || !ad.owner) {
-        alert(
-            "You can only delete your own ads."
-        );
-        return;
-    }
-
-    const confirmed =
-        confirm(
-            `Delete "${ad.title}"? This cannot be undone.`
-        );
-
-    if (!confirmed) return;
-
-    const {
-        error: deleteError
-    } = await db
-        .from("ads")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", currentUser.id);
-
-    if (deleteError) {
-        console.error(deleteError);
-
-        alert(
-            "Couldn't delete the ad: " +
-            deleteError.message
-        );
-
-        return;
-    }
-
-    /*
-        If this is one of our Supabase Storage images,
-        also remove the file from ad-images.
-    */
-    try {
-        const marker =
-            "/storage/v1/object/public/ad-images/";
-
-        if (
-            ad.image &&
-            ad.image.includes(marker)
-        ) {
-            const imagePath =
-                decodeURIComponent(
-                    ad.image.split(marker)[1]
-                );
-
-            const {
-                error: imageError
-            } = await db.storage
-                .from("ad-images")
-                .remove([imagePath]);
-
-            if (imageError) {
-                console.error(
-                    "Image cleanup failed:",
-                    imageError
-                );
-            }
-        }
-    } catch (error) {
-        console.error(
-            "Image cleanup failed:",
-            error
-        );
-    }
-
-    await loadAds();
+    alert(
+        "Ad submitted. It is locked and will become public after the safety scan approves it."
+    );
 
     showProfile();
     profileSection("myads");
@@ -2326,14 +2274,10 @@ function profileSection(section) {
     }
 
     list.forEach(ad => {
-        const showOwnerControls =
-            section === "myads";
-
         profileContent.appendChild(
             createCard(
                 ad,
-                null,
-                showOwnerControls
+                null
             )
         );
     });
@@ -2428,6 +2372,8 @@ function escapeHTML(text) {
 ======================================== */
 
 async function loadAds() {
+    /* GET ADS */
+
     const {
         data: adData,
         error: adError
@@ -2447,6 +2393,8 @@ async function loadAds() {
         return;
     }
 
+    /* GET LIKES */
+
     const {
         data: likeData,
         error: likeError
@@ -2460,6 +2408,33 @@ async function loadAds() {
             likeError
         );
         return;
+    }
+
+    /* GET THIS USER'S REAL SUPPORT HISTORY */
+
+    let supportData = [];
+
+    if (currentUser) {
+        const {
+            data,
+            error: supportError
+        } = await db
+            .from("supports")
+            .select("ad_id, amount")
+            .eq(
+                "user_id",
+                currentUser.id
+            );
+
+        if (supportError) {
+            console.error(
+                "Couldn't load support history:",
+                supportError
+            );
+        } else {
+            supportData =
+                data || [];
+        }
     }
 
     ads = adData.map(ad => {
@@ -2476,6 +2451,21 @@ async function loadAds() {
                 )
                 : false;
 
+        const userSupport =
+            currentUser
+                ? supportData
+                    .filter(
+                        support =>
+                            support.ad_id === ad.id
+                    )
+                    .reduce(
+                        (total, support) =>
+                            total +
+                            (Number(support.amount) || 0),
+                        0
+                    )
+                : 0;
+
         return {
             id: ad.id,
             title: ad.title,
@@ -2486,12 +2476,19 @@ async function loadAds() {
             support:
                 Number(ad.support_total) || 0,
 
-            /*
-                Real support history will be added
-                when Stripe is connected.
-            */
-            userSupport: 0,
+            promotionAllocation:
+                ad.promotion_allocation ||
+                defaultPromotionAllocation(),
 
+            moderationStatus:
+                ad.moderation_status ||
+                "pending_scan",
+
+            moderationReason:
+                ad.moderation_reason ||
+                "",
+
+            userSupport,
             owner:
                 currentUser
                     ? ad.user_id === currentUser.id
@@ -2500,63 +2497,13 @@ async function loadAds() {
     });
 }
 
-/* Close the edit panel when clicking outside it */
-
-editOverlay.addEventListener(
-    "click",
-    event => {
-        if (event.target === editOverlay) {
-            closeEditAd();
-        }
-    }
-);
-
-document.addEventListener(
-    "keydown",
-    event => {
-        if (
-            event.key === "Escape" &&
-            editOverlay.style.display === "block"
-        ) {
-            closeEditAd();
-        }
-    }
-);
-
-function showReturnMessage(text, success = false) {
-    const oldMessage =
-        document.querySelector(
-            ".return-message"
-        );
-
-    if (oldMessage) {
-        oldMessage.remove();
-    }
-
-    const message =
-        document.createElement("div");
-
-    message.className =
-        success
-            ? "return-message success"
-            : "return-message";
-
-    message.innerText = text;
-
-    const hero =
-        document.querySelector(".hero");
-
-    hero.insertAdjacentElement(
-        "afterend",
-        message
-    );
-}
-
 /* ========================================
    START
 ======================================== */
 
 async function startApp() {
+    updatePromotionTotal("new");
+
     await checkUser();
     await loadAds();
 
@@ -2581,6 +2528,14 @@ async function startApp() {
         showReturnMessage(
             "Payment completed. AdBattle is verifying the support with Stripe.",
             true
+        );
+
+        setTimeout(
+            async () => {
+                await loadAds();
+                showSupported();
+            },
+            1800
         );
 
     } else if (
