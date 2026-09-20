@@ -1347,11 +1347,6 @@ async function toggleLike(id) {
 
     if (!ad) return;
 
-    if (ad.owner) {
-    alert("You can't like your own ad.");
-    return;
-}
-
     if (ad.liked) {
         const { error } = await db
             .from("likes")
@@ -1517,10 +1512,34 @@ function openSupport(id, button) {
                     error
                 );
 
-                throw new Error(
+                let detailedMessage =
                     data?.error ||
                     error.message ||
-                    "Couldn't start payment."
+                    "Couldn't start payment.";
+
+                /*
+                    Supabase FunctionHttpError stores the
+                    response body on error.context.
+                */
+                try {
+                    if (error.context) {
+                        const body =
+                            await error.context.json();
+
+                        if (body?.error) {
+                            detailedMessage =
+                                body.error;
+                        }
+                    }
+                } catch (bodyError) {
+                    console.error(
+                        "Couldn't read function error body:",
+                        bodyError
+                    );
+                }
+
+                throw new Error(
+                    detailedMessage
                 );
             }
 
