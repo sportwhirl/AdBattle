@@ -125,9 +125,7 @@ nav .post-button:hover {
 
     box-shadow: 0 3px 15px rgba(0,0,0,.07);
 
-    transition:
-        transform .2s ease,
-        box-shadow .2s ease;
+    transition: transform .2s ease, box-shadow .2s ease;
 }
 
 .card:hover {
@@ -198,7 +196,7 @@ nav .post-button:hover {
     font-weight: normal;
 }
 
-/* Highlight whichever metric the current leaderboard uses */
+/* Emphasize ranking metric */
 
 .gallery.show-support .money {
     font-weight: bold;
@@ -209,7 +207,7 @@ nav .post-button:hover {
     color: #202124;
 }
 
-/* ACTION BUTTONS */
+/* ACTIONS */
 
 .action-buttons {
     display: grid;
@@ -257,7 +255,7 @@ nav .post-button:hover {
     background: #543bea;
 }
 
-/* SUPPORT AMOUNT BOX */
+/* SUPPORT BOX */
 
 .support-box {
     margin-top: 14px;
@@ -318,28 +316,25 @@ nav .post-button:hover {
     color: white;
 
     font-weight: bold;
-    font-size: .95rem;
-
     cursor: pointer;
 }
 
 .cancel-support {
     width: 100%;
     padding: 9px;
-
     margin-top: 3px;
 
     border: none;
     background: transparent;
 
     color: #777;
-
     cursor: pointer;
 }
 
-/* POST AD */
+/* SHARED FORMS */
 
-.submit-area {
+.submit-area,
+.auth-area {
     display: none;
 
     width: min(620px, 92%);
@@ -353,21 +348,37 @@ nav .post-button:hover {
     box-shadow: 0 4px 20px rgba(0,0,0,.08);
 }
 
-.submit-area label {
+.auth-area {
+    width: min(450px, 92%);
+}
+
+.submit-area h2,
+.auth-area h2 {
+    margin-top: 0;
+}
+
+.auth-description {
+    color: #666;
+    line-height: 1.5;
+    margin-bottom: 25px;
+}
+
+.submit-area label,
+.auth-area label {
     display: block;
     font-weight: 600;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 
 .submit-area input,
-.submit-area textarea {
+.submit-area textarea,
+.auth-area input {
     width: 100%;
 
     border: 1px solid #ccc;
     border-radius: 9px;
 
     padding: 13px;
-
     margin-bottom: 18px;
 
     font: inherit;
@@ -378,21 +389,39 @@ nav .post-button:hover {
     resize: vertical;
 }
 
-.publish-button {
+.publish-button,
+.auth-main-button,
+.auth-secondary-button {
     width: 100%;
 
     padding: 13px;
-
-    border: none;
     border-radius: 9px;
-
-    background: #654cff;
-    color: white;
 
     font-size: 1rem;
     font-weight: bold;
 
     cursor: pointer;
+}
+
+.publish-button,
+.auth-main-button {
+    border: none;
+    background: #654cff;
+    color: white;
+}
+
+.auth-secondary-button {
+    margin-top: 10px;
+
+    background: white;
+    border: 1px solid #ccc;
+}
+
+#authMessage {
+    margin-top: 17px;
+    text-align: center;
+    color: #666;
+    line-height: 1.4;
 }
 
 /* PROFILE */
@@ -421,6 +450,18 @@ nav .post-button:hover {
 
 .username {
     color: #777;
+}
+
+.logout-button {
+    margin-top: 12px;
+    padding: 0;
+
+    border: 0;
+    background: transparent;
+
+    color: #777;
+
+    cursor: pointer;
 }
 
 .profile-tabs {
@@ -537,9 +578,9 @@ nav .post-button:hover {
 
         <button
             id="profileNav"
-            onclick="showProfile()"
+            onclick="handleProfileClick()"
         >
-            👤 Profile
+            👤 Log In
         </button>
 
     </nav>
@@ -552,18 +593,62 @@ nav .post-button:hover {
 <section class="hero">
 
     <h1 id="pageTitle">
-        The Internet's Ad Battle
+        Most Supported
     </h1>
 
     <p id="pageDescription">
-        Like the ads you enjoy.
-        Support the ones you really want people to see.
+        The ads people have put the most support behind.
     </p>
 
 </section>
 
 
 <main class="gallery" id="gallery"></main>
+
+
+<!-- LOGIN -->
+
+<section class="auth-area" id="authArea">
+
+    <h2>Log In</h2>
+
+    <p class="auth-description">
+        Log in to post ads, like ads and manage your profile.
+    </p>
+
+    <label>Email</label>
+
+    <input
+        id="authEmail"
+        type="email"
+        placeholder="you@example.com"
+    >
+
+    <label>Password</label>
+
+    <input
+        id="authPassword"
+        type="password"
+        placeholder="Password"
+    >
+
+    <button
+        class="auth-main-button"
+        onclick="login()"
+    >
+        Log In
+    </button>
+
+    <button
+        class="auth-secondary-button"
+        onclick="signup()"
+    >
+        Create Account
+    </button>
+
+    <div id="authMessage"></div>
+
+</section>
 
 
 <!-- POST AN AD -->
@@ -613,9 +698,19 @@ nav .post-button:hover {
 
         <h2>Profile</h2>
 
-        <div class="username">
-            @username
+        <div
+            class="username"
+            id="profileUsername"
+        >
+            Account
         </div>
+
+        <button
+            class="logout-button"
+            onclick="logout()"
+        >
+            Log Out
+        </button>
 
         <div class="profile-tabs">
 
@@ -652,37 +747,40 @@ nav .post-button:hover {
 
 </section>
 
+
+<!-- SUPABASE LIBRARY -->
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
+
+
 <script>
-    
+
+/* ========================================
+   SUPABASE
+======================================== */
+
 const SUPABASE_URL =
-  "https://bmsrdzqprxvldltaislp.supabase.co";
+    "https://bmsrdzqprxvldltaislp.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd";
+    "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd";
 
-const db = supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
-);
+const db =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY
+    );
 
-async function testSupabase() {
-  const { data, error } = await db
-    .from("ads")
-    .select("*");
+let currentUser = null;
 
-  if (error) {
-    console.error("Supabase error:", error);
-    return;
-  }
 
-  console.log("Connected to Supabase!");
-  console.log("Ads:", data);
-}
+/* ========================================
+   DEMO ADS
 
-testSupabase();
-    
+   We'll replace these with real Supabase
+   ads after the account system works.
+======================================== */
+
 let ads = [
 
 {
@@ -752,15 +850,18 @@ let ads = [
 ];
 
 
-/* -----------------------------
+/* ========================================
    ELEMENTS
------------------------------ */
+======================================== */
 
 const gallery =
     document.getElementById("gallery");
 
 const submitArea =
     document.getElementById("submitArea");
+
+const authArea =
+    document.getElementById("authArea");
 
 const profile =
     document.getElementById("profile");
@@ -775,16 +876,259 @@ const pageDescription =
     document.getElementById("pageDescription");
 
 
-/* -----------------------------
-   CREATE AD CARD
------------------------------ */
+/* ========================================
+   AUTH
+======================================== */
+
+async function checkUser() {
+
+    const {
+        data: { user },
+        error
+    } = await db.auth.getUser();
+
+    if (error) {
+        console.log(
+            "No logged-in user."
+        );
+    }
+
+    currentUser = user || null;
+
+    updateAccountButton();
+
+    console.log(
+        currentUser
+            ? "Logged in:"
+            : "Not logged in",
+        currentUser?.email || ""
+    );
+}
+
+
+function updateAccountButton() {
+
+    const button =
+        document.getElementById(
+            "profileNav"
+        );
+
+    if (currentUser) {
+
+        button.innerText =
+            "👤 Profile";
+
+        document
+            .getElementById(
+                "profileUsername"
+            )
+            .innerText =
+                currentUser.email;
+
+    } else {
+
+        button.innerText =
+            "👤 Log In";
+
+    }
+}
+
+
+function handleProfileClick() {
+
+    if (currentUser) {
+        showProfile();
+    } else {
+        showLogin();
+    }
+}
+
+
+function showLogin() {
+
+    hideAll();
+
+    authArea.style.display =
+        "block";
+
+    pageTitle.innerText =
+        "Welcome to AdBattle";
+
+    pageDescription.innerText =
+        "Log in or create an account to join the battle.";
+
+    setNav("profileNav");
+}
+
+
+async function signup() {
+
+    const email =
+        document
+            .getElementById("authEmail")
+            .value
+            .trim();
+
+    const password =
+        document
+            .getElementById("authPassword")
+            .value;
+
+    const message =
+        document
+            .getElementById("authMessage");
+
+
+    if (!email || !password) {
+
+        message.innerText =
+            "Enter an email and password.";
+
+        return;
+    }
+
+
+    message.innerText =
+        "Creating account...";
+
+
+    const {
+        data,
+        error
+    } = await db.auth.signUp({
+        email,
+        password
+    });
+
+
+    if (error) {
+
+        message.innerText =
+            error.message;
+
+        return;
+    }
+
+
+    if (data.session) {
+
+        currentUser =
+            data.user;
+
+        updateAccountButton();
+
+        showProfile();
+
+    } else {
+
+        message.innerText =
+            "Account created. Check your email for the confirmation link.";
+
+    }
+}
+
+
+async function login() {
+
+    const email =
+        document
+            .getElementById("authEmail")
+            .value
+            .trim();
+
+    const password =
+        document
+            .getElementById("authPassword")
+            .value;
+
+    const message =
+        document
+            .getElementById("authMessage");
+
+
+    if (!email || !password) {
+
+        message.innerText =
+            "Enter your email and password.";
+
+        return;
+    }
+
+
+    message.innerText =
+        "Logging in...";
+
+
+    const {
+        data,
+        error
+    } =
+        await db.auth
+            .signInWithPassword({
+                email,
+                password
+            });
+
+
+    if (error) {
+
+        message.innerText =
+            error.message;
+
+        return;
+    }
+
+
+    currentUser =
+        data.user;
+
+    message.innerText = "";
+
+    updateAccountButton();
+
+    showProfile();
+}
+
+
+async function logout() {
+
+    await db.auth.signOut();
+
+    currentUser = null;
+
+    updateAccountButton();
+
+    showSupported();
+}
+
+
+/* Keep UI updated if auth changes */
+
+db.auth.onAuthStateChange(
+    (event, session) => {
+
+        currentUser =
+            session?.user || null;
+
+        updateAccountButton();
+
+    }
+);
+
+
+/* ========================================
+   CREATE CARD
+======================================== */
 
 function createCard(ad, rank = null) {
 
     const card =
-        document.createElement("article");
+        document.createElement(
+            "article"
+        );
 
     card.className = "card";
+
 
     card.innerHTML = `
 
@@ -792,8 +1136,8 @@ function createCard(ad, rank = null) {
 
             ${
                 rank
-                ? `<div class="rank">#${rank}</div>`
-                : ""
+                    ? `<div class="rank">#${rank}</div>`
+                    : ""
             }
 
             <img
@@ -832,12 +1176,17 @@ function createCard(ad, rank = null) {
                     ${ad.liked ? "liked" : ""}"
                     onclick="toggleLike(${ad.id})"
                 >
-                    ${ad.liked ? "♥ Liked" : "♡ Like"}
+                    ${ad.liked
+                        ? "♥ Liked"
+                        : "♡ Like"}
                 </button>
 
                 <button
                     class="support-button"
-                    onclick="openSupport(${ad.id}, this)"
+                    onclick="openSupport(
+                        ${ad.id},
+                        this
+                    )"
                 >
                     ⚡ Support
                 </button>
@@ -851,17 +1200,22 @@ function createCard(ad, rank = null) {
 }
 
 
-/* -----------------------------
+/* ========================================
    MOST SUPPORTED
------------------------------ */
+======================================== */
 
 function showSupported() {
 
     showGallery();
-    
-    gallery.classList.remove("show-likes");
-    gallery.classList.add("show-support");
-    
+
+    gallery.classList.remove(
+        "show-likes"
+    );
+
+    gallery.classList.add(
+        "show-support"
+    );
+
     pageTitle.innerText =
         "Most Supported";
 
@@ -870,25 +1224,32 @@ function showSupported() {
 
     setNav("supportedNav");
 
+
     const sorted =
         [...ads].sort(
-            (a,b) => b.support - a.support
+            (a,b) =>
+                b.support - a.support
         );
 
     renderGallery(sorted);
 }
 
 
-/* -----------------------------
+/* ========================================
    MOST LIKED
------------------------------ */
+======================================== */
 
 function showMostLiked() {
 
     showGallery();
 
-    gallery.classList.remove("show-support");
-    gallery.classList.add("show-likes");
+    gallery.classList.remove(
+        "show-support"
+    );
+
+    gallery.classList.add(
+        "show-likes"
+    );
 
     pageTitle.innerText =
         "Most Liked";
@@ -898,43 +1259,68 @@ function showMostLiked() {
 
     setNav("likedNav");
 
+
     const sorted =
         [...ads].sort(
-            (a,b) => b.likes - a.likes
+            (a,b) =>
+                b.likes - a.likes
         );
 
     renderGallery(sorted);
 }
 
 
-/* -----------------------------
-   RENDER GALLERY
------------------------------ */
+/* ========================================
+   GALLERY
+======================================== */
 
 function renderGallery(list) {
 
     gallery.innerHTML = "";
 
-    list.forEach((ad,index) => {
+    list.forEach(
+        (ad,index) => {
 
-        gallery.appendChild(
-            createCard(ad,index + 1)
-        );
+            gallery.appendChild(
+                createCard(
+                    ad,
+                    index + 1
+                )
+            );
 
-    });
+        }
+    );
 }
 
 
-/* -----------------------------
+/* ========================================
    LIKE
------------------------------ */
+======================================== */
 
 function toggleLike(id) {
 
+    if (!currentUser) {
+
+        showLogin();
+
+        document
+            .getElementById(
+                "authMessage"
+            )
+            .innerText =
+                "Log in to like ads.";
+
+        return;
+    }
+
+
     const ad =
-        ads.find(ad => ad.id === id);
+        ads.find(
+            ad => ad.id === id
+        );
 
     if (!ad) return;
+
 
     if (ad.liked) {
 
@@ -948,24 +1334,47 @@ function toggleLike(id) {
 
     }
 
+
     refreshCurrentView();
 }
 
 
-/* -----------------------------
+/* ========================================
    SUPPORT
------------------------------ */
+======================================== */
 
 function openSupport(id, button) {
 
+    if (!currentUser) {
+
+        showLogin();
+
+        document
+            .getElementById(
+                "authMessage"
+            )
+            .innerText =
+                "Log in to support ads.";
+
+        return;
+    }
+
+
     document
-        .querySelectorAll(".support-box")
-        .forEach(box => box.remove());
+        .querySelectorAll(
+            ".support-box"
+        )
+        .forEach(
+            box => box.remove()
+        );
+
 
     const box =
         document.createElement("div");
 
-    box.className = "support-box";
+    box.className =
+        "support-box";
+
 
     box.innerHTML = `
 
@@ -995,18 +1404,25 @@ function openSupport(id, button) {
         </button>
     `;
 
+
     button
         .closest(".caption")
         .appendChild(box);
+
 
     const input =
         box.querySelector("input");
 
     const confirm =
-        box.querySelector(".confirm-support");
+        box.querySelector(
+            ".confirm-support"
+        );
 
     const cancel =
-        box.querySelector(".cancel-support");
+        box.querySelector(
+            ".cancel-support"
+        );
+
 
     input.focus();
 
@@ -1016,12 +1432,14 @@ function openSupport(id, button) {
         () => {
 
             const amount =
-                parseFloat(input.value);
+                parseFloat(
+                    input.value
+                );
 
             confirm.innerText =
                 amount > 0
-                ? `⚡ Support $${amount.toFixed(2)}`
-                : "⚡ Support";
+                    ? `⚡ Support $${amount.toFixed(2)}`
+                    : "⚡ Support";
         }
     );
 
@@ -1030,8 +1448,11 @@ function openSupport(id, button) {
         "keydown",
         event => {
 
-            if (event.key === "Enter")
+            if (
+                event.key === "Enter"
+            ) {
                 confirm.click();
+            }
 
         }
     );
@@ -1040,46 +1461,78 @@ function openSupport(id, button) {
     confirm.onclick = () => {
 
         const amount =
-            parseFloat(input.value);
+            parseFloat(
+                input.value
+            );
 
-        if (!amount || amount <= 0) {
+
+        if (
+            !amount ||
+            amount <= 0
+        ) {
+
             input.focus();
             return;
+
         }
 
+
         const ad =
-            ads.find(ad => ad.id === id);
+            ads.find(
+                ad => ad.id === id
+            );
+
 
         ad.support += amount;
-        ad.userSupport += amount;
+
+        ad.userSupport +=
+            amount;
+
 
         /*
-          DEMO ONLY.
+        DEMO ONLY.
 
-          This does NOT charge money.
+        No money is charged here.
 
-          Later this is where Stripe
-          Checkout will be connected.
+        Stripe will eventually replace
+        this section.
         */
+
 
         refreshCurrentView();
     };
 
 
-    cancel.onclick = () =>
-        box.remove();
+    cancel.onclick =
+        () => box.remove();
 }
 
 
-/* -----------------------------
-   POST AN AD
------------------------------ */
+/* ========================================
+   POST AD
+======================================== */
 
 function showPost() {
 
-    gallery.style.display = "none";
-    profile.style.display = "none";
-    submitArea.style.display = "block";
+    if (!currentUser) {
+
+        showLogin();
+
+        document
+            .getElementById(
+                "authMessage"
+            )
+            .innerText =
+                "Create an account or log in to post an ad.";
+
+        return;
+    }
+
+
+    hideAll();
+
+    submitArea.style.display =
+        "block";
 
     pageTitle.innerText =
         "Post an Ad";
@@ -1095,21 +1548,34 @@ function postAd() {
 
     const title =
         document
-        .getElementById("newTitle")
-        .value.trim();
+            .getElementById(
+                "newTitle"
+            )
+            .value
+            .trim();
 
     const image =
         document
-        .getElementById("newImage")
-        .value.trim();
+            .getElementById(
+                "newImage"
+            )
+            .value
+            .trim();
 
     const caption =
         document
-        .getElementById("newCaption")
-        .value.trim();
+            .getElementById(
+                "newCaption"
+            )
+            .value
+            .trim();
 
 
-    if (!title || !image || !caption) {
+    if (
+        !title ||
+        !image ||
+        !caption
+    ) {
 
         alert(
             "Please add a title, image and caption."
@@ -1139,15 +1605,21 @@ function postAd() {
 
 
     document
-        .getElementById("newTitle")
+        .getElementById(
+            "newTitle"
+        )
         .value = "";
 
     document
-        .getElementById("newImage")
+        .getElementById(
+            "newImage"
+        )
         .value = "";
 
     document
-        .getElementById("newCaption")
+        .getElementById(
+            "newCaption"
+        )
         .value = "";
 
 
@@ -1157,15 +1629,22 @@ function postAd() {
 }
 
 
-/* -----------------------------
+/* ========================================
    PROFILE
------------------------------ */
+======================================== */
 
 function showProfile() {
 
-    gallery.style.display = "none";
-    submitArea.style.display = "none";
-    profile.style.display = "block";
+    if (!currentUser) {
+        showLogin();
+        return;
+    }
+
+
+    hideAll();
+
+    profile.style.display =
+        "block";
 
     pageTitle.innerText =
         "Your Profile";
@@ -1182,9 +1661,13 @@ function showProfile() {
 function profileSection(section) {
 
     document
-        .querySelectorAll(".profile-tabs button")
-        .forEach(button =>
-            button.classList.remove("active")
+        .querySelectorAll(
+            ".profile-tabs button"
+        )
+        .forEach(
+            button =>
+                button.classList
+                    .remove("active")
         );
 
 
@@ -1194,38 +1677,51 @@ function profileSection(section) {
     if (section === "myads") {
 
         document
-            .getElementById("myAdsTab")
-            .classList.add("active");
+            .getElementById(
+                "myAdsTab"
+            )
+            .classList
+            .add("active");
 
         list =
-            ads.filter(ad => ad.owner);
-
+            ads.filter(
+                ad => ad.owner
+            );
     }
 
 
     if (section === "liked") {
 
         document
-            .getElementById("myLikesTab")
-            .classList.add("active");
-
-        list =
-            ads.filter(ad => ad.liked);
-
-    }
-
-
-    if (section === "supported") {
-
-        document
-            .getElementById("mySupportedTab")
-            .classList.add("active");
+            .getElementById(
+                "myLikesTab"
+            )
+            .classList
+            .add("active");
 
         list =
             ads.filter(
-                ad => ad.userSupport > 0
+                ad => ad.liked
             );
+    }
 
+
+    if (
+        section === "supported"
+    ) {
+
+        document
+            .getElementById(
+                "mySupportedTab"
+            )
+            .classList
+            .add("active");
+
+        list =
+            ads.filter(
+                ad =>
+                    ad.userSupport > 0
+            );
     }
 
 
@@ -1237,6 +1733,7 @@ function profileSection(section) {
         let message =
             "Nothing here yet.";
 
+
         if (section === "myads")
             message =
                 "You haven't posted an ad yet.";
@@ -1245,7 +1742,9 @@ function profileSection(section) {
             message =
                 "You haven't liked any ads yet.";
 
-        if (section === "supported")
+        if (
+            section === "supported"
+        )
             message =
                 "You haven't supported any ads yet.";
 
@@ -1262,41 +1761,67 @@ function profileSection(section) {
     }
 
 
-    list.forEach(ad => {
+    list.forEach(
+        ad => {
 
-        profileContent.appendChild(
-            createCard(ad)
-        );
+            profileContent
+                .appendChild(
+                    createCard(ad)
+                );
 
-    });
+        }
+    );
 }
 
 
-/* -----------------------------
+/* ========================================
    HELPERS
------------------------------ */
+======================================== */
+
+function hideAll() {
+
+    gallery.style.display =
+        "none";
+
+    submitArea.style.display =
+        "none";
+
+    authArea.style.display =
+        "none";
+
+    profile.style.display =
+        "none";
+}
+
 
 function showGallery() {
 
-    submitArea.style.display = "none";
-    profile.style.display = "none";
-    gallery.style.display = "grid";
+    hideAll();
+
+    gallery.style.display =
+        "grid";
 }
 
 
 function setNav(id) {
 
     document
-        .querySelectorAll("nav button")
-        .forEach(button =>
-            button.classList.remove("active")
+        .querySelectorAll(
+            "nav button"
+        )
+        .forEach(
+            button =>
+                button.classList
+                    .remove("active")
         );
+
 
     if (id) {
 
         document
             .getElementById(id)
-            .classList.add("active");
+            .classList
+            .add("active");
 
     }
 }
@@ -1306,9 +1831,11 @@ function refreshCurrentView() {
 
     if (
         document
-        .getElementById("supportedNav")
-        .classList
-        .contains("active")
+            .getElementById(
+                "supportedNav"
+            )
+            .classList
+            .contains("active")
     ) {
 
         showSupported();
@@ -1318,9 +1845,11 @@ function refreshCurrentView() {
 
     if (
         document
-        .getElementById("likedNav")
-        .classList
-        .contains("active")
+            .getElementById(
+                "likedNav"
+            )
+            .classList
+            .contains("active")
     ) {
 
         showMostLiked();
@@ -1330,22 +1859,25 @@ function refreshCurrentView() {
 
     if (
         document
-        .getElementById("profileNav")
-        .classList
-        .contains("active")
+            .getElementById(
+                "profileNav"
+            )
+            .classList
+            .contains("active")
     ) {
 
         showProfile();
-        return;
-    }
 
+    }
 }
 
 
 function escapeHTML(text) {
 
     const div =
-        document.createElement("div");
+        document.createElement(
+            "div"
+        );
 
     div.textContent = text;
 
@@ -1353,9 +1885,23 @@ function escapeHTML(text) {
 }
 
 
-/* START */
+/* ========================================
+   START
+======================================== */
 
-showSupported();
+async function startApp() {
+
+    await checkUser();
+
+    showSupported();
+
+    console.log(
+        "AdBattle connected to Supabase."
+    );
+}
+
+
+startApp();
 
 </script>
 
