@@ -236,23 +236,122 @@ nav .post-button:hover {
     background: #543bea;
 }
 
-/* DELETE AD BUTTON */
+/* OWNER CONTROLS */
 
-.delete-ad-button {
+.edit-ad-button {
     width: 100%;
     margin-top: 12px;
     padding: 10px;
-    background: transparent;
-    border: 1px solid #ddd;
+    background: white;
+    border: 1px solid #d8d8d8;
     border-radius: 9px;
+    color: #333;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.edit-ad-button:hover {
+    background: #f5f5f5;
+}
+
+/* EDIT MODAL */
+
+.edit-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0,0,0,.45);
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.edit-panel {
+    width: min(540px, 100%);
+    margin: 40px auto;
+    background: white;
+    border-radius: 17px;
+    padding: 28px;
+    box-shadow: 0 18px 60px rgba(0,0,0,.22);
+}
+
+.edit-panel h2 {
+    margin: 0 0 22px;
+}
+
+.edit-panel label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.edit-panel input,
+.edit-panel textarea {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 17px;
+    border: 1px solid #ccc;
+    border-radius: 9px;
+    font: inherit;
+}
+
+.edit-panel textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+.edit-save-button {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 9px;
+    background: #654cff;
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.edit-cancel-button {
+    width: 100%;
+    margin-top: 8px;
+    padding: 11px;
+    border: none;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+}
+
+.danger-zone {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e8e8e8;
+}
+
+.danger-zone strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.danger-zone p {
+    margin: 0 0 12px;
     color: #777;
-    font-weight: 600;
+    font-size: .92rem;
+}
+
+.delete-ad-button {
+    width: 100%;
+    padding: 11px;
+    background: white;
+    border: 1px solid #d33;
+    border-radius: 9px;
+    color: #c22;
+    font-weight: 700;
     cursor: pointer;
 }
 
 .delete-ad-button:hover {
-    border-color: #d33;
-    color: #d33;
+    background: #fff4f4;
 }
 
 /* SUPPORT BOX */
@@ -673,6 +772,62 @@ nav .post-button:hover {
     ></div>
 </section>
 
+<!-- EDIT AD -->
+
+<div class="edit-overlay" id="editOverlay">
+    <div class="edit-panel">
+        <h2>Edit Ad</h2>
+
+        <label>Title</label>
+        <input
+            id="editTitle"
+            type="text"
+            placeholder="Ad title"
+        >
+
+        <label>Caption</label>
+        <textarea
+            id="editCaption"
+            placeholder="Ad caption"
+        ></textarea>
+
+        <label>Replace image (optional)</label>
+        <input
+            id="editImage"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+        >
+
+        <button
+            class="edit-save-button"
+            onclick="saveAdEdits()"
+        >
+            Save Changes
+        </button>
+
+        <button
+            class="edit-cancel-button"
+            onclick="closeEditAd()"
+        >
+            Cancel
+        </button>
+
+        <div class="danger-zone">
+            <strong>Delete this ad</strong>
+            <p>
+                This permanently removes the ad and its uploaded image.
+            </p>
+
+            <button
+                class="delete-ad-button"
+                onclick="deleteCurrentAd()"
+            >
+                Delete Ad
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- SUPABASE LIBRARY -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -725,6 +880,20 @@ const pageTitle =
 
 const pageDescription =
     document.getElementById("pageDescription");
+
+const editOverlay =
+    document.getElementById("editOverlay");
+
+const editTitle =
+    document.getElementById("editTitle");
+
+const editCaption =
+    document.getElementById("editCaption");
+
+const editImage =
+    document.getElementById("editImage");
+
+let editingAdId = null;
 
 /* ========================================
    AUTH
@@ -975,10 +1144,10 @@ function createCard(ad, rank = null, showOwnerControls = false) {
                 ad.owner && showOwnerControls
                     ? `
                         <button
-                            class="delete-ad-button"
-                            onclick="deleteAd(${ad.id})"
+                            class="edit-ad-button"
+                            onclick="openEditAd(${ad.id})"
                         >
-                            Delete Ad
+                            Edit Ad
                         </button>
                     `
                     : ""
@@ -1369,6 +1538,227 @@ async function postAd() {
 }
 
 /* ========================================
+   EDIT AD
+======================================== */
+
+function openEditAd(id) {
+    if (!currentUser) return;
+
+    const ad =
+        ads.find(ad => ad.id === id);
+
+    if (!ad || !ad.owner) {
+        alert("You can only edit your own ads.");
+        return;
+    }
+
+    editingAdId = id;
+
+    editTitle.value =
+        ad.title;
+
+    editCaption.value =
+        ad.caption;
+
+    editImage.value = "";
+
+    editOverlay.style.display =
+        "block";
+}
+
+function closeEditAd() {
+    editOverlay.style.display =
+        "none";
+
+    editingAdId = null;
+    editImage.value = "";
+}
+
+async function saveAdEdits() {
+    if (!currentUser || editingAdId === null) {
+        return;
+    }
+
+    const ad =
+        ads.find(ad => ad.id === editingAdId);
+
+    if (!ad || !ad.owner) {
+        alert("You can only edit your own ads.");
+        return;
+    }
+
+    const title =
+        editTitle.value.trim();
+
+    const caption =
+        editCaption.value.trim();
+
+    const replacementImage =
+        editImage.files[0];
+
+    if (!title || !caption) {
+        alert("Please add a title and caption.");
+        return;
+    }
+
+    let newImageUrl =
+        ad.image;
+
+    let newImagePath =
+        null;
+
+    if (replacementImage) {
+        if (
+            replacementImage.size >
+            10 * 1024 * 1024
+        ) {
+            alert(
+                "Please choose an image smaller than 10 MB."
+            );
+            return;
+        }
+
+        const rawExtension =
+            replacementImage.name.includes(".")
+                ? replacementImage.name.split(".").pop()
+                : "jpg";
+
+        const extension =
+            rawExtension
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, "") || "jpg";
+
+        newImagePath =
+            `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+
+        const {
+            error: uploadError
+        } = await db.storage
+            .from("ad-images")
+            .upload(
+                newImagePath,
+                replacementImage,
+                {
+                    cacheControl: "3600",
+                    upsert: false
+                }
+            );
+
+        if (uploadError) {
+            console.error(
+                "Replacement image upload failed:",
+                uploadError
+            );
+
+            alert(
+                "Couldn't upload the new image: " +
+                uploadError.message
+            );
+
+            return;
+        }
+
+        const {
+            data: publicUrlData
+        } = db.storage
+            .from("ad-images")
+            .getPublicUrl(newImagePath);
+
+        newImageUrl =
+            publicUrlData.publicUrl;
+    }
+
+    const {
+        error: updateError
+    } = await db
+        .from("ads")
+        .update({
+            title,
+            caption,
+            image_url: newImageUrl
+        })
+        .eq("id", editingAdId)
+        .eq("user_id", currentUser.id);
+
+    if (updateError) {
+        console.error(
+            "Couldn't update ad:",
+            updateError
+        );
+
+        if (newImagePath) {
+            await db.storage
+                .from("ad-images")
+                .remove([newImagePath]);
+        }
+
+        alert(
+            "Couldn't save changes: " +
+            updateError.message
+        );
+
+        return;
+    }
+
+    /*
+        If the user replaced the image and the old image
+        is one of our Supabase Storage images, remove it.
+    */
+    if (
+        replacementImage &&
+        ad.image
+    ) {
+        try {
+            const marker =
+                "/storage/v1/object/public/ad-images/";
+
+            if (ad.image.includes(marker)) {
+                const oldImagePath =
+                    decodeURIComponent(
+                        ad.image.split(marker)[1]
+                    );
+
+                const {
+                    error: oldImageError
+                } = await db.storage
+                    .from("ad-images")
+                    .remove([oldImagePath]);
+
+                if (oldImageError) {
+                    console.error(
+                        "Old image cleanup failed:",
+                        oldImageError
+                    );
+                }
+            }
+        } catch (error) {
+            console.error(
+                "Old image cleanup failed:",
+                error
+            );
+        }
+    }
+
+    closeEditAd();
+
+    await loadAds();
+
+    showProfile();
+    profileSection("myads");
+}
+
+async function deleteCurrentAd() {
+    if (editingAdId === null) return;
+
+    const id =
+        editingAdId;
+
+    closeEditAd();
+
+    await deleteAd(id);
+}
+
+/* ========================================
    DELETE AD
 ======================================== */
 
@@ -1753,6 +2143,29 @@ async function loadAds() {
         };
     });
 }
+
+/* Close the edit panel when clicking outside it */
+
+editOverlay.addEventListener(
+    "click",
+    event => {
+        if (event.target === editOverlay) {
+            closeEditAd();
+        }
+    }
+);
+
+document.addEventListener(
+    "keydown",
+    event => {
+        if (
+            event.key === "Escape" &&
+            editOverlay.style.display === "block"
+        ) {
+            closeEditAd();
+        }
+    }
+);
 
 /* ========================================
    START
