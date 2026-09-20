@@ -27,6 +27,9 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !anonKey || !stripeSecret) {
       throw new Error("Wallet Checkout is not configured.");
     }
+    if (!stripeSecret.startsWith("sk_test_")) {
+      throw new Error("Wallet top-ups are restricted to Stripe test mode pending production review.");
+    }
 
     const token = parseBearerToken(req);
     if (!token) {
@@ -141,4 +144,3 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: errorMessage(error) }, 500);
   }
 });
-

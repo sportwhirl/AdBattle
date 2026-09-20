@@ -36,10 +36,23 @@ async function retrySettlement(settlementId: string, error: string) {
 }
 
 async function transferSettlement(settlement: Settlement) {
+  // Do not silently enable real-money transfers before production review.
+  if (!stripeSecret!.startsWith("sk_test_")) {
+    throw new Error("Wallet settlements are restricted to Stripe test mode.");
+  }
+  const { data: guard, error: guardError } = await admin.rpc("prepare_wallet_transfer", {
+    p_settlement_id: settlement.settlement_id,
+  });
+  if (guardError) throw new Error("Could not authorize this transfer attempt.");
+  if (!guard?.allowed) return { status: "held", reason: guard?.reason || "not_authorized" };
+  if (!guard.destination || Date.now() >= Date.parse(guard.retry_before) - 60_000 ||
+      !Number.isFinite(Date.parse(guard.retry_before))) {
+    return { status: "held", reason: "retry_window_expired" };
+  }
   const params = new URLSearchParams();
   params.set("amount", String(settlement.creator_transfer_cents));
   params.set("currency", "usd");
-  params.set("destination", settlement.stripe_account_id);
+  params.set("destination", guard.destination);
   params.set("transfer_group", `adbattle_ad_${settlement.ad_id}`);
   params.set("metadata[settlement_id]", settlement.settlement_id);
   params.set("metadata[ad_id]", String(settlement.ad_id));
@@ -51,11 +64,11 @@ async function transferSettlement(settlement: Settlement) {
     headers: {
       "Authorization": `Bearer ${stripeSecret}`,
       "Content-Type": "application/x-www-form-urlencoded",
-      // Reusing the settlement ID makes a retry safe even if Stripe completed
-      // the transfer but the first HTTP response was lost.
+      // Same ID and immutable parameters, only inside the bounded retry window.
       "Idempotency-Key": `adbattle-settlement-${settlement.settlement_id}`,
     },
     body: params.toString(),
+    signal: AbortSignal.timeout(30_000),
   });
 
   const transfer = await stripeResponse.json();
@@ -74,12 +87,12 @@ async function transferSettlement(settlement: Settlement) {
   );
 
   if (completeError) {
-    // Leave this settlement in processing. The database reclaims stale
-    // processing work with the same ID and Stripe idempotency key.
+    // Bounded retries only. A prolonged failure is held for reconciliation;
+    // never assume Stripe keeps an idempotency key indefinitely.
     throw new Error(`Transfer created but ledger completion failed: ${completeError.message}`);
   }
 
-  return transfer.id as string;
+  return { status: "succeeded", transfer_id: transfer.id as string };
 }
 
 Deno.serve(async (req) => {
@@ -105,18 +118,16 @@ Deno.serve(async (req) => {
 
   for (const settlement of settlements) {
     try {
-      const transferId = await transferSettlement(settlement);
+      const outcome = await transferSettlement(settlement);
       results.push({
         settlement_id: settlement.settlement_id,
-        status: "succeeded",
-        transfer_id: transferId,
+        ...outcome,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown transfer error";
       console.error("Settlement transfer failed:", settlement.settlement_id, error);
 
-      // If ledger completion failed after Stripe accepted the transfer, this
-      // retry still remains safe because the same settlement ID is reused.
+      // The preparation RPC refuses future POSTs once the retry window expires.
       await retrySettlement(settlement.settlement_id, message);
       results.push({
         settlement_id: settlement.settlement_id,
@@ -128,4 +139,3 @@ Deno.serve(async (req) => {
 
   return Response.json({ processed: settlements.length, results });
 });
-

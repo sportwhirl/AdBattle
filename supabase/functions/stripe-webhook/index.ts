@@ -25,6 +25,7 @@ function paymentIntentId(session: Stripe.Checkout.Session) {
 }
 
 async function recordWalletTopup(session: Stripe.Checkout.Session) {
+  if (session.livemode) throw new Error("Wallet payments are restricted to test mode.");
   if (session.payment_status !== "paid") return;
   if (session.currency !== "usd") {
     throw new Error(`Unexpected top-up currency on ${session.id}`);
@@ -44,6 +45,19 @@ async function recordWalletTopup(session: Stripe.Checkout.Session) {
     throw new Error(`Invalid wallet top-up metadata on ${session.id}`);
   }
 
+  // Check the current charge as well as webhook history: a delayed paid
+  // event must not make an already-refunded/disputed payment spendable.
+  const intentId = paymentIntentId(session);
+  if (!intentId) throw new Error("Wallet payment intent is missing.");
+  const intent = await stripe.paymentIntents.retrieve(intentId);
+  const latestChargeId = typeof intent.latest_charge === "string"
+    ? intent.latest_charge : intent.latest_charge?.id;
+  if (!latestChargeId) throw new Error("Wallet charge is missing.");
+  const currentCharge = await stripe.charges.retrieve(latestChargeId);
+  if (currentCharge.amount_refunded > 0 || currentCharge.disputed) {
+    await recordPaymentRisk(currentCharge, `checkout-risk:${session.id}`,
+      "checkout.risk_snapshot", Boolean(currentCharge.disputed));
+  }
   const { data, error } = await admin.rpc("record_wallet_topup", {
     p_stripe_session_id: session.id,
     p_stripe_payment_intent_id: paymentIntentId(session) || "",
@@ -62,6 +76,27 @@ async function recordWalletTopup(session: Stripe.Checkout.Session) {
     amount_cents: amountCents,
     credited: data?.credited,
   });
+}
+
+async function recordPaymentRisk(
+  charge: Stripe.Charge, eventId: string, eventType: string, disputeSeen: boolean,
+) {
+  const intentId = typeof charge.payment_intent === "string"
+    ? charge.payment_intent : charge.payment_intent?.id;
+  if (!intentId) return;
+  const intent = await stripe.paymentIntents.retrieve(intentId);
+  if (intent.metadata?.payment_type !== "wallet_topup") return;
+  const userId = intent.metadata?.wallet_user_id;
+  if (!userId) throw new Error("Wallet risk user is missing.");
+  const { error } = await admin.rpc("record_wallet_payment_risk", {
+    p_payment_intent_id: intentId,
+    p_user_id: userId,
+    p_refunded_cents: charge.amount_refunded,
+    p_dispute_seen: disputeSeen || Boolean(charge.disputed),
+    p_event_id: eventId,
+    p_event_type: eventType,
+  });
+  if (error) throw new Error(`Could not persist wallet payment risk: ${error.message}`);
 }
 
 // Kept during the migration so a direct-Support Checkout session created
@@ -211,6 +246,24 @@ Deno.serve(async (req) => {
       case "checkout.session.async_payment_succeeded":
         await processPaidSession(event.data.object as Stripe.Checkout.Session);
         break;
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        await recordPaymentRisk(charge, event.id, event.type, false);
+        break;
+      }
+      case "charge.dispute.created":
+      case "charge.dispute.updated":
+      case "charge.dispute.closed":
+      case "charge.dispute.funds_withdrawn":
+      case "charge.dispute.funds_reinstated": {
+        const dispute = event.data.object as Stripe.Dispute;
+        const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+        const charge = await stripe.charges.retrieve(chargeId);
+        // Never auto-unfreeze on won/closed events: reconcile refunds,
+        // previously transferred funds, and fees before releasing a hold.
+        await recordPaymentRisk(charge, event.id, event.type, true);
+        break;
+      }
       default:
         console.log("Ignoring Stripe event:", event.type);
     }

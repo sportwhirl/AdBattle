@@ -1175,6 +1175,35 @@ function formatCents(cents) {
     ).toFixed(2)}`;
 }
 
+function pendingSupportKey() {
+    return `adbattle:pending-support:${currentUser.id}`;
+}
+
+function readPendingSupport() {
+    const raw = localStorage.getItem(pendingSupportKey());
+    return raw ? JSON.parse(raw) : null;
+}
+
+async function submitWalletSupport(adId, amountCents) {
+    const key = pendingSupportKey();
+    let pending = readPendingSupport();
+    if (pending && (pending.ad_id !== adId || pending.amount_cents !== amountCents)) {
+        throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} Support for ad #${pending.ad_id} first. Retry that same ad and amount; it will not be charged twice.`);
+    }
+    if (!pending) {
+        pending = { ad_id: adId, amount_cents: amountCents, request_id: crypto.randomUUID() };
+        // Persist BEFORE sending. If storage is unavailable, fail without spending.
+        localStorage.setItem(key, JSON.stringify(pending));
+    }
+    const { data, error } = await db.functions.invoke("support-from-wallet", { body: pending });
+    if (error || !data?.ok) {
+        throw new Error(await functionErrorMessage(error, data,
+            "Support could not be confirmed. Retry the same ad and amount."));
+    }
+    localStorage.removeItem(key);
+    return data;
+}
+
 function formatMicros(micros) {
     const fixed = (
         Number(micros || 0) / 1000000
@@ -1925,6 +1954,17 @@ async function openSupport(id, button) {
     const cancel =
         box.querySelector(".cancel-support");
 
+    try {
+        const pending = readPendingSupport();
+        if (pending?.ad_id === id) {
+            input.value = (pending.amount_cents / 100).toFixed(2);
+            confirm.innerText = "Retry pending Support";
+        }
+    } catch (error) {
+        box.remove();
+        alert("Browser storage is unavailable. Support is paused to protect against duplicate charges.");
+        return;
+    }
     input.focus();
 
     input.addEventListener(
@@ -1950,6 +1990,13 @@ async function openSupport(id, button) {
     );
 
     confirm.onclick = async () => {
+        if (confirm.disabled) return;
+        let pending;
+        try { pending = readPendingSupport(); }
+        catch (error) {
+            alert("Cannot read pending Support. No payment was sent.");
+            return;
+        }
         const amountCents =
             inputDollarsToCents(
                 input.value
@@ -1967,7 +2014,7 @@ async function openSupport(id, button) {
             return;
         }
 
-        if (amountCents > walletBalanceCents) {
+        if (amountCents > walletBalanceCents && !pending) {
             alert(
                 "Your AdBattle balance is too low. Add at least $10.00 from your Profile."
             );
@@ -1981,36 +2028,7 @@ async function openSupport(id, button) {
             "Recording Support...";
 
         try {
-            const {
-                data,
-                error
-            } = await db.functions.invoke(
-                "support-from-wallet",
-                {
-                    body: {
-                        ad_id: id,
-                        amount_cents:
-                            amountCents,
-                        request_id:
-                            crypto.randomUUID()
-                    }
-                }
-            );
-
-            if (error) {
-                console.error(
-                    "Wallet Support error:",
-                    error
-                );
-
-                throw new Error(
-                    await functionErrorMessage(
-                        error,
-                        data,
-                        "Couldn't record this Support."
-                    )
-                );
-            }
+            const data = await submitWalletSupport(id, amountCents);
 
             walletBalanceCents =
                 Number(data?.balance_cents) || 0;
@@ -2018,7 +2036,10 @@ async function openSupport(id, button) {
             walletBalance.innerText =
                 formatCents(walletBalanceCents);
 
-            await Promise.all([
+            // Payment has been acknowledged: remove the retry button before
+            // refreshing unrelated UI, which may fail independently.
+            box.remove();
+            await Promise.allSettled([
                 loadAds(),
                 loadCreatorBalance()
             ]);
