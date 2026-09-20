@@ -912,7 +912,7 @@ db.auth.onAuthStateChange(
    CREATE CARD
 ======================================== */
 
-function createCard(ad, rank = null) {
+function createCard(ad, rank = null, showOwnerControls = false) {
     const card =
         document.createElement("article");
 
@@ -972,7 +972,7 @@ function createCard(ad, rank = null) {
             </div>
 
             ${
-                ad.owner
+                ad.owner && showOwnerControls
                     ? `
                         <button
                             class="delete-ad-button"
@@ -1580,8 +1580,15 @@ function profileSection(section) {
     }
 
     list.forEach(ad => {
+        const showOwnerControls =
+            section === "myads";
+
         profileContent.appendChild(
-            createCard(ad)
+            createCard(
+                ad,
+                null,
+                showOwnerControls
+            )
         );
     });
 }
