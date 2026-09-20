@@ -1962,63 +1962,111 @@ async function loadPaymentStatus() {
         "Checking payment setup...";
 
     setupPaymentsButton.disabled =
-        false;
+        true;
 
-    const {
-        data,
-        error
-    } = await db
-        .from("creator_accounts")
-        .select(
-            "stripe_account_id, onboarding_complete, charges_enabled, payouts_enabled"
-        )
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
-
-    if (error) {
-        console.error(
-            "Couldn't load payment status:",
+    try {
+        const {
+            data,
             error
+        } = await db.functions.invoke(
+            "sync-connect-status",
+            {
+                body: {}
+            }
         );
 
+        if (error) {
+            console.error(
+                "Couldn't sync payment status:",
+                error
+            );
+
+            throw error;
+        }
+
+        if (!data?.has_account) {
+            paymentStatus.innerText =
+                "Payments are not set up yet.";
+
+            setupPaymentsButton.innerText =
+                "Set Up Payments";
+
+            setupPaymentsButton.disabled =
+                false;
+
+            return;
+        }
+
+        if (
+            data.onboarding_complete &&
+            data.charges_enabled &&
+            data.payouts_enabled
+        ) {
+            paymentStatus.innerText =
+                "✓ Payments enabled";
+
+            setupPaymentsButton.innerText =
+                "Payment Settings";
+
+            setupPaymentsButton.disabled =
+                false;
+
+            return;
+        }
+
         paymentStatus.innerText =
-            "Couldn't check payment status.";
+            "Payment setup needs attention.";
 
         setupPaymentsButton.innerText =
-            "Set Up Payments";
+            "Continue Payment Setup";
 
-        return;
+        setupPaymentsButton.disabled =
+            false;
+
+    } catch (error) {
+        console.error(error);
+
+        /*
+            Fall back to the saved database state if
+            Stripe status sync is temporarily unavailable.
+        */
+        const {
+            data
+        } = await db
+            .from("creator_accounts")
+            .select(
+                "stripe_account_id, onboarding_complete, charges_enabled, payouts_enabled"
+            )
+            .eq("user_id", currentUser.id)
+            .maybeSingle();
+
+        if (!data) {
+            paymentStatus.innerText =
+                "Payments are not set up yet.";
+
+            setupPaymentsButton.innerText =
+                "Set Up Payments";
+        } else if (
+            data.onboarding_complete &&
+            data.charges_enabled &&
+            data.payouts_enabled
+        ) {
+            paymentStatus.innerText =
+                "✓ Payments enabled";
+
+            setupPaymentsButton.innerText =
+                "Payment Settings";
+        } else {
+            paymentStatus.innerText =
+                "Payment setup started.";
+
+            setupPaymentsButton.innerText =
+                "Continue Payment Setup";
+        }
+
+        setupPaymentsButton.disabled =
+            false;
     }
-
-    if (!data) {
-        paymentStatus.innerText =
-            "Payments are not set up yet.";
-
-        setupPaymentsButton.innerText =
-            "Set Up Payments";
-
-        return;
-    }
-
-    if (
-        data.onboarding_complete &&
-        data.charges_enabled &&
-        data.payouts_enabled
-    ) {
-        paymentStatus.innerText =
-            "✓ Payments enabled";
-
-        setupPaymentsButton.innerText =
-            "Payment Settings";
-
-        return;
-    }
-
-    paymentStatus.innerText =
-        "Payment setup started.";
-
-    setupPaymentsButton.innerText =
-        "Continue Payment Setup";
 }
 
 async function setupPayments() {
