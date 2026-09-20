@@ -1297,47 +1297,63 @@ function renderGallery(list) {
    LIKE
 ======================================== */
 
-function toggleLike(id) {
+async function toggleLike(id) {
 
     if (!currentUser) {
-
         showLogin();
 
-        document
-            .getElementById(
-                "authMessage"
-            )
-            .innerText =
-                "Log in to like ads.";
+        document.getElementById("authMessage").innerText =
+            "Log in to like ads.";
 
         return;
     }
 
-
-    const ad =
-        ads.find(
-            ad => ad.id === id
-        );
+    const ad = ads.find(ad => ad.id === id);
 
     if (!ad) return;
 
 
+    /* REMOVE LIKE */
+
     if (ad.liked) {
 
-        ad.liked = false;
-        ad.likes--;
+        const { error } = await db
+            .from("likes")
+            .delete()
+            .eq("ad_id", id)
+            .eq("user_id", currentUser.id);
 
-    } else {
-
-        ad.liked = true;
-        ad.likes++;
+        if (error) {
+            console.error(error);
+            alert("Couldn't remove like.");
+            return;
+        }
 
     }
 
+    /* ADD LIKE */
+
+    else {
+
+        const { error } = await db
+            .from("likes")
+            .insert({
+                ad_id: id,
+                user_id: currentUser.id
+            });
+
+        if (error) {
+            console.error(error);
+            alert("Couldn't save like.");
+            return;
+        }
+    }
+
+
+    await loadAds();
 
     refreshCurrentView();
 }
-
 
 /* ========================================
    SUPPORT
@@ -1851,40 +1867,91 @@ function escapeHTML(text) {
 
 async function loadAds() {
 
-    const { data, error } = await db
-        .from("ads")
-        .select("*")
-        .order("created_at", {
-            ascending: false
-        });
+    /* GET ADS */
 
-    if (error) {
+    const { data: adData, error: adError } =
+        await db
+            .from("ads")
+            .select("*")
+            .order("created_at", {
+                ascending: false
+            });
+
+    if (adError) {
         console.error(
             "Couldn't load ads:",
-            error
+            adError
         );
         return;
     }
 
-    ads = data.map(ad => ({
-        id: ad.id,
 
-        title: ad.title,
-        caption: ad.caption || "",
-        image: ad.image_url,
+    /* GET LIKES */
 
-        likes: ad.likes || 0,
-        support:
-            Number(ad.support_total) || 0,
+    const { data: likeData, error: likeError } =
+        await db
+            .from("likes")
+            .select("ad_id, user_id");
 
-        liked: false,
-        userSupport: 0,
+    if (likeError) {
+        console.error(
+            "Couldn't load likes:",
+            likeError
+        );
+        return;
+    }
 
-        owner:
+
+    ads = adData.map(ad => {
+
+        const adLikes =
+            likeData.filter(
+                like => like.ad_id === ad.id
+            );
+
+        const userLiked =
             currentUser
-                ? ad.user_id === currentUser.id
-                : false
-    }));
+                ? adLikes.some(
+                    like =>
+                        like.user_id === currentUser.id
+                )
+                : false;
+
+
+        return {
+
+            id: ad.id,
+
+            title: ad.title,
+
+            caption:
+                ad.caption || "",
+
+            image:
+                ad.image_url,
+
+            /* REAL LIKE DATA */
+
+            likes:
+                adLikes.length,
+
+            liked:
+                userLiked,
+
+            /* SUPPORT STILL COMES
+               FROM ADS TABLE */
+
+            support:
+                Number(ad.support_total) || 0,
+
+            userSupport: 0,
+
+            owner:
+                currentUser
+                    ? ad.user_id === currentUser.id
+                    : false
+        };
+    });
 }
 /* ========================================
    START
