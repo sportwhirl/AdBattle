@@ -665,14 +665,14 @@ nav .post-button:hover {
         placeholder="Give your ad a title"
     >
 
-    <label>Image URL</label>
+   <label>Choose Image</label>
 
     <input
         id="newImage"
-        type="url"
-        placeholder="https://example.com/image.jpg"
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
     >
-
+    
     <label>Caption</label>
 
     <textarea
@@ -1570,43 +1570,132 @@ async function postAd() {
     const title =
         document.getElementById("newTitle").value.trim();
 
-    const image =
-        document.getElementById("newImage").value.trim();
-
     const caption =
         document.getElementById("newCaption").value.trim();
 
-    if (!title || !image || !caption) {
+    const imageInput =
+        document.getElementById("newImage");
+
+    const imageFile =
+        imageInput.files[0];
+
+
+    if (!title || !caption || !imageFile) {
         alert("Please add a title, image and caption.");
         return;
     }
 
-    const { data, error } = await db
+
+    /* Limit image size to 10 MB */
+
+    if (imageFile.size > 10 * 1024 * 1024) {
+        alert("Please choose an image smaller than 10 MB.");
+        return;
+    }
+
+
+    /*
+       Give every image a unique filename.
+       Putting it inside the user's folder will
+       also make ownership easier later.
+    */
+
+    const extension =
+        imageFile.name.split(".").pop();
+
+    const fileName =
+        `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+
+
+    /* UPLOAD IMAGE */
+
+    const {
+        error: uploadError
+    } = await db.storage
+        .from("ad-images")
+        .upload(
+            fileName,
+            imageFile,
+            {
+                cacheControl: "3600",
+                upsert: false
+            }
+        );
+
+
+    if (uploadError) {
+
+        console.error(
+            "Image upload failed:",
+            uploadError
+        );
+
+        alert(
+            "Couldn't upload image: " +
+            uploadError.message
+        );
+
+        return;
+    }
+
+
+    /* GET PUBLIC IMAGE URL */
+
+    const {
+        data: publicUrlData
+    } = db.storage
+        .from("ad-images")
+        .getPublicUrl(fileName);
+
+
+    const imageUrl =
+        publicUrlData.publicUrl;
+
+
+    /* CREATE THE AD */
+
+    const {
+        error: adError
+    } = await db
         .from("ads")
         .insert({
             user_id: currentUser.id,
             title: title,
             caption: caption,
-            image_url: image
-        })
-        .select()
-        .single();
+            image_url: imageUrl
+        });
 
-    if (error) {
-        console.error(error);
-        alert("Couldn't post the ad: " + error.message);
+
+    if (adError) {
+
+        console.error(
+            "Couldn't create ad:",
+            adError
+        );
+
+        alert(
+            "Image uploaded, but the ad couldn't be created: " +
+            adError.message
+        );
+
         return;
     }
 
-    document.getElementById("newTitle").value = "";
-    document.getElementById("newImage").value = "";
-    document.getElementById("newCaption").value = "";
 
-    alert("Ad posted!");
+    /* CLEAR FORM */
+
+    document.getElementById("newTitle").value = "";
+    document.getElementById("newCaption").value = "";
+    imageInput.value = "";
+
+
+    /* RELOAD REAL ADS */
 
     await loadAds();
 
     showProfile();
+
+    profileSection("myads");
 }
 
 
