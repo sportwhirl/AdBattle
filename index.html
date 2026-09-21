@@ -765,6 +765,26 @@ nav .post-button:hover {
     color: #777;
 }
 
+/* ENVIRONMENT */
+
+.environment-label {
+    display: none;
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #7c2d12;
+    color: white;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    box-shadow: 0 3px 12px rgba(0,0,0,.24);
+}
+
+.environment-label.visible { display: block; }
+
 /* RETURN MESSAGE */
 
 .return-message {
@@ -813,9 +833,20 @@ nav .post-button:hover {
     }
 }
 </style>
+<!-- Runtime configuration is injected in memory by scripts/serve_staging.py. -->
+<script src="./adbattle.local-config.js"></script>
+<script src="./frontend-config.js"></script>
+
 </head>
 
 <body>
+
+<div id="environmentLabel" class="environment-label" role="status">ADBATTLE TEST · LOCAL STAGING</div>
+<script>
+if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
+    document.getElementById("environmentLabel").classList.add("visible");
+}
+</script>
 
 <header>
     <div class="topbar">
@@ -841,6 +872,7 @@ nav .post-button:hover {
 
             <button
                 class="post-button"
+                id="postNav"
                 onclick="showPost()"
             >
                 + POST AN AD
@@ -1084,7 +1116,6 @@ nav .post-button:hover {
 </section>
 
 <!-- SUPABASE LIBRARY -->
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
@@ -1093,17 +1124,19 @@ nav .post-button:hover {
    SUPABASE
 ======================================== */
 
-const SUPABASE_URL =
-    "https://bmsrdzqprxvldltaislp.supabase.co";
+const APP_CONFIG = AdBattleConfig.resolve(
+    window.location,
+    window.ADBATTLE_LOCAL_CONFIG
+);
+const SUPABASE_URL = APP_CONFIG.supabaseUrl;
+const SUPABASE_PUBLISHABLE_KEY = APP_CONFIG.publishableKey;
+const PROJECT_REF = APP_CONFIG.projectRef;
+const FEATURES = APP_CONFIG.features;
 
-const SUPABASE_PUBLISHABLE_KEY =
-    "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd";
-
-const db =
-    supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY
-    );
+const db = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+);
 
 let currentUser = null;
 let ads = [];
@@ -1158,6 +1191,31 @@ const walletMessage =
 const creatorBalanceStatus =
     document.getElementById("creatorBalanceStatus");
 
+function applyEnvironmentConfiguration() {
+    if (APP_CONFIG.environment === "staging") {
+        document.getElementById("environmentLabel").classList.add("visible");
+    }
+    if (!FEATURES.likes) {
+        const likedNav = document.getElementById("likedNav");
+        const myLikesTab = document.getElementById("myLikesTab");
+        likedNav.disabled = true;
+        likedNav.title = "Likes are unavailable in the staging schema.";
+        myLikesTab.disabled = true;
+        myLikesTab.title = likedNav.title;
+    }
+    if (!FEATURES.adImages) {
+        const postNav = document.getElementById("postNav");
+        postNav.disabled = true;
+        postNav.title = "Ad posting is unavailable in staging because ad-images is not deployed.";
+    }
+    if (!FEATURES.creatorOnboarding) {
+        setupPaymentsButton.disabled = true;
+        setupPaymentsButton.title = "Creator onboarding functions are not deployed in staging.";
+        paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+    }
+}
+
+applyEnvironmentConfiguration();
 
 function defaultPromotionAllocation() {
     return {
@@ -1176,11 +1234,22 @@ function formatCents(cents) {
 }
 
 function pendingSupportKey() {
-    return `adbattle:pending-support:${currentUser.id}`;
+    return `adbattle:pending-support:${PROJECT_REF}:${currentUser.id}`;
 }
 
 function readPendingSupport() {
-    const raw = localStorage.getItem(pendingSupportKey());
+    const key = pendingSupportKey();
+    let raw = localStorage.getItem(key);
+    const legacyKey = `adbattle:pending-support:${currentUser.id}`;
+    if (!raw) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+            // Move, never discard, a request saved before storage was project-scoped.
+            localStorage.setItem(key, legacy);
+            localStorage.removeItem(legacyKey);
+            raw = legacy;
+        }
+    }
     return raw ? JSON.parse(raw) : null;
 }
 
@@ -1304,6 +1373,8 @@ async function loadWalletBalance() {
         data?.status === "frozen"
             ? "This balance is temporarily unavailable."
             : "Your full top-up becomes available to support ads.";
+
+    await reconcilePendingTopup();
 }
 
 async function loadCreatorBalance() {
@@ -1341,85 +1412,106 @@ async function loadCreatorBalance() {
         `Pending creator balance: ${formatMicros(pendingMicros)}`;
 }
 
+function pendingTopupKey() {
+    return `adbattle:pending-topup:${PROJECT_REF}:${currentUser.id}`;
+}
+
+function readPendingTopup() {
+    const raw = localStorage.getItem(pendingTopupKey());
+    return raw ? JSON.parse(raw) : null;
+}
+
+function stripeTestSessionId(url) {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/(cs_test_[A-Za-z0-9]+)(?:\/|$)/);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "checkout.stripe.com" ||
+        parsed.username || parsed.password || (parsed.port && parsed.port !== "443") || !match) {
+        throw new Error("Stripe did not return an approved TEST Checkout URL.");
+    }
+    return match[1];
+}
+
+async function reconcilePendingTopup() {
+    if (!currentUser) return false;
+    const key = pendingTopupKey();
+    const pending = readPendingTopup();
+    if (!pending?.checkout_session_id) return false;
+    const { data, error } = await db
+        .from("wallet_topups")
+        .select("amount_cents,status")
+        .eq("user_id", currentUser.id)
+        .eq("stripe_session_id", pending.checkout_session_id);
+    if (error) {
+        console.error("Couldn't reconcile pending top-up:", error);
+        return false;
+    }
+    if (data?.length === 1 && data[0].status === "paid" &&
+        data[0].amount_cents === pending.amount_cents) {
+        localStorage.removeItem(key);
+        return true;
+    }
+    return false;
+}
+
 async function addWalletFunds() {
     if (!currentUser) {
         showLogin();
         return;
     }
 
-    const amountCents =
-        inputDollarsToCents(
-            walletTopupAmount.value
-        );
-
-    if (
-        amountCents === null ||
-        amountCents < 1000
-    ) {
-        walletMessage.innerText =
-            "The minimum account top-up is $10.00.";
+    const amountCents = inputDollarsToCents(walletTopupAmount.value);
+    if (amountCents === null || amountCents < 1000) {
+        walletMessage.innerText = "The minimum account top-up is $10.00.";
+        walletTopupAmount.focus();
+        return;
+    }
+    if (amountCents > 1000000) {
+        walletMessage.innerText = "The maximum account top-up is $10,000.00.";
         walletTopupAmount.focus();
         return;
     }
 
-    if (amountCents > 1000000) {
-        walletMessage.innerText =
-            "The maximum account top-up is $10,000.00.";
-        walletTopupAmount.focus();
+    const key = pendingTopupKey();
+    let pending;
+    try {
+        pending = readPendingTopup();
+        if (pending && pending.amount_cents !== amountCents) {
+            throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} top-up first. Retry that same amount; it will not create a second Checkout.`);
+        }
+        if (!pending) {
+            pending = { amount_cents: amountCents, request_id: crypto.randomUUID() };
+            // Persist BEFORE sending. If storage is unavailable, fail without creating Checkout.
+            localStorage.setItem(key, JSON.stringify(pending));
+        }
+    } catch (error) {
+        walletMessage.innerText = error instanceof Error ? error.message : "Couldn't save top-up retry state.";
         return;
     }
 
     walletTopupButton.disabled = true;
-    walletTopupButton.innerText =
-        "Opening Stripe...";
-    walletMessage.innerText =
-        "Preparing your secure payment page...";
+    walletTopupButton.innerText = "Opening Stripe...";
+    walletMessage.innerText = "Preparing your secure payment page...";
 
     try {
-        const {
-            data,
-            error
-        } = await db.functions.invoke(
-            "create-wallet-checkout",
-            {
-                body: {
-                    amount_cents: amountCents,
-                    request_id:
-                        crypto.randomUUID()
-                }
-            }
-        );
-
+        const { data, error } = await db.functions.invoke("create-wallet-checkout", {
+            body: pending
+        });
         if (error) {
-            throw new Error(
-                await functionErrorMessage(
-                    error,
-                    data,
-                    "Couldn't start the top-up."
-                )
-            );
+            throw new Error(await functionErrorMessage(error, data,
+                "Couldn't start the top-up. Retry the same amount."));
         }
-
         if (!data?.url) {
-            throw new Error(
-                data?.error ||
-                "Stripe did not return a Checkout URL."
-            );
+            throw new Error(data?.error || "Stripe did not return a Checkout URL.");
         }
-
+        pending.checkout_session_id = stripeTestSessionId(data.url);
+        // Persist the session before navigation so a reload can verify the exact credit.
+        localStorage.setItem(key, JSON.stringify(pending));
         window.location.href = data.url;
-
     } catch (error) {
         console.error(error);
-
-        walletMessage.innerText =
-            error instanceof Error
-                ? error.message
-                : "Couldn't start the top-up.";
-
+        walletMessage.innerText = error instanceof Error ? error.message : "Couldn't start the top-up.";
         walletTopupButton.disabled = false;
-        walletTopupButton.innerText =
-            "Add Funds";
+        walletTopupButton.innerText = "Add Funds";
     }
 }
 
@@ -1696,13 +1788,15 @@ function createCard(ad, rank = null) {
                 <button
                     class="like-button ${ad.liked ? "liked" : ""}"
                     onclick="toggleLike(${ad.id})"
-                    ${ad.owner ? "disabled" : ""}
-                    title="${ad.owner ? "You can't like your own ad." : ""}"
+                    ${(!FEATURES.likes || ad.owner) ? "disabled" : ""}
+                    title="${!FEATURES.likes ? "Likes are unavailable in staging." : ad.owner ? "You can't like your own ad." : ""}"
                 >
                     ${
-                        ad.owner
-                            ? "♡ Your Ad"
-                            : (ad.liked ? "♥ Liked" : "♡ Like")
+                        !FEATURES.likes
+                            ? "Likes unavailable"
+                            : ad.owner
+                                ? "♡ Your Ad"
+                                : (ad.liked ? "♥ Liked" : "♡ Like")
                     }
                 </button>
 
@@ -1761,6 +1855,10 @@ function showSupported() {
 ======================================== */
 
 function showMostLiked() {
+    if (!FEATURES.likes) {
+        showSupported();
+        return;
+    }
     showGallery();
 
     gallery.classList.remove("show-support");
@@ -1812,6 +1910,10 @@ function renderGallery(list) {
 ======================================== */
 
 async function toggleLike(id) {
+    if (!FEATURES.likes) {
+        alert("Likes are unavailable in the staging schema.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
 
@@ -2081,6 +2183,10 @@ async function openSupport(id, button) {
 ======================================== */
 
 async function postAd() {
+    if (!FEATURES.adImages) {
+        alert("Ad posting is unavailable in staging because ad-images is not deployed.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
         return;
@@ -2219,6 +2325,10 @@ async function postAd() {
 ======================================== */
 
 function showPost() {
+    if (!FEATURES.adImages) {
+        alert("Ad posting is unavailable in staging because ad-images is not deployed.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
 
@@ -2249,6 +2359,12 @@ function showPost() {
 ======================================== */
 
 async function loadPaymentStatus() {
+    if (!FEATURES.creatorOnboarding) {
+        paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+        setupPaymentsButton.innerText = "Unavailable in staging";
+        setupPaymentsButton.disabled = true;
+        return;
+    }
     if (!currentUser) {
         return;
     }
@@ -2365,6 +2481,10 @@ async function loadPaymentStatus() {
 }
 
 async function setupPayments() {
+    if (!FEATURES.creatorOnboarding) {
+        alert("Creator onboarding functions are not deployed in staging.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
         return;
@@ -2461,6 +2581,9 @@ function showProfile() {
 }
 
 function profileSection(section) {
+    if (section === "liked" && !FEATURES.likes) {
+        section = "myads";
+    }
     document
         .querySelectorAll(".profile-tabs button")
         .forEach(
@@ -2672,19 +2795,16 @@ async function loadAds() {
 
     /* GET LIKES */
 
-    const {
-        data: likeData,
-        error: likeError
-    } = await db
-        .from("likes")
-        .select("ad_id, user_id");
-
-    if (likeError) {
-        console.error(
-            "Couldn't load likes:",
-            likeError
-        );
-        return;
+    let likeData = [];
+    if (FEATURES.likes) {
+        const { data, error: likeError } = await db
+            .from("likes")
+            .select("ad_id, user_id");
+        if (likeError) {
+            console.error("Couldn't load likes:", likeError);
+            return;
+        }
+        likeData = data || [];
     }
 
     /* GET THIS USER'S REAL SUPPORT HISTORY */
@@ -2825,6 +2945,7 @@ async function startApp() {
     } else if (
         params.get("wallet") === "cancel"
     ) {
+        if (currentUser) localStorage.removeItem(pendingTopupKey());
         showReturnMessage(
             "Top-up canceled. You were not charged."
         );
