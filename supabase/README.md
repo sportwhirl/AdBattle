@@ -205,9 +205,15 @@ Browser Support and top-up retry records are keyed by Supabase project and user.
 Both UUIDs are written to `localStorage` before their Edge Function request.
 After an uncertain response, reload and retry the same ad/amount or top-up
 amount; do not clear storage. A different amount is blocked while unresolved.
-Top-up state is removed only after its exact paid Checkout session is visible in
-`wallet_topups`, or after an explicit Checkout cancellation. Existing unscoped
-Support retry state is moved to the project-scoped key rather than discarded.
+The original top-up attempt time is also stored. Automatic retry stops after 20
+hours, conservatively before [Stripe may prune an idempotency key after 24
+hours](https://docs.stripe.com/api/idempotent_requests).
+Unknown-age or stale state is retained for reconciliation and its UUID is never
+automatically replaced. A `?wallet=cancel` URL alone is not proof that payment
+failed: top-up state is removed only after its exact paid Checkout session is
+visible in `wallet_topups`; cancellation or expiration requires authoritative
+Stripe-side verification. Existing unscoped Support retry state is moved to the
+project-scoped key rather than discarded.
 
 #### Staging Edge Function configuration and redeployment
 
@@ -221,8 +227,10 @@ ADBATTLE_CHECKOUT_ORIGIN=http://localhost:8000
 The functions accept only that exact local origin in addition to the fixed
 production allowlist. `*`, alternate ports/hosts, paths, query strings, and
 client-supplied redirect destinations are rejected. Checkout return URLs come
-only from server configuration. The existing `sk_test_` checks remain in
-force—do not configure a live Stripe key.
+only from server configuration. When staging CORS is enabled, omitting
+`ADBATTLE_CHECKOUT_ORIGIN` is an error rather than a fallback to production.
+The existing `sk_test_` checks remain in force—do not configure a live Stripe
+key.
 
 After reviewing the diff, redeploy these functions to adbattle-test:
 

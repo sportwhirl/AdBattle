@@ -51,12 +51,21 @@ export function corsPreflightResponse(req: Request) {
 }
 
 export function checkoutReturnOrigin() {
-  const configured = Deno.env.get("ADBATTLE_CHECKOUT_ORIGIN")?.trim() ||
-    "https://adbattle.io";
-  if (configured === "https://adbattle.io") return configured;
-  if (configured === LOCAL_STAGING_ORIGIN && stagingOrigin() === configured) {
-    return configured;
+  const staging = stagingOrigin();
+  const supplied = Deno.env.get("ADBATTLE_CHECKOUT_ORIGIN")?.trim();
+  if (staging && !supplied) {
+    throw new Error(
+      "ADBATTLE_CHECKOUT_ORIGIN is required when local staging is enabled.",
+    );
   }
+  const configured = supplied || "https://adbattle.io";
+  if (staging) {
+    if (configured === staging) return configured;
+    throw new Error(
+      "ADBATTLE_CHECKOUT_ORIGIN must match ADBATTLE_STAGING_ORIGIN.",
+    );
+  }
+  if (configured === "https://adbattle.io") return configured;
   throw new Error(
     "ADBATTLE_CHECKOUT_ORIGIN must be https://adbattle.io or the configured local staging origin.",
   );

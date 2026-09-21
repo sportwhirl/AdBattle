@@ -38,8 +38,17 @@ test("local frontend fails closed unless explicit adbattle-test config is exact"
   });
   assert.throws(() => AdBattleConfig.resolve(
     { protocol: "http:", hostname: "127.0.0.1", origin: "http://127.0.0.1:8000" },
-    null,
-  ), /refusing to connect/);
+    {
+      environment: "staging", projectRef: "nccqnrcdygujulrnwair",
+      supabaseUrl: "https://nccqnrcdygujulrnwair.supabase.co",
+      frontendOrigin: "http://localhost:8000", publishableKey: "sb_publishable_test_fixture",
+    },
+  ), /origin is not allowed/);
+  for (const origin of [
+    "http://localhost:9000", "http://[::1]:8000", "null", "https://preview.example",
+  ]) {
+    assert.throws(() => AdBattleConfig.resolve({ origin }, null), /origin is not allowed/);
+  }
 });
 
 test("hosted frontend preserves production configuration", () => {
@@ -50,6 +59,9 @@ test("hosted frontend preserves production configuration", () => {
   assert.equal(config.environment, "production");
   assert.equal(config.projectRef, "bmsrdzqprxvldltaislp");
   assert.equal(config.features.likes, true);
+  assert.throws(() => AdBattleConfig.resolve({
+    protocol: "https:", hostname: "evil.example", origin: "https://evil.example",
+  }, null), /origin is not allowed/);
 });
 
 test("local staging server requires every explicit project setting", () => {
@@ -79,7 +91,13 @@ test("local staging server requires every explicit project setting", () => {
   assert.equal(configured.stdout.trim(), "nccqnrcdygujulrnwair");
   const serverSource = readFileSync(new URL("../scripts/serve_staging.py", import.meta.url), "utf8");
   assert.match(serverSource, /SUPABASE_URL \+ "\/auth\/v1\/settings"/);
-  assert.match(serverSource, /build_opener\(NoRedirects\)/);
+  const redirectCheck = spawnSync("python3", ["-c", [
+    "import importlib.util",
+    "s=importlib.util.spec_from_file_location('serve','scripts/serve_staging.py')",
+    "m=importlib.util.module_from_spec(s);s.loader.exec_module(m)",
+    "assert m.NoRedirects().redirect_request(None,None,302,'',{},'https://evil.example') is None",
+  ].join(";")], { encoding: "utf8" });
+  assert.equal(redirectCheck.status, 0, redirectCheck.stderr);
 });
 
 function httpHelpers(env = {}) {
@@ -100,6 +118,13 @@ test("CORS only adds validated production or exact local staging origins", () =>
     headers: { origin: "https://evil.example" },
   }))["Access-Control-Allow-Origin"], undefined);
   assert.throws(() => httpHelpers({ ADBATTLE_STAGING_ORIGIN: "*" }).allowedOrigins(), /must be exactly/);
+  assert.throws(() => httpHelpers({
+    ADBATTLE_STAGING_ORIGIN: "http://localhost:8000",
+  }).checkoutReturnOrigin(), /is required/);
+  assert.throws(() => httpHelpers({
+    ADBATTLE_STAGING_ORIGIN: "http://localhost:8000",
+    ADBATTLE_CHECKOUT_ORIGIN: "https://adbattle.io",
+  }).checkoutReturnOrigin(), /must match/);
   helpers = httpHelpers({
     ADBATTLE_STAGING_ORIGIN: "http://localhost:8000",
     ADBATTLE_CHECKOUT_ORIGIN: "http://localhost:8000",
@@ -224,4 +249,30 @@ test("pending top-up is removed only after its exact paid session is visible", a
   };
   assert.equal(await topupClient(storage, async () => {}, mismatch).reconcilePendingTopup(), false);
   assert.equal(storage.size, 1);
+});
+
+test("stale or unknown-age top-up state is retained and never retried", async () => {
+  const key = "adbattle:pending-topup:project-1:user-1";
+  for (const pending of [
+    { amount_cents: 1000, request_id: "unknown-age" },
+    { amount_cents: 1000, request_id: "stale", created_at_ms: Date.now() - 20 * 60 * 60 * 1000 },
+  ]) {
+    const storage = new Map([[key, JSON.stringify(pending)]]);
+    let calls = 0;
+    const client = topupClient(storage, async () => { calls++; return {}; });
+    await client.addWalletFunds();
+    assert.match(client.walletMessage.innerText, /reconcile/);
+    assert.equal(calls, 0);
+    assert.equal(JSON.parse(storage.get(key)).request_id, pending.request_id);
+  }
+});
+
+test("wallet cancel URL preserves pending identity and makes no charge claim", () => {
+  const cancelBranch = html.slice(
+    html.indexOf('params.get("wallet") === "cancel"'),
+    html.indexOf('params.get("support") === "success"'),
+  );
+  assert.doesNotMatch(cancelBranch, /removeItem/);
+  assert.doesNotMatch(cancelBranch, /not charged/i);
+  assert.match(cancelBranch, /pending top-up request was preserved/);
 });

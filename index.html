@@ -1421,6 +1421,19 @@ function readPendingTopup() {
     return raw ? JSON.parse(raw) : null;
 }
 
+const TOPUP_RETRY_LIMIT_MS = 20 * 60 * 60 * 1000;
+
+function assertPendingTopupRetryable(pending, now = Date.now()) {
+    const createdAt = Number(pending?.created_at_ms);
+    if (!Number.isFinite(createdAt)) {
+        throw new Error("This pending top-up has unknown age. Keep its request ID and reconcile it before trying another payment.");
+    }
+    const age = now - createdAt;
+    if (age < 0 || age >= TOPUP_RETRY_LIMIT_MS) {
+        throw new Error("This pending top-up is too old to retry safely. Keep its request ID and reconcile it; do not create another payment.");
+    }
+}
+
 function stripeTestSessionId(url) {
     const parsed = new URL(url);
     const match = parsed.pathname.match(/\/(cs_test_[A-Za-z0-9]+)(?:\/|$)/);
@@ -1478,8 +1491,15 @@ async function addWalletFunds() {
         if (pending && pending.amount_cents !== amountCents) {
             throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} top-up first. Retry that same amount; it will not create a second Checkout.`);
         }
+        if (pending) {
+            assertPendingTopupRetryable(pending);
+        }
         if (!pending) {
-            pending = { amount_cents: amountCents, request_id: crypto.randomUUID() };
+            pending = {
+                amount_cents: amountCents,
+                request_id: crypto.randomUUID(),
+                created_at_ms: Date.now()
+            };
             // Persist BEFORE sending. If storage is unavailable, fail without creating Checkout.
             localStorage.setItem(key, JSON.stringify(pending));
         }
@@ -2945,9 +2965,8 @@ async function startApp() {
     } else if (
         params.get("wallet") === "cancel"
     ) {
-        if (currentUser) localStorage.removeItem(pendingTopupKey());
         showReturnMessage(
-            "Top-up canceled. You were not charged."
+            "Checkout returned without payment confirmation. Your pending top-up request was preserved until its status can be verified."
         );
 
     } else if (

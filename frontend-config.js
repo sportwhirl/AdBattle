@@ -15,6 +15,11 @@
     const STAGING_REF = "nccqnrcdygujulrnwair";
     const STAGING_URL = `https://${STAGING_REF}.supabase.co`;
     const STAGING_ORIGIN = "http://localhost:8000";
+    const PRODUCTION_ORIGINS = Object.freeze([
+        "https://adbattle.io",
+        "https://www.adbattle.io",
+        "https://sportwhirl.github.io"
+    ]);
 
     function isPublicKey(value) {
         if (typeof value !== "string" || !value) return false;
@@ -31,9 +36,10 @@
     }
 
     function resolve(location, supplied) {
-        const local = location.protocol === "file:" ||
-            location.hostname === "localhost" || location.hostname === "127.0.0.1";
-        if (!local) return PRODUCTION;
+        if (PRODUCTION_ORIGINS.includes(location.origin)) return PRODUCTION;
+        if (location.origin !== STAGING_ORIGIN) {
+            throw new Error("This frontend origin is not allowed; refusing to connect to Supabase.");
+        }
         if (!supplied || supplied.environment !== "staging" ||
             supplied.projectRef !== STAGING_REF || supplied.supabaseUrl !== STAGING_URL ||
             supplied.frontendOrigin !== STAGING_ORIGIN || !isPublicKey(supplied.publishableKey)) {
@@ -48,5 +54,7 @@
         });
     }
 
-    root.AdBattleConfig = Object.freeze({ resolve, PRODUCTION, STAGING_REF, STAGING_ORIGIN });
+    root.AdBattleConfig = Object.freeze({
+        resolve, PRODUCTION, PRODUCTION_ORIGINS, STAGING_REF, STAGING_ORIGIN
+    });
 })(globalThis);
