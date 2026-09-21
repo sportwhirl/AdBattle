@@ -8,7 +8,7 @@ const html = readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const helper = html.slice(html.indexOf('function pendingSupportKey()'),html.indexOf('function formatMicros('));
 function client(storage, invoke) {
   const ctx = vm.createContext({
-    currentUser:{id:'user-1'}, localStorage:{
+    currentUser:{id:'user-1'}, PROJECT_REF:'project-1', localStorage:{
       getItem:k=>storage.get(k) ?? null,
       setItem:(k,v)=>storage.set(k,v), removeItem:k=>storage.delete(k),
     }, crypto:globalThis.crypto, db:{functions:{invoke}},
@@ -33,6 +33,7 @@ test('actual client retries a lost response after reload without a second debit'
     return {data:ledger.get(body.request_id)};
   };
   await assert.rejects(client(storage,invoke).submitWalletSupport(1,100),/Lost response/);
+  assert.ok(storage.has('adbattle:pending-support:project-1:user-1'));
   await client(storage,invoke).submitWalletSupport(1,100);
   assert.equal(balance,900);
   assert.equal(ledger.size,1);

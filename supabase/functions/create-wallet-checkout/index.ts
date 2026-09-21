@@ -1,10 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  corsHeaders,
+  checkoutReturnOrigin,
+  corsPreflightResponse,
   errorMessage,
   isUuid,
   jsonResponse,
   parseBearerToken,
+  requestOriginAllowed,
 } from "../_shared/http.ts";
 
 const MINIMUM_TOPUP_CENTS = 1000;
@@ -12,11 +14,14 @@ const MAXIMUM_TOPUP_CENTS = 1_000_000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders(req) });
+    return corsPreflightResponse(req);
   }
 
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed." }, 405);
+  }
+  if (!requestOriginAllowed(req)) {
+    return jsonResponse(req, { error: "Origin is not allowed." }, 403);
   }
 
   try {
@@ -71,13 +76,14 @@ Deno.serve(async (req) => {
       return jsonResponse(req, { error: "Invalid top-up request." }, 400);
     }
 
+    const returnOrigin = checkoutReturnOrigin();
     const params = new URLSearchParams();
     params.set("mode", "payment");
     params.set(
       "success_url",
-      "https://adbattle.io/?wallet=success&session_id={CHECKOUT_SESSION_ID}",
+      `${returnOrigin}/?wallet=success&session_id={CHECKOUT_SESSION_ID}`,
     );
-    params.set("cancel_url", "https://adbattle.io/?wallet=cancel");
+    params.set("cancel_url", `${returnOrigin}/?wallet=cancel`);
     params.set("client_reference_id", user.id);
     params.set("line_items[0][price_data][currency]", "usd");
     params.set(

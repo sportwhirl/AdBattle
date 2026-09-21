@@ -165,6 +165,109 @@ creator settlements and retry behavior, refunds/disputes and reconciliation,
 and multi-connection concurrency checks remain outstanding. Keep all existing
 test-mode, deployment-order, credential-handling, reconciliation-hold, and
 production-launch restrictions in force.
+
+### Local frontend against adbattle-test
+
+The tracked production configuration is unchanged. Localhost is fail-closed:
+opening `index.html` directly, using `python3 -m http.server`, using
+`127.0.0.1`, or omitting/mistyping any staging value stops initialization
+before a Supabase client is created. Use the staging server, which validates
+the key against the fixed adbattle-test Auth endpoint, holds it in memory, and
+serves an uncacheable runtime configuration without writing it into the
+checkout or repository:
+
+```sh
+export ADBATTLE_SUPABASE_PROJECT_REF='nccqnrcdygujulrnwair'
+export ADBATTLE_SUPABASE_URL='https://nccqnrcdygujulrnwair.supabase.co'
+export ADBATTLE_FRONTEND_ORIGIN='http://localhost:8000'
+read -rsp 'adbattle-test publishable key: ' ADBATTLE_SUPABASE_PUBLISHABLE_KEY
+export ADBATTLE_SUPABASE_PUBLISHABLE_KEY
+printf '\n'
+python3 scripts/serve_staging.py
+```
+
+Open exactly <http://localhost:8000>. The page must show the fixed
+`ADBATTLE TEST · LOCAL STAGING` badge. Supply only adbattle-test's publishable
+key (or legacy `anon` key); never use a secret/service-role key. The tracked
+`adbattle.local-config.js` is deliberately empty, and the local server replaces
+its response in memory. Do not save the key in that file, shell history, a URL,
+or a committed environment file.
+
+The limited staging schema intentionally disables likes, ad posting/image
+storage, and creator onboarding. Their controls are visibly disabled and no
+requests are made to the missing `likes` table, `ad-images` bucket,
+`sync-connect-status`, or `create-connect-account`. Login, approved ad loading,
+wallet balances, pending creator balance, top-ups, and wallet Support remain
+available under the existing RLS policies. This is a UI capability switch, not
+a database-permission bypass.
+
+Browser Support and top-up retry records are keyed by Supabase project and user.
+Both UUIDs are written to `localStorage` before their Edge Function request.
+After an uncertain response, reload and retry the same ad/amount or top-up
+amount; do not clear storage. A different amount is blocked while unresolved.
+The original top-up attempt time is also stored. Automatic retry stops after 20
+hours, conservatively before [Stripe may prune an idempotency key after 24
+hours](https://docs.stripe.com/api/idempotent_requests).
+Unknown-age or stale state is retained for reconciliation and its UUID is never
+automatically replaced. A `?wallet=cancel` URL alone is not proof that payment
+failed: top-up state is removed only after its exact paid Checkout session is
+visible in `wallet_topups`; cancellation or expiration requires authoritative
+Stripe-side verification. Existing unscoped Support retry state is moved to the
+project-scoped key rather than discarded.
+
+#### Staging Edge Function configuration and redeployment
+
+Set these Edge Function secrets/configuration values on **adbattle-test only**:
+
+```text
+ADBATTLE_STAGING_ORIGIN=http://localhost:8000
+ADBATTLE_CHECKOUT_ORIGIN=http://localhost:8000
+```
+
+The functions accept only that exact local origin in addition to the fixed
+production allowlist. `*`, alternate ports/hosts, paths, query strings, and
+client-supplied redirect destinations are rejected. Checkout return URLs come
+only from server configuration. When staging CORS is enabled, omitting
+`ADBATTLE_CHECKOUT_ORIGIN` is an error rather than a fallback to production.
+The existing `sk_test_` checks remain in force—do not configure a live Stripe
+key.
+
+After reviewing the diff, redeploy these functions to adbattle-test:
+
+- `create-wallet-checkout` — CORS plus configured success/cancel destination.
+- `support-from-wallet` — CORS validation.
+- `create-checkout-session` — CORS validation on the retired fail-closed route.
+
+Do not redeploy `stripe-webhook` or `settle-wallet-support` for this frontend
+change. Do not rerun either hosted SQL migration.
+
+For a CLI deployment, authenticate the Supabase CLI separately, verify the
+project ref in every command, set the two values above, and deploy only the
+three named functions. For Dashboard packaging, create a clean temporary
+bundle—never include `.env`, local state, keys, or the repository history—with
+this relative layout so each `../_shared/http.ts` import remains intact:
+
+```text
+adbattle-staging-functions/
+├── _shared/http.ts
+├── create-wallet-checkout/index.ts
+├── support-from-wallet/index.ts
+└── create-checkout-session/index.ts
+```
+
+Copy those four tracked files into that layout, archive the **contents** of
+`adbattle-staging-functions/` (not a parent directory and not the whole repo),
+and inspect the archive before using the adbattle-test Dashboard's Edge
+Functions upload/deploy flow. Confirm the Dashboard project ref is
+`nccqnrcdygujulrnwair`, configure the two values in Edge Function Secrets, and
+retain each function's JWT setting from `supabase/config.toml`. If the Dashboard
+editor requires one function at a time, include that function directory and
+the same `_shared/http.ts` sibling in each package. Do not paste secrets into
+source files.
+
+If testing account creation with email confirmation, add
+`http://localhost:8000/**` to adbattle-test's Auth redirect allowlist; do not
+replace production Site URL or production redirect entries.
 7. Deploy `create-checkout-session`, the fail-closed replacement for the
    retired direct-Support endpoint, and then immediately publish the updated
    root `index.html`. The retired endpoint can no longer create 1/9/90
