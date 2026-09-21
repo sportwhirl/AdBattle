@@ -94,6 +94,77 @@ select cron.schedule(
    - The creator ledger receives $0.009 and AdBattle receives $0.001.
    - Crossing $10 creates one $9 creator transfer.
    - Re-running the worker cannot duplicate that transfer.
+
+### Staging top-up and one-cent Support runner
+
+Run `scripts/adbattle_topup_test.py` from a private local terminal against
+**adbattle-test only**. It uses Python 3's standard library, a project
+publishable (or legacy `anon`) key, and an ordinary test-user login. Never give
+it a secret/service-role key, Stripe key, database password, production user,
+or real card. Do not use this runner as a reason to rerun hosted migrations or
+deploy any code.
+
+First, use a fresh test user with no wallet top-up history to create or recheck
+one $10 Stripe **test-mode** top-up:
+
+```sh
+python3 scripts/adbattle_topup_test.py
+```
+
+The runner saves the checkout request UUID and private Checkout URL before it
+can initiate or resume payment. Its state is stored per user under
+`~/.local/state/adbattle-wallet-test/nccqnrcdygujulrnwair/`, with the directory
+restricted to mode `0700` and its state/lock files private. Passwords and access
+tokens remain in memory. Keep this state: after a timeout, interruption, or
+lost response, rerun the same command rather than deleting state, generating a
+new request ID, or paying again. Treat the saved Checkout URL as a credential;
+do not paste the state file or URL into issues, chat, or logs.
+
+After the top-up is credited, use the same computer, test user, and saved state
+to exercise one-cent Support idempotency:
+
+```sh
+python3 scripts/adbattle_topup_test.py --support
+```
+
+`--support` never creates another Checkout. It creates a synthetic staging ad,
+prints a narrowly scoped approval statement if administrator moderation is
+needed, saves the Support request UUID before sending, and submits the exact
+same one-cent request twice. Do not change or discard that UUID after an
+uncertain response. The check requires one debit and one Support record, a
+$9.99 balance, $10.00 lifetime top-ups, $0.01 lifetime Support, and the exact
+$0.009 creator / $0.001 AdBattle accrual.
+
+#### Manual duplicate-webhook verification
+
+The local runner cannot authenticate or replay Stripe webhooks. After the
+Support check, an operator should open the **test-mode** Stripe Dashboard,
+locate the original paid Checkout's successful
+`checkout.session.completed` delivery to the adbattle-test
+`/functions/v1/stripe-webhook` endpoint, and use Stripe's **Resend** action for
+that same event. Verify the replay returns HTTP 200. Then rerun the plain
+command above with the preserved state and confirm it still reports exactly
+one top-up and one matching $10 ledger credit, with final balance $9.99,
+lifetime top-ups $10.00, and lifetime Support $0.01. Do not create a new event,
+Checkout, request UUID, or payment for this replay check.
+
+The following staging results have been completed and reported for
+adbattle-test:
+
+- One $10 Stripe test payment produced exactly one top-up and ledger credit.
+- Sending $0.01 Support twice with the same request ID produced one debit and
+  one Support record.
+- Creator accrual was $0.009 and AdBattle accrual was $0.001.
+- Resending the original paid Checkout webhook returned HTTP 200 and retained
+  exactly one credit.
+- Final balance was $9.99; lifetime top-ups were $10.00; lifetime Support was
+  $0.01.
+
+These results do **not** complete staging. The AdBattle browser frontend,
+creator settlements and retry behavior, refunds/disputes and reconciliation,
+and multi-connection concurrency checks remain outstanding. Keep all existing
+test-mode, deployment-order, credential-handling, reconciliation-hold, and
+production-launch restrictions in force.
 7. Deploy `create-checkout-session`, the fail-closed replacement for the
    retired direct-Support endpoint, and then immediately publish the updated
    root `index.html`. The retired endpoint can no longer create 1/9/90
