@@ -1,0 +1,220 @@
+ADBATTLE DETAILED SCANNER V2 — INSTALLATION
+
+This scanner intentionally uses several layers rather than trusting
+a single AI classification.
+
+------------------------------------------------------------
+WHAT IT CHECKS
+------------------------------------------------------------
+
+1. WEBHOOK AUTHENTICATION
+   Requests must include x-adbattle-scanner-secret.
+
+2. IMMUTABLE DATABASE RECORD
+   The Edge Function reads the authoritative ad row from Supabase.
+   It does not trust title/image fields supplied in the webhook body.
+
+3. TEXT VALIDATION
+   - title length
+   - caption length
+   - invalid control characters
+
+4. URL VALIDATION
+   - parses links found in title/caption
+   - rejects local/private-network destinations
+   - sends URL shorteners, punycode hosts, and non-HTTPS links
+     to manual review
+
+5. IMAGE OWNERSHIP
+   The image URL must point to:
+   ad-images/<same Supabase user id>/...
+
+6. IMAGE NETWORK SAFETY
+   - no redirects
+   - 15-second network timeout
+   - max 12 MB
+   - verifies actual magic bytes
+   - MIME header must agree with image bytes
+
+7. EXACT IMAGE HASH
+   Saves SHA-256 of the exact creative.
+   An exact creative reused by another account is sent to review.
+
+8. OPENAI HARM MODERATION
+   Uses omni-moderation-latest on:
+   - title
+   - caption
+   - detected URLs
+   - exact validated image bytes
+
+9. ADBATTLE AD-POLICY CLASSIFIER
+   Uses a second vision-capable model through the Responses API
+   with Structured Outputs.
+
+   It checks categories not covered well by general harm moderation,
+   such as:
+   - phishing / obvious fraud
+   - suspicious advertising claims
+   - political ads
+   - health/medical claims
+   - financial/investment ads
+   - gambling
+   - alcohol/nicotine/cannabis
+   - trademark/impersonation concerns
+   - age-restricted/adult services
+
+10. HUMAN-REVIEW FALLBACK
+    Ambiguous or regulated ads become:
+    manual_review
+
+    They do NOT go public and cannot receive Support.
+
+11. AUDIT TRAIL
+    moderation_events records every scanner stage.
+
+12. FAIL-CLOSED BEHAVIOR
+    If OpenAI or another scanner dependency fails, the ad remains
+    unpublished. It is never approved merely because a scanner failed.
+
+
+------------------------------------------------------------
+INSTALLATION
+------------------------------------------------------------
+
+STEP 1
+Run:
+
+adbattle_detailed_scanner_migration.sql
+
+in Supabase -> SQL Editor.
+
+
+STEP 2
+Replace your scan-ad Edge Function index.ts with:
+
+scan-ad-detailed-index.ts
+
+
+STEP 3
+Supabase -> Edge Functions -> Secrets
+
+Confirm these exist:
+
+OPENAI_API_KEY
+SCANNER_WEBHOOK_SECRET
+
+Optional:
+
+ADBATTLE_POLICY_MODEL = gpt-5.6-luna
+
+gpt-5.6-luna is a cost-sensitive vision + structured-output model.
+You can later change the secret to a stronger model without editing code.
+
+
+STEP 4
+Deploy scan-ad.
+
+JWT verification should remain OFF for scan-ad because the Supabase
+Database Webhook does not authenticate as a normal Supabase user.
+The x-adbattle-scanner-secret header is used instead.
+
+
+STEP 5
+Keep your Database Webhook:
+
+Table:
+public.ads
+
+Event:
+INSERT
+
+Method:
+POST
+
+URL:
+https://bmsrdzqprxvldltaislp.supabase.co/functions/v1/scan-ad
+
+Header:
+x-adbattle-scanner-secret: <your secret>
+
+
+STEP 6
+If you are using the provided AdBattle frontend, replace index.html with:
+
+index_detailed_moderation.html
+
+This adds:
+- "Needs manual review"
+- owner-visible moderation reason
+- Support remains disabled unless approved
+
+
+------------------------------------------------------------
+TEST SEQUENCE
+------------------------------------------------------------
+
+Test 1: ordinary harmless ad
+Expected:
+approved
+
+Test 2: ad with a bit.ly link
+Expected:
+manual_review
+
+Test 3: image from the wrong user's Storage folder
+Expected:
+rejected
+
+Test 4: malformed/non-image file renamed .png
+Expected:
+rejected
+
+Test 5: clearly unsafe content
+Expected:
+rejected
+
+Test 6: medical/financial/political ad
+Expected:
+manual_review in many cases rather than automatic approval
+
+
+------------------------------------------------------------
+CHECKING RESULTS
+------------------------------------------------------------
+
+In ads:
+
+moderation_status
+moderation_reason
+moderation_risk_score
+moderation_image_sha256
+moderation_scan_version
+moderation_attempts
+moderation_last_error
+
+For internal scanner details:
+
+select *
+from public.moderation_events
+where ad_id = YOUR_AD_ID
+order by created_at;
+
+
+------------------------------------------------------------
+IMPORTANT LIMITS
+------------------------------------------------------------
+
+- SHA-256 catches exact duplicates, not cropped/resized/recompressed copies.
+  Perceptual-image hashing can be added later.
+
+- URLs printed inside the image are evaluated by the vision policy review,
+  but are not deterministically resolved by the URL checker.
+
+- This is a pre-screen. Meta, Google, TikTok and Snapchat still perform
+  their own advertising-policy reviews.
+
+- High-risk categories should remain human-reviewed even if the automated
+  classifier looks confident.
+
+- Do not expose OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY, or
+  SCANNER_WEBHOOK_SECRET in GitHub Pages or browser JavaScript.
