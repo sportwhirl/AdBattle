@@ -29,7 +29,7 @@ before(async () => {
     insert into public.ads(id,user_id) values (1,'${creator}');
     insert into public.creator_accounts values ('${creator}','acct_original',true,true,true);
   `);
-  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql']) {
+  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql']) {
     let sql = readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8');
     // PGlite has builtin gen_random_uuid; it does not ship the pgcrypto extension.
     sql = sql.replace('create extension if not exists pgcrypto;', '');
@@ -69,14 +69,58 @@ test('actual settlement claim and guard preserve destination and retry deadline'
   assert.equal((await db.query('select * from claim_due_wallet_settlements(25)')).rows.length,0);
 });
 
+test('capability recovery records one key without changing identity, destination, time or accounting', async () => {
+  await db.query('select retry_wallet_settlement($1,$2)', [settlementId,'capability failure']);
+  const beforeGuard = await scalar('select * from wallet_transfer_guards where settlement_id=$1',[settlementId]);
+  const beforeState = await scalar('select * from ad_settlement_state where ad_id=1');
+  const beforeSettlement = await scalar('select * from support_settlements where id=$1',[settlementId]);
+  const key = `adbattle-settlement-${settlementId}`;
+  const args = [settlementId,key,'req_verified','insufficient_capabilities_for_transfer'];
+  for (const bad of [
+    [settlementId,key,'req_verified','api_error'],
+    [settlementId,key+'-other','req_verified',args[3]],
+    [settlementId,key,null,args[3]],
+  ]) await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',bad),/INVALID_CAPABILITY/);
+  await db.query('update wallet_transfer_guards set manual_review=true where settlement_id=$1',[settlementId]);
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/RECOVERY_BLOCKED/);
+  await db.query('update wallet_transfer_guards set manual_review=false where settlement_id=$1',[settlementId]);
+  await db.exec('update creator_accounts set payouts_enabled=false');
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/RECOVERY_CREATOR_NOT_READY/);
+  await db.exec('update creator_accounts set payouts_enabled=true');
+  const first = (await scalar('select authorize_wallet_capability_recovery($1,$2,$3,$4) as result',args)).result;
+  const repeat = (await scalar('select authorize_wallet_capability_recovery($1,$2,$3,$4) as result',args)).result;
+  assert.equal(first.created,true);
+  assert.equal(repeat.created,false);
+  assert.equal(repeat.idempotency_key,first.idempotency_key);
+  assert.notEqual(first.idempotency_key,key);
+  const guard = (await scalar('select prepare_wallet_transfer($1) as g',[settlementId])).g;
+  assert.equal(guard.idempotency_key,first.idempotency_key);
+  assert.equal(guard.destination,beforeGuard.destination);
+  assert.deepEqual(await scalar('select * from ad_settlement_state where ad_id=1'),beforeState);
+  assert.deepEqual(await scalar('select * from support_settlements where id=$1',[settlementId]),beforeSettlement);
+  const after = await scalar('select * from wallet_transfer_guards where settlement_id=$1',[settlementId]);
+  assert.deepEqual(after.first_attempt_at,beforeGuard.first_attempt_at);
+  assert.equal(after.manual_review,false);
+  assert.equal(after.capability_recovery_request_id,'req_verified');
+  await db.exec('set role authenticated');
+  try {
+    await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/permission denied/);
+    await assert.rejects(db.query('select prepare_wallet_transfer_before_recovery($1)',[settlementId]),/permission denied/);
+  } finally { await db.exec('reset role'); }
+});
+
 test('expired transfer cannot POST again; completion can reconcile it without paying again', async () => {
   await db.query("update wallet_transfer_guards set first_attempt_at=now()-interval '21 hours' where settlement_id=$1",[settlementId]);
   const held = (await scalar('select prepare_wallet_transfer($1) as guard',[settlementId])).guard;
   assert.equal(held.allowed,false);
   assert.equal(held.reason,'manual_review');
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',
+    [settlementId,`adbattle-settlement-${settlementId}`,'req_verified','insufficient_capabilities_for_transfer']),/RECOVERY_BLOCKED/);
   await db.query('select complete_wallet_settlement($1,$2)',[settlementId,'tr_verified']);
   const duplicate = await scalar('select complete_wallet_settlement($1,$2) as completed',[settlementId,'tr_verified']);
   assert.equal(duplicate.completed,false);
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',
+    [settlementId,`adbattle-settlement-${settlementId}`,'req_verified','insufficient_capabilities_for_transfer']),/RECOVERY_REQUIRES/);
   assert.equal((await scalar('select pending_creator_micros from ad_settlement_state where ad_id=1')).pending_creator_micros,0);
 });
 
@@ -132,6 +176,9 @@ test('refund after spending leaves a negative frozen balance and stops settlemen
   const prepared=(await scalar('select prepare_wallet_transfer($1) as guard',[inFlightSettlementId])).guard;
   assert.equal(prepared.allowed,false);
   assert.equal(prepared.reason,'payment_risk_hold');
+  await db.query('select retry_wallet_settlement($1,$2)',[inFlightSettlementId,'capability failure']);
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',
+    [inFlightSettlementId,`adbattle-settlement-${inFlightSettlementId}`,'req_verified','insufficient_capabilities_for_transfer']),/RECOVERY_BLOCKED/);
 });
 
 test('RLS limits reads and browser roles cannot invoke privileged money RPCs', async () => {

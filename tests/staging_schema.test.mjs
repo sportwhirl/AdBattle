@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
-test('supplied staging schema supports both migrations and real wallet RPCs', async () => {
+test('supplied staging schema supports all wallet migrations and real wallet RPCs', async () => {
   const db = new PGlite();
   try {
     await db.exec(`
@@ -17,7 +17,7 @@ test('supplied staging schema supports both migrations and real wallet RPCs', as
     const base = readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url), 'utf8');
     assert.ok(!base.includes('bmsrdzqprxvldltaislp'));
     await db.exec(base);
-    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql']) {
+    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql']) {
       const sql = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
       await db.exec(sql.replace('create extension if not exists pgcrypto;', ''));
     }
