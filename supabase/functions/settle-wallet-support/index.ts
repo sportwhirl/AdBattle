@@ -245,16 +245,34 @@ async function recoverBalanceFailure(settlementId: string) {
   if (before.cents < row.creator_transfer_cents) {
     return { settlement_id: settlementId, status: "held", reason: "insufficient_available_balance" };
   }
-  // The balance GET may take time; recheck before the only transfer POST here.
-  if (!recoveryWindowOpen(guard)) {
-    return { settlement_id: settlementId, status: "held", reason: "retry_window_expired" };
+  // The balance GET can be slow. Reload the authoritative guard immediately
+  // before POST so newly committed holds, key changes and expiry are observed.
+  const { data: refreshedGuard, error: refreshedGuardError } = await admin.rpc("prepare_wallet_transfer", {
+    p_settlement_id: settlementId,
+  });
+  if (refreshedGuardError) throw new Error("Could not refresh recovery authorization.");
+  if (refreshedGuard?.allowed !== true || !recoveryWindowOpen(refreshedGuard)) {
+    return { settlement_id: settlementId, status: "held", reason: refreshedGuard?.reason || "retry_window_expired" };
+  }
+  if (refreshedGuard.balance_recovery_supported !== true) {
+    throw new Error("Balance recovery authorization is unavailable.");
+  }
+  if (refreshedGuard.destination !== guard.destination ||
+      refreshedGuard.destination !== account.stripe_account_id) {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_destination_mismatch" };
+  }
+  if (refreshedGuard.idempotency_key === recoveryKey) {
+    return { settlement_id: settlementId, status: "balance_recovery_already_authorized" };
+  }
+  if (refreshedGuard.idempotency_key !== failedKey) {
+    return { settlement_id: settlementId, status: "held", reason: "requires_capability_recovery_key" };
   }
   const settlement = { ...row, settlement_id: row.id } as Settlement;
-  const response = await sendStripeTransfer(settlement, guard.destination, failedKey);
+  const response = await sendStripeTransfer(settlement, refreshedGuard.destination, failedKey);
   const transfer = await response.json();
   if (response.ok && typeof transfer?.id === "string") {
     if (transfer.object !== "transfer" || transfer.amount !== row.creator_transfer_cents ||
-        transfer.currency !== "usd" || transfer.destination !== guard.destination ||
+        transfer.currency !== "usd" || transfer.destination !== refreshedGuard.destination ||
         transfer.metadata?.settlement_id !== settlementId) {
       return { settlement_id: settlementId, status: "held", reason: "transfer_details_mismatch" };
     }
@@ -273,7 +291,7 @@ async function recoverBalanceFailure(settlementId: string) {
   }
   // Obtain fresh balance evidence after verification, before committing a key.
   const after = await availableStripeUsdCardBalance();
-  if (after.cents < row.creator_transfer_cents || !recoveryWindowOpen(guard)) {
+  if (after.cents < row.creator_transfer_cents || !recoveryWindowOpen(refreshedGuard)) {
     return { settlement_id: settlementId, status: "held", reason: "balance_or_retry_window_changed" };
   }
   const { error: recoveryError } = await admin.rpc("authorize_wallet_balance_recovery", {

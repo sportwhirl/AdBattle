@@ -426,8 +426,14 @@ After this change is reviewed and merged, use **adbattle-test only**:
    ```
 
    The worker reads the platform balance with the same credentials used for
-   transfers. It then repeats the immutable transfer request using the existing
-   capability-recovery key. A successful transfer is reconciled on the same
+   transfers. Immediately after this balance GET, it reloads the database
+   transfer guard before the verification POST. A newly recorded hold, expired
+   deadline, changed guard destination, unavailable authorization or unexpected
+   key stops the POST. If another recovery has already committed the
+   balance-recovery key, it returns `balance_recovery_already_authorized`
+   without another Stripe request. Otherwise it repeats the immutable transfer
+   request using the exact existing capability-recovery key.
+   A successful transfer is reconciled on the same
    settlement. A replacement is authorized only for HTTP 400 with
    `Idempotent-Replayed: true`, error type `invalid_request_error`, exact code
    `balance_insufficient`, no transfer ID, and a valid Stripe request ID.
@@ -463,7 +469,8 @@ stop for reconciliation; this implementation provides no further replacement.
 Do not change the settlement ID or first-attempt time to escape the deadline.
 Do not roll back to a worker or database wrapper that ignores the committed
 balance-recovery key while the settlement is pending. The existing
-webhook-versus-transfer race limitation still applies.
+webhook-versus-transfer race limitation still applies: a hold committed after
+the final database authorization cannot recall a Stripe request already sent.
 
 The database independently checks the preceding key, active retry status,
 frozen/current destination match, creator readiness, payment risks, original

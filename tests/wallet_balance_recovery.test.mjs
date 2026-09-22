@@ -22,8 +22,8 @@ const rejection=(status=400,patch={},headers={'Request-Id':'req_rejected','Idemp
 
 function worker({getBalance=async()=>balance(),postTransfer=async()=>rejection(),guardPatch={},
   secret='sk_test_fake',currentDestination='acct_fixed',creatorReady=true,status='retry',
-  loseAuthorization=false,completeError=null}={}) {
-  let handler; let recoveryKey; let now=Date.now(); const requests=[]; const calls=[];
+  loseAuthorization=false,completeError=null,refreshedGuardPatch={},refreshedGuardError=null}={}) {
+  let handler; let recoveryKey; let guardReads=0; let now=Date.now(); const requests=[]; const calls=[];
   const deadline=new Date(now+3600000).toISOString();
   class ClockDate extends Date { static now() { return now; } }
   const ctx=vm.createContext({
@@ -35,8 +35,12 @@ function worker({getBalance=async()=>balance(),postTransfer=async()=>rejection()
           charges_enabled:creatorReady,payouts_enabled:creatorReady} : {...row,status}})})})}),
       rpc:async(name,args)=>{
         calls.push({name,args});
-        if(name==='prepare_wallet_transfer') return {data:{allowed:true,destination:'acct_fixed',
-          retry_before:deadline,idempotency_key:recoveryKey || failedKey,balance_recovery_supported:true,...guardPatch}};
+        if(name==='prepare_wallet_transfer') {
+          guardReads++;
+          return {data:{allowed:true,destination:'acct_fixed',retry_before:deadline,
+            idempotency_key:recoveryKey || failedKey,balance_recovery_supported:true,...guardPatch,
+            ...(guardReads>1?refreshedGuardPatch:{})},error:guardReads>1?refreshedGuardError:null};
+        }
         if(name==='authorize_wallet_balance_recovery') {
           recoveryKey ||= newKey;
           return loseAuthorization ? {error:{message:'lost reply after commit'}} : {data:{idempotency_key:recoveryKey}};
@@ -186,6 +190,35 @@ test('funding and deadline are rechecked after slow requests before authorizing 
     assert.equal(w.requests.filter(r=>r.opts.method==='POST').length,expireAt===1?0:1);
     assert.equal(w.calls.some(c=>c.name==='authorize_wallet_balance_recovery'),false);
   }
+});
+
+test('guard changes during the balance request stop verification before its transfer POST',async()=>{
+  for(const refreshedGuardPatch of [
+    {allowed:false,reason:'payment_risk_hold'}, {allowed:false,reason:'manual_review'},
+    {allowed:false,reason:'already_succeeded'}, {allowed:'true'}, {allowed:undefined},
+    {retry_before:new Date(Date.now()-1000).toISOString()}, {retry_before:'invalid'},
+    {destination:'acct_changed'}, {destination:null}, {idempotency_key:'unexpected'},
+    {idempotency_key:baseKey}, {idempotency_key:undefined}, {balance_recovery_supported:false},
+  ]) {
+    const w=worker({refreshedGuardPatch});
+    const result=await w.ctx.recoverBalanceFailure(id).catch(()=>null);
+    if(result) assert.equal(result.status,'held');
+    assert.equal(w.calls.filter(c=>c.name==='prepare_wallet_transfer').length,2);
+    assert.deepEqual(w.requests.map(r=>r.opts.method),['GET']);
+    assert.equal(w.calls.some(c=>c.name==='authorize_wallet_balance_recovery'||c.name==='complete_wallet_settlement'),false);
+  }
+  const w=worker({refreshedGuardError:{message:'database unavailable'}});
+  await assert.rejects(w.ctx.recoverBalanceFailure(id),/refresh recovery authorization/);
+  assert.deepEqual(w.requests.map(r=>r.opts.method),['GET']);
+  assert.equal(w.calls.some(c=>c.name==='authorize_wallet_balance_recovery'),false);
+});
+
+test('concurrent balance recovery authorization is recognized without another Stripe POST',async()=>{
+  const w=worker({refreshedGuardPatch:{idempotency_key:newKey}});
+  assert.equal((await w.ctx.recoverBalanceFailure(id)).status,'balance_recovery_already_authorized');
+  assert.equal(w.calls.filter(c=>c.name==='prepare_wallet_transfer').length,2);
+  assert.deepEqual(w.requests.map(r=>r.opts.method),['GET']);
+  assert.equal(w.calls.some(c=>c.name==='authorize_wallet_balance_recovery'||c.name==='complete_wallet_settlement'),false);
 });
 
 test('balance action requires the private header and one UUID field, without claiming other settlements',async()=>{
