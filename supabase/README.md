@@ -213,10 +213,24 @@ hours, conservatively before [Stripe may prune an idempotency key after 24
 hours](https://docs.stripe.com/api/idempotent_requests).
 Unknown-age or stale state is retained for reconciliation and its UUID is never
 automatically replaced. A `?wallet=cancel` URL alone is not proof that payment
-failed: top-up state is removed only after its exact paid Checkout session is
-visible in `wallet_topups`; cancellation or expiration requires authoritative
-Stripe-side verification. Existing unscoped Support retry state is moved to the
-project-scoped key rather than discarded.
+failed: top-up state is removed only after its exact session and amount are
+visible for the signed-in user in `wallet_topups`, with a recorded status of
+`paid`, `partially_refunded`, `refunded`, or `disputed`. These rows are created
+atomically with the original ledger credit; a later refund or dispute does not
+make the original Checkout unconfirmed. Unknown statuses, missing/mismatched
+rows, query errors, and changed pending requests preserve the retry record.
+Cancellation or expiration requires authoritative Stripe-side verification.
+Existing unscoped Support retry state is moved to the project-scoped key rather
+than discarded.
+
+Checkout return messages use this recorded-payment evidence, never the return
+URL alone. A confirmed top-up stops showing a verification message even when
+the wallet is frozen. The balance and return notice explicitly report the
+payment-review hold and unavailable Support. This only clears the browser's
+completed Checkout retry record: refund/dispute holds, balances, and ledger
+entries remain unchanged. Reloading after the retry record has been cleared
+shows a neutral return message and the current balance/hold; receipt evidence
+is only cached in memory for the current page and user.
 
 #### Staging Edge Function configuration and redeployment
 

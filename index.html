@@ -1335,13 +1335,24 @@ async function functionErrorMessage(
 ======================================== */
 
 async function loadWalletBalance() {
-    if (!currentUser) {
+    const loadId = ++walletLoadId;
+    const userId = currentUser?.id;
+    if (!userId) {
         walletBalanceCents = 0;
         walletBalance.innerText = "$0.00";
         walletMessage.innerText =
             "Your full top-up becomes available to support ads.";
+        showWalletReturnMessage();
         return;
     }
+
+    // Read the receipt first so the following balance includes its committed credit.
+    try {
+        await reconcilePendingTopup();
+    } catch (error) {
+        console.error("Couldn't read top-up retry state:", error);
+    }
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
 
     const {
         data,
@@ -1349,9 +1360,10 @@ async function loadWalletBalance() {
     } = await db
         .from("wallets")
         .select("available_cents, status")
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .maybeSingle();
 
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
     if (error) {
         console.error(
             "Couldn't load wallet balance:",
@@ -1360,6 +1372,7 @@ async function loadWalletBalance() {
 
         walletMessage.innerText =
             "Couldn't load your balance right now.";
+        showWalletReturnMessage(false);
         return;
     }
 
@@ -1371,10 +1384,10 @@ async function loadWalletBalance() {
 
     walletMessage.innerText =
         data?.status === "frozen"
-            ? "This balance is temporarily unavailable."
+            ? "Your balance is on hold for payment review; Support is unavailable."
             : "Your full top-up becomes available to support ads.";
 
-    await reconcilePendingTopup();
+    showWalletReturnMessage(true, data?.status);
 }
 
 async function loadCreatorBalance() {
@@ -1421,6 +1434,42 @@ function readPendingTopup() {
     return raw ? JSON.parse(raw) : null;
 }
 
+let walletLoadId = 0;
+// Page-local receipt evidence keeps refreshes from reverting to a verification
+// message after reconciliation removes the pending request. Never trust the URL.
+let recordedTopup = null;
+
+function showWalletReturnMessage(balanceLoaded = false, walletStatus = null) {
+    const result = new URLSearchParams(window.location.search).get("wallet");
+    if (result !== "success" && result !== "cancel") return;
+    if (!currentUser) {
+        showReturnMessage("Log in to check the result of your top-up.");
+        return;
+    }
+    if (!balanceLoaded) {
+        showReturnMessage("Your balance could not be verified. Refresh to check again before retrying your top-up.");
+        return;
+    }
+
+    let message;
+    let confirmed = false;
+    try {
+        if (readPendingTopup()) {
+            message = "Your top-up has not been verified yet. Its pending request has been preserved. Refresh to check again before retrying.";
+        } else if (recordedTopup?.key === pendingTopupKey()) {
+            message = `Your ${formatCents(recordedTopup.amount_cents)} top-up was recorded.`;
+            confirmed = recordedTopup.status === "paid";
+        } else {
+            message = "Checkout returned. Your recorded balance is shown below.";
+        }
+    } catch (error) {
+        message = "Your pending top-up could not be verified. Keep its saved request and refresh before retrying.";
+    }
+    const held = walletStatus === "frozen";
+    if (held) message += " Your balance is on hold for payment review; Support is unavailable.";
+    showReturnMessage(message, confirmed && !held);
+}
+
 const TOPUP_RETRY_LIMIT_MS = 20 * 60 * 60 * 1000;
 
 function assertPendingTopupRetryable(pending, now = Date.now()) {
@@ -1446,21 +1495,29 @@ function stripeTestSessionId(url) {
 
 async function reconcilePendingTopup() {
     if (!currentUser) return false;
+    const userId = currentUser.id;
     const key = pendingTopupKey();
-    const pending = readPendingTopup();
+    const raw = localStorage.getItem(key);
+    const pending = raw ? JSON.parse(raw) : null;
     if (!pending?.checkout_session_id) return false;
     const { data, error } = await db
         .from("wallet_topups")
         .select("amount_cents,status")
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .eq("stripe_session_id", pending.checkout_session_id);
     if (error) {
         console.error("Couldn't reconcile pending top-up:", error);
         return false;
     }
-    if (data?.length === 1 && data[0].status === "paid" &&
+    // These rows are created atomically with the original credit. A later refund
+    // or dispute changes their status but does not make that Checkout uncertain.
+    if (data?.length === 1 &&
+        ["paid", "partially_refunded", "refunded", "disputed"].includes(data[0].status) &&
         data[0].amount_cents === pending.amount_cents) {
+        // Another tab or auth change must not let this delayed read clear a new request.
+        if (currentUser?.id !== userId || localStorage.getItem(key) !== raw) return false;
         localStorage.removeItem(key);
+        recordedTopup = { key, amount_cents: data[0].amount_cents, status: data[0].status };
         return true;
     }
     return false;
@@ -1718,6 +1775,7 @@ async function logout() {
         "Your full top-up becomes available to support ads.";
     creatorBalanceStatus.innerText =
         "Pending creator balance: $0.00";
+    showWalletReturnMessage();
     updateAccountButton();
 
     await loadAds();
@@ -2943,11 +3001,6 @@ async function startApp() {
     if (
         params.get("wallet") === "success"
     ) {
-        showReturnMessage(
-            "Payment completed. AdBattle is verifying your new balance with Stripe.",
-            true
-        );
-
         setTimeout(
             async () => {
                 await loadWalletBalance();
@@ -2960,13 +3013,6 @@ async function startApp() {
                 await loadWalletBalance();
             },
             5000
-        );
-
-    } else if (
-        params.get("wallet") === "cancel"
-    ) {
-        showReturnMessage(
-            "Checkout returned without payment confirmation. Your pending top-up request was preserved until its status can be verified."
         );
 
     } else if (
