@@ -9,6 +9,32 @@ const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const configJs = readFileSync(new URL("../frontend-config.js", import.meta.url), "utf8");
 const httpTs = readFileSync(new URL("../supabase/functions/_shared/http.ts", import.meta.url), "utf8");
 const checkoutTs = readFileSync(new URL("../supabase/functions/create-wallet-checkout/index.ts", import.meta.url), "utf8");
+const amountParser = vm.createContext({});
+vm.runInContext(html.slice(
+  html.indexOf("function inputDollarsToCents("),
+  html.indexOf("async function functionErrorMessage("),
+), amountParser);
+
+test("wallet amount parsing accepts cents with or without a leading zero", () => {
+  for (const [value, cents] of [
+    [".01", 1], ["0.01", 1], [" .01 ", 1],
+    [".1", 10], ["0.10", 10], [".99", 99],
+    ["0", 0], ["0.00", 0], [".00", 0],
+    ["1", 100], ["10.", 1000], ["10.00", 1000],
+  ]) {
+    assert.equal(amountParser.inputDollarsToCents(value), cents, value);
+  }
+});
+
+test("wallet amount parsing rejects malformed amounts and fractional cents", () => {
+  for (const value of [
+    "", " ", ".", ".001", "0.001", "1.001", "-.01", "-1", "+.01",
+    "1e-2", "0,01", "$0.01", "1.2.3", "NaN", "Infinity",
+    "9007199254740992", null, undefined,
+  ]) {
+    assert.equal(amountParser.inputDollarsToCents(value), null, String(value));
+  }
+});
 
 function configContext() {
   const context = vm.createContext({ atob, console });
@@ -168,7 +194,7 @@ function topupClient(storage, invoke, from = () => { throw new Error("not used")
     walletMessage: { innerText: "" },
     window: { location: { href: "" } },
     db: { functions: { invoke }, from },
-    inputDollarsToCents: (value) => Math.round(Number(value) * 100),
+    inputDollarsToCents: amountParser.inputDollarsToCents,
     formatCents: (cents) => `$${(cents / 100).toFixed(2)}`,
     functionErrorMessage: async (error, data, fallback) => data?.error || error?.message || fallback,
     showLogin() {},
@@ -176,6 +202,27 @@ function topupClient(storage, invoke, from = () => { throw new Error("not used")
   vm.runInContext(topupHelper, context);
   return context;
 }
+
+test("accepting leading decimals preserves the ten-dollar top-up minimum", async () => {
+  const requests = [];
+  const invoke = async (name, { body }) => {
+    requests.push({ name, amountCents: body.amount_cents });
+    return { data: { url: "https://checkout.stripe.com/c/pay/cs_test_MINIMUM123" } };
+  };
+  for (const value of [".01", "0.01", ".99", "9.99"]) {
+    const storage = new Map();
+    const context = topupClient(storage, invoke);
+    context.walletTopupAmount.value = value;
+    await context.addWalletFunds();
+    assert.equal(context.walletMessage.innerText, "The minimum account top-up is $10.00.");
+    assert.equal(storage.size, 0);
+    assert.equal(requests.length, 0);
+  }
+  const context = topupClient(new Map(), invoke);
+  context.walletTopupAmount.value = "10.00";
+  await context.addWalletFunds();
+  assert.deepEqual(requests, [{ name: "create-wallet-checkout", amountCents: 1000 }]);
+});
 
 test("top-up retries reuse project/user-scoped request identity after a lost response", async () => {
   const storage = new Map();

@@ -1289,7 +1289,7 @@ function inputDollarsToCents(value) {
     const normalized =
         String(value ?? "").trim();
 
-    if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) {
+    if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(normalized)) {
         return null;
     }
 
