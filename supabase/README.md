@@ -501,9 +501,43 @@ With Node 24+: `npm ci --ignore-scripts` followed by `npm test`.
 Tests exercise the actual browser helper, Edge Function logic with mocked
 Stripe, and the SQL migrations/RPCs/RLS in PGlite (PostgreSQL WASM).
 The fixture models the known legacy schema; it does not prove compatibility
-with the current deployed database. Multi-connection concurrency, hosted
-Supabase authentication, cron, and real Stripe test-mode delivery/transfer
-must still be tested in a staging environment.
+with the current deployed database. Hosted Supabase authentication, cron,
+and real Stripe test-mode delivery/transfer require separate staging checks.
+
+### Concurrent PostgreSQL connections
+
+With Python 3 and PostgreSQL server/client binaries installed, run as an
+ordinary user (not root):
+
+```sh
+npm run test:concurrency
+# If PostgreSQL binaries are not discovered through pg_config or PATH:
+python3 scripts/test_wallet_concurrency.py --postgres-bin /usr/lib/postgresql/16/bin
+```
+
+On Arch Linux the binaries normally live in `/usr/bin`. The runner initializes
+its own disposable cluster under a private temporary directory, listens only
+on a Unix socket, ignores inherited PostgreSQL connection settings, and accepts
+no database URL or credentials. It stops the server and removes the cluster
+on completion. It never contacts Supabase or Stripe.
+
+The minimal legacy fixture and all four wallet migrations are applied without
+rewriting the SQL. RPC calls run as `service_role` on independent connections.
+A separate transaction holds the relevant wallet or ad lock; the test checks
+`pg_stat_activity` and `pg_blocking_pids` to prove the requests overlap before
+releasing that lock. A missing overlap or timeout fails the test.
+
+Seven scenarios cover duplicate one-cent requests; conflicting amounts or ads
+under the same request UUID; competing requests that exceed the balance;
+distinct affordable requests; two wallets supporting the same ad; and a
+waiting Support request encountering a newly committed refund hold. Assertions
+check RPC outcomes, exact debit/Support counts and identities, running ledger
+balances, wallet totals, ad totals, and the 90/10 microdollar accruals.
+
+The `Wallet PostgreSQL concurrency` GitHub Actions job runs this suite for
+relevant pull requests targeting `wallet-ledger-90-10`. These tests cover local
+PostgreSQL transaction behavior; hosted Auth/RLS integration, HTTP retries,
+settlement/Stripe races, and production-schema compatibility are separate checks.
 
 ## Production prerequisites
 
