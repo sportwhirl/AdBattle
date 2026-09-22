@@ -1,11 +1,18 @@
-import { corsHeaders, jsonResponse } from "../_shared/http.ts";
+import {
+  corsPreflightResponse,
+  jsonResponse,
+  requestOriginAllowed,
+} from "../_shared/http.ts";
 
 // This endpoint powered the retired per-Support Stripe Checkout flow.
 // Keep the name deployed temporarily so cached clients fail closed instead
 // of creating a payment under the obsolete 1/9/90 allocation model.
 Deno.serve((req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders(req) });
+    return corsPreflightResponse(req);
+  }
+  if (!requestOriginAllowed(req)) {
+    return jsonResponse(req, { error: "Origin is not allowed." }, 403);
   }
 
   return jsonResponse(

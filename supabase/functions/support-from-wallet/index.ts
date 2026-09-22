@@ -1,10 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  corsHeaders,
+  corsPreflightResponse,
   errorMessage,
   isUuid,
   jsonResponse,
   parseBearerToken,
+  requestOriginAllowed,
 } from "../_shared/http.ts";
 
 function publicSupportError(message: string) {
@@ -32,11 +33,14 @@ function publicSupportError(message: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders(req) });
+    return corsPreflightResponse(req);
   }
 
   if (req.method !== "POST") {
     return jsonResponse(req, { error: "Method not allowed." }, 405);
+  }
+  if (!requestOriginAllowed(req)) {
+    return jsonResponse(req, { error: "Origin is not allowed." }, 403);
   }
 
   try {
@@ -107,4 +111,3 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: errorMessage(error) }, 500);
   }
 });
-
