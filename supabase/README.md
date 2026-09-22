@@ -319,11 +319,81 @@ There is intentionally no automatic hold-release endpoint. Database operators
 must document corrective ledger entries and verify balances before marking a
 risk resolved or unfreezing a wallet. A top-up alone never unfreezes a wallet.
 
+## Recover a cached capability rejection (test mode only)
+
+Stripe can cache an HTTP 400 response under an idempotency key after endpoint
+execution begins. Enabling the destination's Transfers capability does not
+change that cached response. Workbench explicitly labels replayed requests;
+Stripe also returns `Idempotent-Replayed: true`. See
+[Stripe's error handling guidance](https://docs.stripe.com/error-low-level#idempotency).
+This recovery is for the exact code `insufficient_capabilities_for_transfer`.
+It is not a general retry-key reset.
+
+After reviewing and merging this change into the wallet branch, deploy to
+**adbattle-test only**:
+
+1. Apply the new, one-time transactional migration
+   `migrations/20260922_wallet_capability_recovery.sql` after the two existing
+   migrations. Do not rerun those existing migrations. The new migration alone
+   authorizes no recovery and changes no wallet or settlement balances.
+2. Redeploy only `settle-wallet-support` from the same reviewed commit. It remains
+   a single `index.ts` file with JWT verification OFF and the existing private
+   `SETTLEMENT_CRON_SECRET` header required. Preserve the test Stripe key.
+3. Confirm the exact guard destination's **Transfers** capability is Active in
+   the same Stripe sandbox and inspect the original failed transfer request.
+   The creator's current linked account must match that frozen destination;
+   the worker refuses mismatches before contacting Stripe, and the database
+   independently rechecks the match before authorizing recovery. Do not change
+   either account to work around this check. Check settlement
+   status is `retry`, its original 20-hour window is still open, and there are
+   no payment-risk/manual-review holds. Pause any schedule during recovery.
+4. In the function tester, send POST with the existing
+   `x-adbattle-settlement-secret` header and this body, replacing the placeholder
+   with that existing settlement UUID:
+
+   ```json
+   {"recover_capability_failure":"SETTLEMENT_UUID"}
+   ```
+
+   The worker rechecks the guard, then POSTs the original immutable parameters
+   with the original idempotency key to Stripe. It authorizes a replacement
+   only for HTTP 400, the exact capability error code, an explicit replay
+   header, and a valid Stripe request ID. It trusts the actual Stripe response,
+   not an error string or evidence supplied in the request body.
+
+   - `recovery_authorized`: one replacement key has been committed to the guard.
+     This request has not sent that replacement key to Stripe.
+   - `recovery_already_authorized`: keep the already committed key. This is also
+     the response after an authorization succeeded but its reply was lost.
+   - `succeeded`: the original-key request returned a transfer; its completion
+     was recorded instead of authorizing a second key.
+   - `held` or an error: inspect state and Stripe logs. Do not change the ID,
+     original first-attempt time, or hold flags to force a retry.
+5. After `recovery_authorized` or `recovery_already_authorized`, run the normal
+   worker with `{}` once `next_attempt_at` is due. It reads the persisted key.
+   The original destination, amount, settlement ID, retry schedule and 20-hour
+   deadline remain unchanged. Lost Stripe responses or ledger failures reuse
+   that same replacement key. A second replacement is never authorized.
+6. Verify the returned transfer in Stripe by settlement metadata, amount,
+   currency, and destination; inspect the completed settlement and balances.
+   Run the normal worker again and verify no duplicate transfer is created.
+
+If the replacement itself becomes a cached rejection, stop for reconciliation;
+this endpoint does not create an unlimited sequence of replacement keys. The
+existing webhook-versus-transfer race limitation still applies. Never use this
+recovery for a 5xx, timeout, unknown outcome, expired window, or risk hold.
+Do not roll back to an old worker that ignores recovery keys while a recovered
+settlement is pending. The guard keeps the verification request ID and timestamp
+for audit. Database constraints require the key and evidence together, restrict
+the key to its settlement-specific format, and prevent reuse of a Stripe request
+ID across recovery records. Browser roles cannot read or mutate the guard or
+invoke recovery RPCs.
+
 ## Automated checks
 
 With Node 24+: `npm ci --ignore-scripts` followed by `npm test`.
 Tests exercise the actual browser helper, Edge Function logic with mocked
-Stripe, and both SQL migrations/RPCs/RLS in PGlite (PostgreSQL WASM).
+Stripe, and the SQL migrations/RPCs/RLS in PGlite (PostgreSQL WASM).
 The fixture models the known legacy schema; it does not prove compatibility
 with the current deployed database. Multi-connection concurrency, hosted
 Supabase authentication, cron, and real Stripe test-mode delivery/transfer

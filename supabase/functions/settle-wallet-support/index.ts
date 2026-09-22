@@ -35,6 +35,30 @@ async function retrySettlement(settlementId: string, error: string) {
   }
 }
 
+async function sendStripeTransfer(settlement: Settlement, destination: string, idempotencyKey: string) {
+  const params = new URLSearchParams();
+  params.set("amount", String(settlement.creator_transfer_cents));
+  params.set("currency", "usd");
+  params.set("destination", destination);
+  params.set("transfer_group", `adbattle_ad_${settlement.ad_id}`);
+  params.set("metadata[settlement_id]", settlement.settlement_id);
+  params.set("metadata[ad_id]", String(settlement.ad_id));
+  params.set("metadata[creator_user_id]", settlement.creator_user_id);
+  params.set("metadata[trigger_reason]", settlement.trigger_reason);
+
+  return await fetch("https://api.stripe.com/v1/transfers", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${stripeSecret}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      // Same ID and immutable parameters, only inside the bounded retry window.
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: params.toString(),
+    signal: AbortSignal.timeout(30_000),
+  });
+}
+
 async function transferSettlement(settlement: Settlement) {
   // Do not silently enable real-money transfers before production review.
   if (!stripeSecret!.startsWith("sk_test_")) {
@@ -44,32 +68,13 @@ async function transferSettlement(settlement: Settlement) {
     p_settlement_id: settlement.settlement_id,
   });
   if (guardError) throw new Error("Could not authorize this transfer attempt.");
-  if (!guard?.allowed) return { status: "held", reason: guard?.reason || "not_authorized" };
+  if (guard?.allowed !== true) return { status: "held", reason: guard?.reason || "not_authorized" };
   if (!guard.destination || Date.now() >= Date.parse(guard.retry_before) - 60_000 ||
       !Number.isFinite(Date.parse(guard.retry_before))) {
     return { status: "held", reason: "retry_window_expired" };
   }
-  const params = new URLSearchParams();
-  params.set("amount", String(settlement.creator_transfer_cents));
-  params.set("currency", "usd");
-  params.set("destination", guard.destination);
-  params.set("transfer_group", `adbattle_ad_${settlement.ad_id}`);
-  params.set("metadata[settlement_id]", settlement.settlement_id);
-  params.set("metadata[ad_id]", String(settlement.ad_id));
-  params.set("metadata[creator_user_id]", settlement.creator_user_id);
-  params.set("metadata[trigger_reason]", settlement.trigger_reason);
-
-  const stripeResponse = await fetch("https://api.stripe.com/v1/transfers", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${stripeSecret}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      // Same ID and immutable parameters, only inside the bounded retry window.
-      "Idempotency-Key": `adbattle-settlement-${settlement.settlement_id}`,
-    },
-    body: params.toString(),
-    signal: AbortSignal.timeout(30_000),
-  });
+  const stripeResponse = await sendStripeTransfer(settlement, guard.destination,
+    guard.idempotency_key || `adbattle-settlement-${settlement.settlement_id}`);
 
   const transfer = await stripeResponse.json();
   if (!stripeResponse.ok || typeof transfer?.id !== "string") {
@@ -95,6 +100,77 @@ async function transferSettlement(settlement: Settlement) {
   return { status: "succeeded", transfer_id: transfer.id as string };
 }
 
+// Explicit operator recovery: verifies the original key with Stripe, then
+// persists one replacement BEFORE any normal worker can POST with that key.
+async function recoverCapabilityFailure(settlementId: string) {
+  if (!stripeSecret!.startsWith("sk_test_")) {
+    throw new Error("Wallet settlements are restricted to Stripe test mode.");
+  }
+  const { data: row, error } = await admin.from("support_settlements")
+    .select("id,ad_id,creator_user_id,creator_transfer_cents,trigger_reason,status")
+    .eq("id", settlementId).maybeSingle();
+  if (error || !row) throw new Error("Could not read recovery settlement.");
+  if (row.status !== "retry") {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_requires_retry" };
+  }
+  const { data: account, error: accountError } = await admin.from("creator_accounts")
+    .select("stripe_account_id,onboarding_complete,charges_enabled,payouts_enabled")
+    .eq("user_id", row.creator_user_id).maybeSingle();
+  if (accountError || !account?.stripe_account_id || !account.onboarding_complete ||
+      !account.charges_enabled || !account.payouts_enabled) {
+    return { settlement_id: settlementId, status: "held", reason: "creator_not_ready" };
+  }
+  const settlement = { ...row, settlement_id: row.id } as Settlement;
+  const { data: guard, error: guardError } = await admin.rpc("prepare_wallet_transfer", {
+    p_settlement_id: settlementId,
+  });
+  if (guardError) throw new Error("Could not authorize recovery verification.");
+  if (guard?.allowed !== true || !guard.destination || !Number.isFinite(Date.parse(guard.retry_before)) ||
+      Date.now() >= Date.parse(guard.retry_before) - 60_000) {
+    return { settlement_id: settlementId, status: "held", reason: guard?.reason || "retry_window_expired" };
+  }
+  // Readiness for a newly linked account says nothing about the frozen
+  // destination. Refuse verification before contacting Stripe in that case.
+  if (account.stripe_account_id !== guard.destination) {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_destination_mismatch" };
+  }
+  if (typeof guard.idempotency_key !== "string") {
+    throw new Error("Apply the capability recovery migration before using recovery.");
+  }
+  const originalKey = `adbattle-settlement-${settlementId}`;
+  if (guard.idempotency_key !== originalKey) {
+    return { settlement_id: settlementId, status: "recovery_already_authorized" };
+  }
+  const response = await sendStripeTransfer(settlement, guard.destination, originalKey);
+  const transfer = await response.json();
+  if (response.ok && typeof transfer?.id === "string") {
+    // If the original key actually succeeded, reconcile that transfer; never
+    // authorize a second key. This also handles a previously lost response.
+    const { error: completeError } = await admin.rpc("complete_wallet_settlement", {
+      p_settlement_id: settlementId, p_stripe_transfer_id: transfer.id,
+    });
+    if (completeError) throw new Error("Transfer found but ledger completion failed; keep original key.");
+    return { settlement_id: settlementId, status: "succeeded", transfer_id: transfer.id };
+  }
+  const requestId = response.headers.get("Request-Id");
+  const replayed = response.headers.get("Idempotent-Replayed") === "true";
+  if (response.status !== 400 || !replayed || typeof transfer?.id === "string" ||
+      transfer?.error?.code !== "insufficient_capabilities_for_transfer" ||
+      !requestId || !/^req_[A-Za-z0-9]+$/.test(requestId)) {
+    return { settlement_id: settlementId, status: "held", reason: "cached_capability_rejection_not_verified",
+      stripe_status: response.status, stripe_error_code: transfer?.error?.code || null,
+      idempotent_replayed: replayed };
+  }
+  const { error: recoveryError } = await admin.rpc("authorize_wallet_capability_recovery", {
+    p_settlement_id: settlementId, p_failed_key: originalKey,
+    p_stripe_request_id: requestId, p_error_code: transfer.error.code,
+  });
+  if (recoveryError) throw new Error("Recovery was not confirmed; repeat the same recovery request to reconcile.");
+  // This request has not sent the replacement key to Stripe. A normal worker
+  // run will load the committed key, respecting the existing retry schedule.
+  return { settlement_id: settlementId, status: "recovery_authorized" };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -102,6 +178,26 @@ Deno.serve(async (req) => {
 
   if (req.headers.get("x-adbattle-settlement-secret") !== settlementSecret) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    const text = await req.text();
+    body = text.trim() ? JSON.parse(text) : {};
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid body");
+  } catch {
+    return Response.json({ error: "Expected an empty body or a recovery JSON object." }, { status: 400 });
+  }
+  if (Object.keys(body).length) {
+    if (Object.keys(body).length !== 1 || typeof body.recover_capability_failure !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.recover_capability_failure)) {
+      return Response.json({ error: "Invalid capability recovery request." }, { status: 400 });
+    }
+    try {
+      return Response.json({ recovery: await recoverCapabilityFailure(body.recover_capability_failure.toLowerCase()) });
+    } catch {
+      return Response.json({ error: "Recovery could not be confirmed. Inspect settlement state; keep its identity and retry history." }, { status: 500 });
+    }
   }
 
   const { data, error } = await admin.rpc("claim_due_wallet_settlements", {
