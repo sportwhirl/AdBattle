@@ -20,11 +20,14 @@ wallet and batched creator settlements.
 
 Do not publish the updated root `index.html` until steps 1–5 are complete.
 
-1. Apply `migrations/20260920_wallet_ledger.sql`, then
-   `migrations/20260921_wallet_safety.sql` in the Supabase SQL editor.
-   The safety migration is one-time and transactional. Do not rerun it after
-   success; it renames internal RPCs. Take a backup and inspect the actual
-   existing schema before applying either migration.
+1. For a new installation, apply the migrations in this order:
+   `20260920_wallet_ledger.sql`, `20260921_wallet_safety.sql`,
+   `20260922_wallet_capability_recovery.sql`, then
+   `20260923_wallet_balance_recovery.sql` from `migrations/` in the Supabase SQL
+   editor. For an existing installation, apply only missing migrations in that
+   order. The safety and recovery migrations are one-time and transactional;
+   do not rerun them after success because they rename internal RPCs. Take a
+   backup and inspect the actual existing schema before applying migrations.
 2. Set the `SETTLEMENT_CRON_SECRET` Edge Function secret to a new random value.
    Existing `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` secrets remain in use.
 3. Deploy these functions:
@@ -373,13 +376,15 @@ After reviewing and merging this change into the wallet branch, deploy to
    worker with `{}` once `next_attempt_at` is due. It reads the persisted key.
    The original destination, amount, settlement ID, retry schedule and 20-hour
    deadline remain unchanged. Lost Stripe responses or ledger failures reuse
-   that same replacement key. A second replacement is never authorized.
+   that same replacement key. This capability action never authorizes another
+   replacement.
 6. Verify the returned transfer in Stripe by settlement metadata, amount,
    currency, and destination; inspect the completed settlement and balances.
    Run the normal worker again and verify no duplicate transfer is created.
 
-If the replacement itself becomes a cached rejection, stop for reconciliation;
-this endpoint does not create an unlimited sequence of replacement keys. The
+If the replacement itself becomes a cached rejection, stop for reconciliation.
+Only a verified `balance_insufficient` rejection can use the separate, bounded
+balance recovery below; the capability action cannot authorize it. The
 existing webhook-versus-transfer race limitation still applies. Never use this
 recovery for a 5xx, timeout, unknown outcome, expired window, or risk hold.
 Do not roll back to an old worker that ignores recovery keys while a recovered
@@ -388,6 +393,86 @@ for audit. Database constraints require the key and evidence together, restrict
 the key to its settlement-specific format, and prevent reuse of a Stripe request
 ID across recovery records. Browser roles cannot read or mutate the guard or
 invoke recovery RPCs.
+
+## Recover a cached balance rejection after capability recovery (test mode only)
+
+Funding the platform does not change an insufficient-funds response already
+cached under its capability-recovery key. This action supports exactly that
+case: an existing active `retry` settlement whose key ends in
+`-capability-recovery-1`. It permits one additional persisted key ending in
+`-balance-recovery-1`. It cannot replace an original key, replace its own key,
+clear a hold, or extend the original 20-hour window.
+
+After this change is reviewed and merged, use **adbattle-test only**:
+
+1. With the preceding three wallet migrations already applied, apply only
+   `migrations/20260923_wallet_balance_recovery.sql` once. It authorizes no
+   recovery and changes no wallet or settlement balances. Redeploy only
+   `settle-wallet-support/index.ts` from the same reviewed commit, with JWT
+   verification OFF and the existing test Stripe key and private settlement
+   secret. Do not rerun earlier migrations or redeploy other functions.
+2. Pause scheduled settlement runs and other platform fund movements while
+   recovering. Confirm the frozen destination still matches the creator's
+   current linked account, the original deadline is open, and no manual-review
+   or payment-risk hold exists. Confirm the **platform's available USD card
+   balance** covers the creator transfer; pending funds and the destination
+   account's funds do not qualify. See [Stripe balance retrieval](https://docs.stripe.com/api/balance/balance_retrieve)
+   and [transfer funding](https://docs.stripe.com/api/transfers/create).
+3. In the function tester, send POST with the existing
+   `x-adbattle-settlement-secret` header and exactly this body:
+
+   ```json
+   {"recover_balance_failure":"SETTLEMENT_UUID"}
+   ```
+
+   The worker reads the platform balance with the same credentials used for
+   transfers. It then repeats the immutable transfer request using the existing
+   capability-recovery key. A successful transfer is reconciled on the same
+   settlement. A replacement is authorized only for HTTP 400 with
+   `Idempotent-Replayed: true`, error type `invalid_request_error`, exact code
+   `balance_insufficient`, no transfer ID, and a valid Stripe request ID.
+   A second balance GET must still show sufficient available USD card funds.
+   Both balance responses must be test-mode responses with valid request IDs.
+   Request bodies cannot supply their own evidence, amount, account, or key.
+
+   - `balance_recovery_authorized`: the new key and evidence were committed
+     together. This invocation has not sent the new key to Stripe.
+   - `balance_recovery_already_authorized`: the existing committed key remains
+     selected, including when an earlier authorization reply was lost.
+   - `succeeded`: the preceding key returned a matching transfer, and the worker
+     recorded its completion without authorizing another key.
+   - `held` or an error: inspect the settlement and Stripe logs. Preserve all
+     keys, evidence, original timestamps and holds. A 5xx, timeout, malformed
+     response, unverified rejection, changed destination or expired deadline
+     does not authorize replacement.
+4. After authorization, send the normal worker `{}` once `next_attempt_at` is
+   due. It loads the committed balance-recovery key and retains the same
+   settlement, amount, frozen destination, metadata and deadline. A lost Stripe
+   reply or failed ledger completion reuses that key. Normal retries deliberately
+   do not require a balance GET: replaying an already successful transfer must
+   still reconcile it after its funds have left the platform.
+5. Verify one transfer in Stripe with the matching settlement metadata,
+   destination, USD amount and transfer ID recorded in the same completed
+   settlement. For a $10 Support settlement at 90/10, the creator transfer is
+   **900 cents ($9.00)**. Verify the corresponding ledger and pending accruals,
+   then run the normal worker again and confirm no duplicate transfer.
+
+The balance check is a snapshot, not a reservation. Funds may move between
+authorization and the new-key POST. If that key also receives a cached error,
+stop for reconciliation; this implementation provides no further replacement.
+Do not change the settlement ID or first-attempt time to escape the deadline.
+Do not roll back to a worker or database wrapper that ignores the committed
+balance-recovery key while the settlement is pending. The existing
+webhook-versus-transfer race limitation still applies.
+
+The database independently checks the preceding key, active retry status,
+frozen/current destination match, creator readiness, payment risks, original
+deadline and recorded balance amount. The replacement key, rejected-request
+ID, fresh balance-request ID, available amount and timestamp are stored
+atomically. Request IDs are format-checked and unique within their respective
+audit columns. The predecessor audit remains intact. Browser roles cannot
+invoke recovery, and the service role cannot bypass the new preparation
+wrapper by calling its renamed predecessor directly.
 
 ## Automated checks
 

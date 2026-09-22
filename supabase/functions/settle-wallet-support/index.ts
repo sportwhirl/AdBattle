@@ -171,6 +171,122 @@ async function recoverCapabilityFailure(settlementId: string) {
   return { settlement_id: settlementId, status: "recovery_authorized" };
 }
 
+function recoveryWindowOpen(guard: { retry_before?: string }) {
+  const deadline = Date.parse(guard.retry_before || "");
+  return Number.isFinite(deadline) && Date.now() < deadline - 60_000;
+}
+
+async function availableStripeUsdCardBalance() {
+  // Authenticate exactly as transfer creation: platform account, no connected-
+  // account header. Pending, reserved and other-currency funds cannot qualify.
+  const response = await fetch("https://api.stripe.com/v1/balance", {
+    method: "GET", headers: { "Authorization": `Bearer ${stripeSecret}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const balance = await response.json();
+  const requestId = response.headers.get("Request-Id");
+  if (!response.ok || balance?.object !== "balance" || balance.livemode !== false ||
+      !Array.isArray(balance.available) || !requestId || !/^req_[A-Za-z0-9]+$/.test(requestId)) {
+    throw new Error("Could not verify the platform's test-mode available balance.");
+  }
+  const usd = balance.available.filter((item: { currency?: string }) => item?.currency === "usd");
+  if (usd.length !== 1 || !Number.isSafeInteger(usd[0].amount) ||
+      !Number.isSafeInteger(usd[0].source_types?.card)) {
+    throw new Error("Could not verify available USD card funds.");
+  }
+  return { cents: Math.min(usd[0].amount, usd[0].source_types.card), requestId };
+}
+
+// A separate, bounded stage for the already-authorized capability key. It never
+// rotates an arbitrary key or resets the original 20-hour retry window.
+async function recoverBalanceFailure(settlementId: string) {
+  if (!stripeSecret!.startsWith("sk_test_")) {
+    throw new Error("Wallet settlements are restricted to Stripe test mode.");
+  }
+  const { data: row, error } = await admin.from("support_settlements")
+    .select("id,ad_id,creator_user_id,creator_transfer_cents,trigger_reason,status")
+    .eq("id", settlementId).maybeSingle();
+  if (error || !row) throw new Error("Could not read recovery settlement.");
+  if (row.status !== "retry") {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_requires_retry" };
+  }
+  if (!Number.isSafeInteger(row.creator_transfer_cents) || row.creator_transfer_cents <= 0) {
+    throw new Error("Invalid settlement amount.");
+  }
+  const { data: account, error: accountError } = await admin.from("creator_accounts")
+    .select("stripe_account_id,onboarding_complete,charges_enabled,payouts_enabled")
+    .eq("user_id", row.creator_user_id).maybeSingle();
+  if (accountError || !account?.stripe_account_id || !account.onboarding_complete ||
+      !account.charges_enabled || !account.payouts_enabled) {
+    return { settlement_id: settlementId, status: "held", reason: "creator_not_ready" };
+  }
+  const { data: guard, error: guardError } = await admin.rpc("prepare_wallet_transfer", {
+    p_settlement_id: settlementId,
+  });
+  if (guardError) throw new Error("Could not authorize recovery verification.");
+  if (guard?.allowed !== true || !guard.destination || !recoveryWindowOpen(guard)) {
+    return { settlement_id: settlementId, status: "held", reason: guard?.reason || "retry_window_expired" };
+  }
+  if (account.stripe_account_id !== guard.destination) {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_destination_mismatch" };
+  }
+  if (guard.balance_recovery_supported !== true) {
+    throw new Error("Apply the balance recovery migration before using this action.");
+  }
+  const failedKey = `adbattle-settlement-${settlementId}-capability-recovery-1`;
+  const recoveryKey = `adbattle-settlement-${settlementId}-balance-recovery-1`;
+  if (guard.idempotency_key === recoveryKey) {
+    return { settlement_id: settlementId, status: "balance_recovery_already_authorized" };
+  }
+  if (guard.idempotency_key !== failedKey) {
+    return { settlement_id: settlementId, status: "held", reason: "requires_capability_recovery_key" };
+  }
+  const before = await availableStripeUsdCardBalance();
+  if (before.cents < row.creator_transfer_cents) {
+    return { settlement_id: settlementId, status: "held", reason: "insufficient_available_balance" };
+  }
+  // The balance GET may take time; recheck before the only transfer POST here.
+  if (!recoveryWindowOpen(guard)) {
+    return { settlement_id: settlementId, status: "held", reason: "retry_window_expired" };
+  }
+  const settlement = { ...row, settlement_id: row.id } as Settlement;
+  const response = await sendStripeTransfer(settlement, guard.destination, failedKey);
+  const transfer = await response.json();
+  if (response.ok && typeof transfer?.id === "string") {
+    if (transfer.object !== "transfer" || transfer.amount !== row.creator_transfer_cents ||
+        transfer.currency !== "usd" || transfer.destination !== guard.destination ||
+        transfer.metadata?.settlement_id !== settlementId) {
+      return { settlement_id: settlementId, status: "held", reason: "transfer_details_mismatch" };
+    }
+    const { error: completeError } = await admin.rpc("complete_wallet_settlement", {
+      p_settlement_id: settlementId, p_stripe_transfer_id: transfer.id,
+    });
+    if (completeError) throw new Error("Transfer found but ledger completion failed; keep the existing key.");
+    return { settlement_id: settlementId, status: "succeeded", transfer_id: transfer.id };
+  }
+  const requestId = response.headers.get("Request-Id");
+  if (response.status !== 400 || response.headers.get("Idempotent-Replayed") !== "true" ||
+      transfer?.id != null || transfer?.error?.type !== "invalid_request_error" ||
+      transfer?.error?.code !== "balance_insufficient" ||
+      !requestId || !/^req_[A-Za-z0-9]+$/.test(requestId)) {
+    return { settlement_id: settlementId, status: "held", reason: "cached_balance_rejection_not_verified" };
+  }
+  // Obtain fresh balance evidence after verification, before committing a key.
+  const after = await availableStripeUsdCardBalance();
+  if (after.cents < row.creator_transfer_cents || !recoveryWindowOpen(guard)) {
+    return { settlement_id: settlementId, status: "held", reason: "balance_or_retry_window_changed" };
+  }
+  const { error: recoveryError } = await admin.rpc("authorize_wallet_balance_recovery", {
+    p_settlement_id: settlementId, p_failed_key: failedKey,
+    p_stripe_request_id: requestId, p_error_code: transfer.error.code,
+    p_available_cents: after.cents, p_balance_request_id: after.requestId,
+  });
+  if (recoveryError) throw new Error("Recovery was not confirmed; repeat the same recovery request to reconcile.");
+  // No POST with the new key in this invocation. Normal worker retries load it
+  // from the committed guard, even after response loss or ledger failure.
+  return { settlement_id: settlementId, status: "balance_recovery_authorized" };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -189,12 +305,17 @@ Deno.serve(async (req) => {
     return Response.json({ error: "Expected an empty body or a recovery JSON object." }, { status: 400 });
   }
   if (Object.keys(body).length) {
-    if (Object.keys(body).length !== 1 || typeof body.recover_capability_failure !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.recover_capability_failure)) {
-      return Response.json({ error: "Invalid capability recovery request." }, { status: 400 });
+    const action = Object.keys(body)[0];
+    const settlementId = body[action];
+    if (Object.keys(body).length !== 1 ||
+        !["recover_capability_failure", "recover_balance_failure"].includes(action) ||
+        typeof settlementId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(settlementId)) {
+      return Response.json({ error: "Invalid recovery request." }, { status: 400 });
     }
     try {
-      return Response.json({ recovery: await recoverCapabilityFailure(body.recover_capability_failure.toLowerCase()) });
+      const recover = action === "recover_balance_failure" ? recoverBalanceFailure : recoverCapabilityFailure;
+      return Response.json({ recovery: await recover(settlementId.toLowerCase()) });
     } catch {
       return Response.json({ error: "Recovery could not be confirmed. Inspect settlement state; keep its identity and retry history." }, { status: 500 });
     }
