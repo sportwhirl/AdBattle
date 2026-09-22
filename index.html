@@ -370,6 +370,18 @@ nav .post-button:hover {
     border-radius: 11px;
 }
 
+.creator-attribution {
+    margin: 9px 0 0;
+    color: #666;
+    font-size: .9rem;
+}
+
+.creator-attribution a {
+    color: #4f3bd4;
+    font-weight: 700;
+    text-decoration: none;
+}
+
 .support-question {
     font-weight: 700;
     margin-bottom: 11px;
@@ -1000,6 +1012,11 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
             Account
         </div>
 
+        <label for="creatorHandle">Public creator handle</label>
+        <input id="creatorHandle" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="creator_name">
+        <button class="auth-secondary-button" onclick="saveCreatorHandle()">Save creator handle</button>
+        <div id="creatorHandleMessage" class="creator-balance-status"></div>
+
         <button
             class="logout-button"
             onclick="logout()"
@@ -1572,6 +1589,34 @@ function updateAccountButton() {
     }
 }
 
+async function loadCreatorHandle() {
+    if (!currentUser) return;
+    const { data, error } = await db.from("creator_profiles")
+        .select("handle").eq("user_id", currentUser.id).maybeSingle();
+    if (error) {
+        document.getElementById("creatorHandleMessage").innerText =
+            "Creator name is unavailable; attribution will report it as missing.";
+        return;
+    }
+    document.getElementById("creatorHandle").value = data?.handle || "";
+}
+
+async function saveCreatorHandle() {
+    if (!currentUser) return;
+    const handle = document.getElementById("creatorHandle").value.trim();
+    const message = document.getElementById("creatorHandleMessage");
+    if (!/^[A-Za-z0-9_]{1,30}$/.test(handle)) {
+        message.innerText = "Use 1–30 letters, numbers, or underscores.";
+        return;
+    }
+    const { error } = await db.from("creator_profiles").upsert({
+        user_id: currentUser.id,
+        handle
+    }, { onConflict: "user_id" });
+    message.innerText = error ? `Couldn't save creator name: ${error.message}` : "Creator name saved.";
+    if (!error) await loadAds();
+}
+
 async function handleProfileClick() {
     /*
         Re-check the current Supabase session when Profile is clicked.
@@ -1587,6 +1632,7 @@ async function handleProfileClick() {
     if (currentUser) {
         await Promise.all([
             loadAds(),
+            loadCreatorHandle(),
             loadWalletBalance(),
             loadCreatorBalance()
         ]);
@@ -1765,6 +1811,14 @@ function createCard(ad, rank = null) {
             >
         </div>
 
+        <div class="creator-attribution">
+            ${
+                ad.creatorHandle
+                    ? `By <a href="#creator/${encodeURIComponent(ad.userId)}" onclick="showCreatorProfile('${encodeURIComponent(ad.userId)}'); return false">@${escapeHTML(ad.creatorHandle)}</a>`
+                    : "Creator name unavailable"
+            }
+        </div>
+
         <div class="caption">
 
             <h2>
@@ -1900,6 +1954,19 @@ function showMostLiked() {
             );
 
     renderGallery(sorted);
+}
+
+function showCreatorProfile(encodedUserId) {
+    const userId = decodeURIComponent(encodedUserId);
+    const creatorAds = ads.filter(ad => ad.userId === userId && ad.moderationStatus === "approved");
+    const handle = creatorAds.find(ad => ad.creatorHandle)?.creatorHandle;
+    showGallery();
+    gallery.classList.remove("show-likes");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = handle ? `@${handle}` : "Creator name unavailable";
+    pageDescription.innerText = "Approved ads by this creator.";
+    history.replaceState(null, "", `#creator/${encodeURIComponent(userId)}`);
+    renderGallery(creatorAds);
 }
 
 /* ========================================
@@ -2293,6 +2360,7 @@ async function postAd() {
         publicUrlData.publicUrl;
 
     const {
+        data: insertedAd,
         error: adError
     } = await db
         .from("ads")
@@ -2301,9 +2369,12 @@ async function postAd() {
             title,
             caption,
             image_url: imageUrl,
+            image_storage_path: fileName,
             promotion_allocation:
                 promotionAllocation
-        });
+        })
+        .select("id")
+        .single();
 
     if (adError) {
         console.error(
@@ -2330,10 +2401,30 @@ async function postAd() {
     document.getElementById("newCaption").value = "";
     imageInput.value = "";
 
+    const { data: scanResult, error: scanError } = await db.functions.invoke(
+        "scan-ad",
+        { body: { ad_id: insertedAd.id } }
+    );
+
     await loadAds();
 
+    if (scanError) {
+        console.error("Duplicate scan incomplete:", scanError);
+        alert("Ad submitted, but duplicate screening is incomplete. It will remain pending for review.");
+        showProfile();
+        profileSection("myads");
+        return;
+    }
+
+    if (scanResult?.status === "duplicate_same_creator") {
+        alert(`You already submitted this image as ad #${scanResult.matched_ad_id}. The new copy will not be published.`);
+        showProfile();
+        profileSection("myads");
+        return;
+    }
+
     alert(
-        "Ad submitted. It is locked and will become public after the safety scan approves it."
+        "Ad submitted. It remains private until both safety and duplicate screening are complete."
     );
 
     showProfile();
@@ -2813,6 +2904,21 @@ async function loadAds() {
         return;
     }
 
+    const ownerIds = [...new Set((adData || []).map(ad => ad.user_id).filter(Boolean))];
+    let profileData = [];
+    if (ownerIds.length) {
+        const { data, error: profileError } = await db
+            .from("creator_profiles")
+            .select("user_id,handle")
+            .in("user_id", ownerIds);
+        if (profileError) {
+            console.error("Couldn't load creator attribution:", profileError);
+        } else {
+            profileData = data || [];
+        }
+    }
+    const creatorHandles = new Map(profileData.map(profile => [profile.user_id, profile.handle]));
+
     /* GET LIKES */
 
     let likeData = [];
@@ -2885,6 +2991,8 @@ async function loadAds() {
 
         return {
             id: ad.id,
+            userId: ad.user_id,
+            creatorHandle: creatorHandles.get(ad.user_id) || "",
             title: ad.title,
             caption: ad.caption || "",
             image: ad.image_url,

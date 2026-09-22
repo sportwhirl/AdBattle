@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.settle-wallet-support]
 verify_jwt = false
+
+[functions.scan-ad]
+verify_jwt = false
