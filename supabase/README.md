@@ -341,7 +341,10 @@ After reviewing and merging this change into the wallet branch, deploy to
    `SETTLEMENT_CRON_SECRET` header required. Preserve the test Stripe key.
 3. Confirm the exact guard destination's **Transfers** capability is Active in
    the same Stripe sandbox and inspect the original failed transfer request.
-   Do not use a different account to work around the failure. Check settlement
+   The creator's current linked account must match that frozen destination;
+   the worker refuses mismatches before contacting Stripe, and the database
+   independently rechecks the match before authorizing recovery. Do not change
+   either account to work around this check. Check settlement
    status is `retry`, its original 20-hour window is still open, and there are
    no payment-risk/manual-review holds. Pause any schedule during recovery.
 4. In the function tester, send POST with the existing
@@ -381,7 +384,10 @@ existing webhook-versus-transfer race limitation still applies. Never use this
 recovery for a 5xx, timeout, unknown outcome, expired window, or risk hold.
 Do not roll back to an old worker that ignores recovery keys while a recovered
 settlement is pending. The guard keeps the verification request ID and timestamp
-for audit; browser roles cannot read or mutate the guard or invoke recovery RPCs.
+for audit. Database constraints require the key and evidence together, restrict
+the key to its settlement-specific format, and prevent reuse of a Stripe request
+ID across recovery records. Browser roles cannot read or mutate the guard or
+invoke recovery RPCs.
 
 ## Automated checks
 

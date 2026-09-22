@@ -81,6 +81,10 @@ test('capability recovery records one key without changing identity, destination
     [settlementId,key+'-other','req_verified',args[3]],
     [settlementId,key,null,args[3]],
   ]) await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',bad),/INVALID_CAPABILITY/);
+  // The preceding test changed the current account, not the frozen destination.
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/RECOVERY_DESTINATION_MISMATCH/);
+  assert.deepEqual(await scalar('select * from wallet_transfer_guards where settlement_id=$1',[settlementId]),beforeGuard);
+  await db.exec("update creator_accounts set stripe_account_id='acct_original'");
   await db.query('update wallet_transfer_guards set manual_review=true where settlement_id=$1',[settlementId]);
   await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/RECOVERY_BLOCKED/);
   await db.query('update wallet_transfer_guards set manual_review=false where settlement_id=$1',[settlementId]);
@@ -102,6 +106,9 @@ test('capability recovery records one key without changing identity, destination
   assert.deepEqual(after.first_attempt_at,beforeGuard.first_attempt_at);
   assert.equal(after.manual_review,false);
   assert.equal(after.capability_recovery_request_id,'req_verified');
+  await db.exec("update creator_accounts set stripe_account_id='acct_changed'");
+  await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/RECOVERY_DESTINATION_MISMATCH/);
+  await db.exec("update creator_accounts set stripe_account_id='acct_original'");
   await db.exec('set role authenticated');
   try {
     await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',args),/permission denied/);
@@ -140,6 +147,23 @@ test('actual 24-hour inactivity rule waits, resets on new Support, then settles'
   assert.equal(due.length,1);
   assert.equal(due[0].trigger_reason,'inactivity');
   inFlightSettlementId=due[0].settlement_id;
+});
+
+test('recovery evidence cannot be partial, malformed or reused for another settlement', async () => {
+  const key=`adbattle-settlement-${inFlightSettlementId}-capability-recovery-1`;
+  const sql=`update wallet_transfer_guards set capability_recovery_key=$2,
+    capability_recovery_request_id=$3, capability_recovered_at=$4 where settlement_id=$1`;
+  const at=new Date().toISOString();
+  for(const values of [
+    [key,null,null], [null,'req_new',null], [null,null,at],
+    [key,'req_new',null], [key,null,at], [null,'req_new',at],
+    [key+'-another','req_new',at], [key,'invalid request',at],
+  ]) await assert.rejects(db.query(sql,[inFlightSettlementId,...values]),/wallet_capability_recovery_complete/);
+  await assert.rejects(db.query(sql,[inFlightSettlementId,key,'req_verified',at]),/unique constraint/);
+  const guard=await scalar('select * from wallet_transfer_guards where settlement_id=$1',[inFlightSettlementId]);
+  assert.equal(guard.capability_recovery_key,null);
+  assert.equal(guard.capability_recovery_request_id,null);
+  assert.equal(guard.capability_recovered_at,null);
 });
 
 test('refunds debit only the cumulative delta, ignoring duplicates and old snapshots', async () => {
@@ -191,4 +215,23 @@ test('RLS limits reads and browser roles cannot invoke privileged money RPCs', a
     await assert.rejects(db.query('select * from claim_due_wallet_settlements(25)'),/permission denied/);
     await assert.rejects(db.query('select * from wallet_payment_risks'),/permission denied/);
   } finally { await db.exec('reset role'); }
+});
+
+test('preparation wrapper refuses absent or non-boolean authorization from its predecessor', async () => {
+  // Replace only the predecessor inside a rolled-back transaction so the real
+  // wrapper is exercised against malformed authorization without persisting it.
+  await db.exec('begin');
+  try {
+    await db.exec(`create or replace function public.prepare_wallet_transfer_before_recovery(p_settlement_id uuid)
+      returns jsonb language sql security definer set search_path = '' as $$
+      select current_setting('test.guard_result')::jsonb $$;`);
+    for(const result of [null,{}, {allowed:null}, {allowed:false,reason:'manual_review'},
+      {allowed:'true'}, {allowed:1}]) {
+      await db.query("select set_config('test.guard_result',$1,true)",[JSON.stringify(result)]);
+      const guard=(await scalar('select prepare_wallet_transfer($1) as g',[settlementId])).g;
+      assert.equal(guard.allowed,false);
+      assert.equal(guard.idempotency_key,undefined);
+      if(result?.reason) assert.equal(guard.reason,result.reason);
+    }
+  } finally { await db.exec('rollback'); }
 });

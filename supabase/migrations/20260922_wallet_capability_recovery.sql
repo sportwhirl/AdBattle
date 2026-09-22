@@ -4,8 +4,17 @@ begin;
 
 alter table public.wallet_transfer_guards
   add column capability_recovery_key text unique,
-  add column capability_recovery_request_id text,
-  add column capability_recovered_at timestamptz;
+  add column capability_recovery_request_id text unique,
+  add column capability_recovered_at timestamptz,
+  add constraint wallet_capability_recovery_complete check (
+    (capability_recovery_key is null and capability_recovery_request_id is null
+      and capability_recovered_at is null)
+    or
+    (capability_recovery_key is not null and capability_recovery_request_id is not null
+      and capability_recovered_at is not null
+      and capability_recovery_key = 'adbattle-settlement-' || settlement_id::text || '-capability-recovery-1'
+      and capability_recovery_request_id ~ '^req_[A-Za-z0-9]+$')
+  );
 
 alter function public.prepare_wallet_transfer(uuid)
   rename to prepare_wallet_transfer_before_recovery;
@@ -16,7 +25,10 @@ declare result jsonb; recovery_key text;
 begin
   -- The existing function locks settlement then guard and applies every hold.
   result := public.prepare_wallet_transfer_before_recovery(p_settlement_id);
-  if not (result->>'allowed')::boolean then return result; end if;
+  if (result->'allowed') is distinct from 'true'::jsonb then
+    return (case when jsonb_typeof(result) = 'object' then result else '{}'::jsonb end)
+      || jsonb_build_object('allowed', false);
+  end if;
   select capability_recovery_key into recovery_key
     from public.wallet_transfer_guards where settlement_id = p_settlement_id;
   return result || jsonb_build_object('idempotency_key', coalesce(recovery_key,
@@ -56,6 +68,9 @@ begin
     where user_id = settlement.creator_user_id and nullif(stripe_account_id, '') is not null
       and onboarding_complete and charges_enabled and payouts_enabled)
   then raise exception 'RECOVERY_CREATOR_NOT_READY'; end if;
+  if not exists (select 1 from public.creator_accounts
+    where user_id = settlement.creator_user_id and stripe_account_id = guard.destination)
+  then raise exception 'RECOVERY_DESTINATION_MISMATCH'; end if;
   -- Concurrent/repeated authorization retains the ONE persisted replacement.
   if guard.capability_recovery_key is not null then
     return jsonb_build_object('idempotency_key', guard.capability_recovery_key,

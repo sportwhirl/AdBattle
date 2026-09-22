@@ -68,7 +68,7 @@ async function transferSettlement(settlement: Settlement) {
     p_settlement_id: settlement.settlement_id,
   });
   if (guardError) throw new Error("Could not authorize this transfer attempt.");
-  if (!guard?.allowed) return { status: "held", reason: guard?.reason || "not_authorized" };
+  if (guard?.allowed !== true) return { status: "held", reason: guard?.reason || "not_authorized" };
   if (!guard.destination || Date.now() >= Date.parse(guard.retry_before) - 60_000 ||
       !Number.isFinite(Date.parse(guard.retry_before))) {
     return { status: "held", reason: "retry_window_expired" };
@@ -125,9 +125,14 @@ async function recoverCapabilityFailure(settlementId: string) {
     p_settlement_id: settlementId,
   });
   if (guardError) throw new Error("Could not authorize recovery verification.");
-  if (!guard?.allowed || !guard.destination || !Number.isFinite(Date.parse(guard.retry_before)) ||
+  if (guard?.allowed !== true || !guard.destination || !Number.isFinite(Date.parse(guard.retry_before)) ||
       Date.now() >= Date.parse(guard.retry_before) - 60_000) {
     return { settlement_id: settlementId, status: "held", reason: guard?.reason || "retry_window_expired" };
+  }
+  // Readiness for a newly linked account says nothing about the frozen
+  // destination. Refuse verification before contacting Stripe in that case.
+  if (account.stripe_account_id !== guard.destination) {
+    return { settlement_id: settlementId, status: "held", reason: "recovery_destination_mismatch" };
   }
   if (typeof guard.idempotency_key !== "string") {
     throw new Error("Apply the capability recovery migration before using recovery.");

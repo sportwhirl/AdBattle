@@ -17,7 +17,8 @@ const rejection = (status=400,code='insufficient_capabilities_for_transfer',repl
   }});
 
 function worker({fetchImpl=async()=>rejection(),guardPatch={},secret='sk_test_fake',
-  loseAuthorization=false,completeError=null,status='retry',creatorReady=true}={}) {
+  loseAuthorization=false,completeError=null,status='retry',creatorReady=true,
+  currentDestination='acct_fixed'}={}) {
   let handler; let recoveryKey; const calls=[]; const requests=[];
   const guard = () => ({allowed:true,destination:'acct_fixed',
     retry_before:new Date(Date.now()+3600000).toISOString(),idempotency_key:recoveryKey || key,...guardPatch});
@@ -25,7 +26,7 @@ function worker({fetchImpl=async()=>rejection(),guardPatch={},secret='sk_test_fa
     SUPABASE_SERVICE_ROLE_KEY:'test',STRIPE_SECRET_KEY:secret,SETTLEMENT_CRON_SECRET:'test'})[k]},serve:f=>{handler=f;}},
     createClient:()=>({
       from:table=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:table==='creator_accounts'
-        ? {stripe_account_id:'acct_mutable',onboarding_complete:creatorReady,
+        ? {stripe_account_id:currentDestination,onboarding_complete:creatorReady,
           charges_enabled:creatorReady,payouts_enabled:creatorReady} : {...row,status}})})})}),
       rpc:async(name,args)=>{
         calls.push({name,args});
@@ -51,6 +52,12 @@ test('verified cached capability rejection persists one key without sending a re
   const w=worker();
   assert.equal((await w.ctx.recoverCapabilityFailure(id)).status,'recovery_authorized');
   assert.equal(w.requests.length,1);
+  const changed=worker({currentDestination:'acct_changed'});
+  const blocked=await changed.ctx.recoverCapabilityFailure(id);
+  assert.equal(blocked.status,'held');
+  assert.equal(blocked.reason,'recovery_destination_mismatch');
+  assert.equal(changed.requests.length,0);
+  assert.equal(changed.calls.some(c=>c.name==='authorize_wallet_capability_recovery'),false);
   assert.equal(w.requests[0].options.headers['Idempotency-Key'],key);
   const p=new URLSearchParams(w.requests[0].options.body);
   assert.equal(p.get('amount'),'900'); assert.equal(p.get('destination'),'acct_fixed');
@@ -106,6 +113,8 @@ test('live keys, holds, deadlines and completed settlements cannot start recover
   for(const options of [
     {secret:'sk_live_fake'}, {guardPatch:{allowed:false,reason:'manual_review'}},
     {guardPatch:{allowed:false,reason:'payment_risk_hold'}},
+    {guardPatch:{allowed:null}}, {guardPatch:{allowed:undefined}},
+    {guardPatch:{allowed:'true'}}, {guardPatch:{allowed:1}},
     {guardPatch:{retry_before:new Date(Date.now()-1000).toISOString()}},
     {guardPatch:{retry_before:'invalid'}}, {status:'succeeded'}, {creatorReady:false},
   ]) {
