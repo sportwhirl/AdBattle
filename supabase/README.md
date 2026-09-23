@@ -169,6 +169,72 @@ and multi-connection concurrency checks remain outstanding. Keep all existing
 test-mode, deployment-order, credential-handling, reconciliation-hold, and
 production-launch restrictions in force.
 
+### Hosted wallet access checks (no wallet mutations)
+
+These two complementary checks inspect the deployed database permissions and
+exercise actual user sessions over Auth/PostgREST. They do not initiate Stripe
+payments, call wallet RPCs/Edge Functions, change holds, or write wallet data.
+An Auth password sign-in creates ordinary Auth session activity. No deployment
+or hosted migration is needed to use these tools.
+
+1. In **adbattle-test** (`nccqnrcdygujulrnwair`) SQL Editor, run the entire
+   [`staging/check_wallet_access.sql`](staging/check_wallet_access.sql).
+   It is a read-only catalog SELECT. Expect `audit_status=PASS`,
+   `nonpassing_checks=0`, and `findings=[]`. The current schema produces 178
+   checks. Keep the report separately from the runner's output.
+2. If it reports `REVIEW_REQUIRED`, inspect/share `findings` before proceeding.
+   Missing objects, unexpected overloads and client-readable dependent views
+   are not passing checks. The audit includes inherited/PUBLIC and column
+   grants, RLS, client bypass roles, protected RPCs, and access to their renamed
+   predecessors. It also flags TRUNCATE/REFERENCES/TRIGGER privileges for
+   least-privilege review even though PostgREST does not expose those operations.
+   Do not automatically revoke privileges or rerun migrations to suppress a
+   finding. A catalog PASS is not proof of row isolation or a universal audit
+   of every function/view in the application.
+3. Use the existing ordinary test account as **A**. It must own existing rows
+   in all five read-scoped wallet/creator tables, including a completed
+   settlement. In the test project's **Authentication → Users → Add user**,
+   create a different ordinary email/password account **B** with email
+   confirmation enabled/completed. B does not need a wallet, funding, ad or
+   payment. Keep both passwords on your own computer; do not paste them into
+   chat, SQL, issues or command arguments.
+4. From the updated local checkout, run:
+
+   ```sh
+   python3 scripts/test_wallet_access.py
+   ```
+
+   Supply only the **adbattle-test public publishable or legacy anon key** and
+   the two ordinary logins at its prompts. Public key/password input is hidden;
+   pasting can succeed without characters appearing. The host/project cannot
+   be overridden. Secret/service-role/Stripe keys are rejected, redirects are
+   refused, and passwords/tokens are held only in memory. No state file is
+   written. The runner signs in twice; its transport permits only Auth sign-in
+   POSTs and allowlisted GETs. It rejects RPC, Edge Function and database
+   mutation paths.
+5. Share the `ACCESS RESULTS — safe to share` block along with the SQL audit
+   result. A network error, invalid login, missing table, unexpected HTTP error,
+   missing pagination evidence, or empty A fixture stops the test and is never
+   counted as an authorization denial. If A's visible snapshot changes during
+   the test, investigate before claiming a pass. Only the fixed diagnostics and
+   final report are intended for sharing; credentials and raw API bodies are not.
+
+The hosted runner verifies Auth accepts two distinct ordinary sessions, A can
+read its populated owner rows, B cannot read those same rows through explicit
+owner filters or unfiltered reads, anonymous reads are denied, and both users
+are denied the private risk/event/transfer-guard tables. It reads all pages
+using exact counts and aborts above 5,000 rows per result. A-to-B isolation has
+a positive foreign-row control only if B already owns rows; an empty B account
+does not establish that direction by itself. `supports` remains intentionally
+public-readable and is not treated as a private wallet table.
+
+The SQL report establishes the inspected table/column and named RPC privilege
+configuration. The Python report establishes the actual GET behavior for these
+sessions. Neither report alone proves all authorization boundaries: Edge
+Function request validation, arbitrary app RPC/view paths, or every possible
+role/identity combination require separate tests. Do not claim the hosted
+checks ran merely because the offline regression suite passes.
+
 ### Local frontend against adbattle-test
 
 The tracked production configuration is unchanged. Localhost is fail-closed:
