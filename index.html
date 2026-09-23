@@ -3006,7 +3006,6 @@ function resetAiDraftPreview() {
     generatedDraftFile = null;
     previewDraftFile = null;
     generatedDraftRequestId = null;
-    if (generatedDraftUrl) URL.revokeObjectURL(generatedDraftUrl);
     generatedDraftUrl = null;
     document.getElementById("aiImagePreview").hidden = true;
     document.getElementById("aiImagePreviewImage").removeAttribute("src");
@@ -3042,38 +3041,9 @@ function aiDraftErrorMessage(message) {
     if (message.includes("PROMPT_NEEDS_REVIEW")) return "This ad idea needs review. Discard it to try another idea.";
     if (message.includes("GENERATION_OUTCOME_UNCERTAIN")) return "The earlier attempt is uncertain. Discard it before a new request.";
     if (message.includes("DRAFT_URL_UNAVAILABLE")) return "Draft download is unavailable. Retry the same request to recover it.";
+    if (message.includes("CANONICAL_DRAFT_UNAVAILABLE")) return "This older draft has no verified posting image. Discard it and generate a new one.";
     if (message.includes("GENERATION_FAILED")) return "The draft failed. Discard it before trying another request.";
     return message;
-}
-
-async function smallJpegDraft(blob) {
-    if (blob.size > 8 * 1024 * 1024 || !["image/png", "image/jpeg"].includes(blob.type)) {
-        throw new Error("The generated image exceeds the draft limit.");
-    }
-    const bitmap = await createImageBitmap(blob);
-    try {
-        if (bitmap.width < 1 || bitmap.height < 1 ||
-            bitmap.width > 4096 || bitmap.height > 4096) {
-            throw new Error("The generated image has invalid dimensions.");
-        }
-        const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        const context = canvas.getContext("2d");
-        context.imageSmoothingEnabled = document.getElementById("aiImageStyle").value !== "pixel_art";
-        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        let output = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", .68));
-        if (!output || output.size > 500 * 1024) {
-            output = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", .50));
-        }
-        if (!output || output.type !== "image/jpeg" || output.size > 500 * 1024) {
-            throw new Error("Couldn't make a small JPEG from this image.");
-        }
-        return new File([output], "adbattle-ai-draft.jpg", { type: "image/jpeg" });
-    } finally {
-        bitmap.close();
-    }
 }
 
 async function generateAiDraft() {
@@ -3116,14 +3086,19 @@ async function generateAiDraft() {
                 data?.error || "Image generation is unavailable.";
             throw new Error(aiDraftErrorMessage(detail));
         }
-        const response = await fetch(data.url);
-        if (!response.ok) throw new Error("Couldn't download the private draft. Try recovering it.");
-        const file = await smallJpegDraft(await response.blob());
         resetAiDraftPreview();
-        previewDraftFile = file;
+        // The URL points to the server-created canonical JPEG. The browser
+        // only previews it; the trusted submit function copies the stored bytes.
         generatedDraftRequestId = data.request_id;
-        generatedDraftUrl = URL.createObjectURL(file);
-        document.getElementById("aiImagePreviewImage").src = generatedDraftUrl;
+        generatedDraftUrl = data.url;
+        const previewImage = document.getElementById("aiImagePreviewImage");
+        previewImage.src = generatedDraftUrl;
+        try { await previewImage.decode(); }
+        catch {
+            resetAiDraftPreview();
+            throw new Error("Couldn't load the private draft. Try recovering it.");
+        }
+        previewDraftFile = true;
         document.getElementById("aiImagePreview").hidden = false;
         status.innerText = "Review the draft. It is not posted until you submit the ad.";
     } catch (error) {
@@ -3188,6 +3163,26 @@ async function postAd() {
         alert("Recover the AI image draft before submitting it.");
         return;
     }
+    if (generatedDraftFile) {
+        const { data, error } = await db.functions.invoke("submit-ai-ad", {
+            body: { request_id: generatedDraftRequestId, title, caption }
+        });
+        if (error || data?.status !== "submitted") {
+            const detail = error ? await functionErrorMessage(error, data, "AI ad submission is unavailable.") :
+                data?.error || "AI ad submission is unavailable.";
+            alert(aiDraftErrorMessage(detail));
+            return;
+        }
+        document.getElementById("newTitle").value = "";
+        document.getElementById("newCaption").value = "";
+        imageInput.value = "";
+        discardAiDraft();
+        await loadAds();
+        alert("Ad submitted. It remains pending and private until both safety and duplicate screening are complete.");
+        showProfile();
+        profileSection("myads");
+        return;
+    }
 
     if (!["image/jpeg", "image/png"].includes(imageFile.type)) {
         alert("Please choose a JPEG or PNG image.");
@@ -3201,15 +3196,7 @@ async function postAd() {
         return;
     }
 
-    const rawExtension =
-        imageFile.name.includes(".")
-            ? imageFile.name.split(".").pop()
-            : "jpg";
-
-    const extension =
-        rawExtension
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "") || "jpg";
+    const extension = imageFile.type === "image/png" ? "png" : "jpg";
 
     const fileName =
         `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
@@ -3217,7 +3204,7 @@ async function postAd() {
     const {
         error: uploadError
     } = await db.storage
-        .from("ad-images")
+        .from("ad-pending-images")
         .upload(
             fileName,
             imageFile,
@@ -3241,26 +3228,14 @@ async function postAd() {
         return;
     }
 
-    const {
-        data: publicUrlData
-    } = db.storage
-        .from("ad-images")
-        .getPublicUrl(fileName);
-
-    const imageUrl =
-        publicUrlData.publicUrl;
-
     const { error: adError } = await db
         .from("ads")
         .insert({
             user_id: currentUser.id,
             title,
             caption,
-            image_url: imageUrl,
+            image_url: "",
             image_storage_path: fileName,
-            ...(FEATURES.aiImageDrafts && generatedDraftFile
-                ? { ai_source_request_id: generatedDraftRequestId }
-                : {}),
             promotion_allocation:
                 promotionAllocation
         });
@@ -3271,16 +3246,8 @@ async function postAd() {
             adError
         );
 
-        /*
-            Clean up the image if the ad row fails.
-        */
-        await db.storage
-            .from("ad-images")
-            .remove([fileName]);
-
         alert(
-            "Couldn't create the ad: " +
-            adError.message
+            "Couldn't create the ad. The private upload will be cleaned up later: " + adError.message
         );
 
         return;
@@ -3785,6 +3752,22 @@ async function loadAds() {
         ownerAdData = data || [];
     }
 
+    // The owner-only RPC never includes a public URL for unreviewed uploads.
+    // Fetch short-lived signed URLs in batches; a failed preview stays blank.
+    const pendingPreviewUrls = new Map();
+    const pendingIds = ownerAdData
+        .filter(ad => ad.moderation_status === "pending_scan" && !ad.image_url)
+        .map(ad => Number(ad.id)).filter(Number.isSafeInteger);
+    for (let i = 0; i < pendingIds.length; i += 50) {
+        const { data, error } = await db.functions.invoke("pending-ad-previews", {
+            body: { ad_ids: pendingIds.slice(i, i + 50) }
+        });
+        if (error || !data?.previews) continue;
+        Object.entries(data.previews).forEach(([id, url]) => {
+            if (typeof url === "string") pendingPreviewUrls.set(Number(id), url);
+        });
+    }
+
     // Owner rows replace their public copies, so approved owner ads appear once
     // while private pending/review rows remain visible only to their creator.
     const adRowsById = new Map(
@@ -3900,7 +3883,8 @@ async function loadAds() {
             creatorHandle: creatorHandles.get(ad.user_id) || "",
             title: ad.title,
             caption: ad.caption || "",
-            image: ad.image_url,
+            image: ad.image_url || (isOwner ? pendingPreviewUrls.get(numericAdId) : "") ||
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23e9eee9'/%3E%3C/svg%3E",
             seedCount:
                 seedCounts.get(numericAdId) || 0,
             seeded:

@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import vm from 'node:vm';
+import { requireSupportedImage } from '../supabase/functions/_shared/storage-scan-policy.ts';
 
 // Execute the actual Edge handler with mocked I/O; no live keys or API calls.
 const source = readFileSync(new URL('../supabase/functions/scan-ad/index.ts', import.meta.url), 'utf8');
-const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/, '')));
+const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')));
 const image = readFileSync(new URL('./fixtures/images/valid.png', import.meta.url));
 const approval = {
   decision: 'approve', hard_violation: false, confidence: 0.99, risk_score: 1,
@@ -26,11 +27,12 @@ function scanner(policyResponse, { policyHttpStatus = 200, safetyStatus = 'pendi
   const projectUrl = 'https://test-project.supabase.co';
   const ad = {
     id: 4, user_id: 'test-owner', title: 'Staging upload test', caption: 'A harmless image.',
-    image_url: `${projectUrl}/storage/v1/object/public/ad-images/test-owner/image.png`,
+    image_url: '', image_storage_path: 'test-owner/image.png',
     moderation_status: 'pending_scan', safety_status: safetyStatus, moderation_attempts: 1,
   };
   const audits = [], updates = [], rpcCalls = [], requests = [];
   const admin = {
+    storage: { from(bucket) { assert.equal(bucket, 'ad-pending-images'); return {}; } },
     from(table) {
       assert.ok(['ads', 'moderation_events'].includes(table), `unexpected table: ${table}`);
       let update;
@@ -64,10 +66,15 @@ function scanner(policyResponse, { policyHttpStatus = 200, safetyStatus = 'pendi
   const context = vm.createContext({
     Deno: { env: { get: (key) => env[key] }, serve: (fn) => { handler = fn; } },
     createClient: () => admin,
+    loadOwnedImage: async (_bucket, owner, path) => {
+      assert.equal(owner, ad.user_id);
+      assert.equal(path, ad.image_storage_path);
+      return new Uint8Array(image);
+    },
+    requireSupportedImage,
     Request, Response, URL, TextEncoder, AbortController, Uint8Array, crypto: globalThis.crypto,
     setTimeout, clearTimeout, btoa, console: { error() {} },
     fetch: async (url, options = {}) => {
-      if (url === ad.image_url) return new Response(image, { headers: { 'content-type': 'image/png' } });
       const body = JSON.parse(options.body);
       requests.push({ url, body });
       if (url === 'https://api.openai.com/v1/moderations') {

@@ -8,7 +8,8 @@ test('restored safety scanner keeps private webhook auth and authoritative reloa
   assert.match(source,/SCANNER_WEBHOOK_SECRET/);
   assert.match(source,/x-adbattle-scanner-secret/);
   assert.match(source,/\.from\("ads"\)[\s\S]*\.eq\(\s*"id",\s*adId/);
-  assert.match(source,/title,[\s\S]*caption,[\s\S]*image_url,[\s\S]*moderation_attempts/);
+  assert.match(source,/title,[\s\S]*caption,[\s\S]*image_storage_path,[\s\S]*moderation_attempts/);
+  assert.match(source,/loadOwnedImage\([\s\S]*PENDING_IMAGE_BUCKET/);
 });
 
 test('restored scanner retains deterministic, OpenAI, policy, and audit stages', () => {

@@ -4,8 +4,10 @@
 staging-only and permits approved adult testers; it does not establish a child
 account, parental-consent flow, Zero Data Retention (ZDR), or a public video
 publishing path. The existing signup, ordinary image posting, Support, Seed,
-and wallet endpoints also have **no age entitlement**, and ordinary pending
-image uploads use public storage before scanning. Public AI creation remains
+and wallet endpoints also have **no age entitlement**. This branch adds a
+private pending-image gate and server-bound AI derivatives, but neither has
+been deployed or verified in hosted staging. The deployed ordinary posting
+path still uses public storage before scanning. Public AI creation remains
 off until the applicable gates are implemented and verified. The current site
 must not be presented as child-safe. This plan needs review for each launch
 jurisdiction.
@@ -78,10 +80,11 @@ teen use also needs confirmation under the chosen account agreement.
    define retention/deletion for already held drafts. Existing accounts must
    be classified safely before a public switch.
 5. Keep pending uploads in private storage until the exact media and text pass
-   age-suitable review, then atomically publish approved derivatives. The
-   current public `ad-images` upload happens before scanners run, so an
-   unlisted pending URL is not private. Migrate ordinary uploads as well as AI
-   media; handle rejected assets and stale CDN copies explicitly.
+   age-suitable review, then publish only checked derivatives. The branch
+   implements private pending storage and a hash-bound publisher for images;
+   hosted rollout must inventory and remove preexisting unreviewed public
+   objects, verify the new policies and worker, and address rejected assets
+   and stale CDN copies explicitly.
 6. Use contextual display only for children. Audit cookies, analytics,
    embedded media, storage/CDN logs, public creator handles, outgoing links,
    and any advertising or third-party scripts. Under COPPA, a persistent

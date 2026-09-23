@@ -21,6 +21,12 @@ verify_jwt = false
 [functions.scan-ad-duplicate]
 verify_jwt = false
 
+[functions.publish-ad-image]
+verify_jwt = false
+
+[functions.pending-ad-previews]
+verify_jwt = true
+
 [functions.ai-video-draft]
 verify_jwt = true
 
@@ -30,4 +36,7 @@ verify_jwt = false
 # Header: x-adbattle-duplicate-scanner-secret: <private secret>
 
 [functions.generate-ai-image]
+verify_jwt = true
+
+[functions.submit-ai-ad]
 verify_jwt = true

@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 import { corsPreflightResponse, jsonResponse, parseBearerToken } from "../_shared/http.ts";
 
 // Draft generation is deliberately restricted to the local adbattle-test origin
@@ -9,6 +10,7 @@ const MODEL = "gpt-image-2.5-flare";
 const DRAFT_BUCKET = "ai-image-drafts";
 const MAX_PROVIDER_RESPONSE_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_POST_BYTES = 500 * 1024;
 const STYLES = Object.freeze({
   pixel_art: "Coarse, readable pixel art with a limited palette and simple silhouettes.",
   flat_illustration: "Clean flat illustration with broad color fields, few details, and simple shapes.",
@@ -192,6 +194,62 @@ function imageFromOpenAI(result: any, aspectRatio: string) {
   return { bytes, mime: "image/jpeg", extension: "jpg" };
 }
 
+async function canonicalPostJpeg(source: Uint8Array, style: string, aspectRatio: string) {
+  // Never accept a browser-supplied derivative. Decode the actual provider
+  // output before the service uploads the exact bytes the ad scanners will see.
+  const expected = aspectRatio === "1:1" ? [1024, 1024] : [1280, 720];
+  const dimensions = aspectRatio === "1:1" ? [640, 640] : [640, 360];
+  const image = await Image.decode(source);
+  if (image.width !== expected[0] || image.height !== expected[1]) {
+    throw new Error("INVALID_IMAGE_OUTPUT");
+  }
+  const resized = style === "pixel_art"
+    ? image.resize(dimensions[0], dimensions[1])
+    : smoothResize(image, dimensions[0], dimensions[1]);
+  let bytes = await resized.encodeJPEG(68);
+  if (bytes.byteLength > MAX_POST_BYTES) bytes = await resized.encodeJPEG(50);
+  const actual = jpegDimensions(bytes);
+  if (!bytes.byteLength || bytes.byteLength > MAX_POST_BYTES ||
+      !actual || actual.width !== dimensions[0] || actual.height !== dimensions[1]) {
+    throw new Error("CANONICAL_IMAGE_TOO_LARGE");
+  }
+  return { bytes, width: actual.width, height: actual.height };
+}
+
+function smoothResize(source: Image, width: number, height: number) {
+  // ImageScript's v1 resize is nearest-neighbor. A bounded bilinear pass
+  // preserves smoother art and photos without loading a Node-specific codec.
+  const output = new Image(width, height);
+  const src = source.bitmap;
+  const dst = output.bitmap;
+  const xScale = source.width / width;
+  const yScale = source.height / height;
+  for (let y = 0; y < height; y++) {
+    const fy = Math.max(0, Math.min(source.height - 1, (y + .5) * yScale - .5));
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(y0 + 1, source.height - 1);
+    const wy = fy - y0;
+    for (let x = 0; x < width; x++) {
+      const fx = Math.max(0, Math.min(source.width - 1, (x + .5) * xScale - .5));
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(x0 + 1, source.width - 1);
+      const wx = fx - x0;
+      const top = 4 * (y0 * source.width + x0);
+      const topRight = 4 * (y0 * source.width + x1);
+      const bottom = 4 * (y1 * source.width + x0);
+      const bottomRight = 4 * (y1 * source.width + x1);
+      const target = 4 * (y * width + x);
+      for (let channel = 0; channel < 3; channel++) {
+        const upper = src[top + channel] * (1 - wx) + src[topRight + channel] * wx;
+        const lower = src[bottom + channel] * (1 - wx) + src[bottomRight + channel] * wx;
+        dst[target + channel] = upper * (1 - wy) + lower * wy;
+      }
+      dst[target + 3] = 255;
+    }
+  }
+  return output;
+}
+
 async function signedDraftUrl(admin: any, path: string) {
   const { data, error } = await admin.storage.from(DRAFT_BUCKET).createSignedUrl(path, 600);
   if (error || !data?.signedUrl) throw new Error("DRAFT_URL_UNAVAILABLE");
@@ -250,10 +308,15 @@ Deno.serve(async (request) => {
   }
   const record = reservation?.[0];
   if (!record) return jsonResponse(request, { error: "QUOTA_UNAVAILABLE" }, 503);
-  if (record.reservation_status === "completed" && record.draft_path) {
+  if (record.reservation_status === "completed") {
+    const { data: prior, error: priorError } = await admin.from("ai_image_draft_requests")
+      .select("post_path").eq("request_id", draft.requestId).eq("user_id", user.id).single();
+    if (priorError || !prior?.post_path) {
+      return jsonResponse(request, { error: "CANONICAL_DRAFT_UNAVAILABLE" }, 409);
+    }
     try {
       return jsonResponse(request, { request_id: draft.requestId, status: "completed",
-        url: await signedDraftUrl(admin, record.draft_path) });
+        url: await signedDraftUrl(admin, prior.post_path) });
     } catch { return jsonResponse(request, { error: "DRAFT_URL_UNAVAILABLE" }, 503); }
   }
   if (["user_limit", "global_limit"].includes(record.reservation_status)) {
@@ -280,21 +343,33 @@ Deno.serve(async (request) => {
     if (!response.ok) throw new Error("PROVIDER_ERROR");
     const image = imageFromOpenAI(await boundedJson(response, MAX_PROVIDER_RESPONSE_BYTES), draft.aspectRatio);
     const path = `${user.id}/${draft.requestId}.${image.extension}`;
+    const postPath = `${user.id}/${draft.requestId}.post.jpg`;
+    const post = await canonicalPostJpeg(image.bytes, draft.style, draft.aspectRatio);
     const outputHash = await sha256Hex(image.bytes);
+    const postHash = await sha256Hex(post.bytes);
     const bucket = admin.storage.from(DRAFT_BUCKET);
     const { error: uploadError } = await bucket.upload(path, image.bytes, {
       contentType: image.mime, cacheControl: "60", upsert: false,
     });
     if (uploadError) throw new Error("PRIVATE_DRAFT_UPLOAD_FAILED");
+    const { error: postUploadError } = await bucket.upload(postPath, post.bytes, {
+      contentType: "image/jpeg", cacheControl: "60", upsert: false,
+    });
+    if (postUploadError) {
+      await bucket.remove([path]);
+      throw new Error("PRIVATE_POST_IMAGE_UPLOAD_FAILED");
+    }
     const { data: updated, error: updateError } = await admin.from("ai_image_draft_requests")
       .update({ status: "completed", output_path: path, output_sha256: outputHash,
+        post_path: postPath, post_sha256: postHash, post_bytes: post.bytes.byteLength,
+        post_width: post.width, post_height: post.height,
         updated_at: new Date().toISOString() })
       .eq("request_id", draft.requestId).eq("status", "reserved").select("request_id").maybeSingle();
     if (updateError || !updated) {
-      await bucket.remove([path]);
+      await bucket.remove([path, postPath]);
       throw new Error("DRAFT_FINALIZE_FAILED");
     }
-    completedPath = path;
+    completedPath = postPath;
   } catch (error) {
     // Conservative: consume the attempt even if the provider response is lost.
     await admin.from("ai_image_draft_requests")

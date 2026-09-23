@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import vm from 'node:vm';
+import { Image } from 'imagescript';
 
 const source = readFileSync(new URL('../supabase/functions/generate-ai-image/index.ts', import.meta.url), 'utf8');
 const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')));
@@ -23,21 +24,22 @@ const origin = 'http://localhost:8000';
 function fixture({ reservation = 'reserved', provider = good, project = 'https://nccqnrcdygujulrnwair.supabase.co',
                    enabled = 'true', user = { id: owner, app_metadata: { ai_image_adult_test_approved: true } },
                    providerStatus = 200, apiKey = 'private-openai-test-key',
-                   policy = allowPolicy } = {}) {
-  const calls = { provider: [], policy: [], rpc: [], uploads: [], signs: [], updates: [] };
+                   policy = allowPolicy, failPostUpload = false } = {}) {
+  const calls = { provider: [], policy: [], rpc: [], uploads: [], signs: [], updates: [], removes: [] };
   let handler;
   let jobStatus = reservation;
   let outputPath = `${owner}/${requestId}.jpg`;
   const bucket = {
     async upload(path, bytes, options) {
       calls.uploads.push({ path, bytes, options });
-      return { error: null };
+      return { error: failPostUpload && path.endsWith('.post.jpg') ?
+        { message: 'temporary private upload failure' } : null };
     },
     async createSignedUrl(path) {
       calls.signs.push(path);
       return { data: { signedUrl: 'https://nccqnrcdygujulrnwair.supabase.co/storage/v1/object/sign/ai-image-drafts/draft?token=private' }, error: null };
     },
-    async remove() { return { error: null }; },
+    async remove(paths) { calls.removes.push(paths); return { error: null }; },
   };
   const admin = {
     async rpc(name, args) {
@@ -52,6 +54,7 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
         eq() { return chain; },
         select() { return chain; },
         async maybeSingle() { return { data: { request_id: requestId }, error: null }; },
+        async single() { return { data: { post_path: `${owner}/${requestId}.post.jpg` }, error: null }; },
         then(resolve, reject) { return Promise.resolve({ error: null }).then(resolve, reject); },
       };
       return chain;
@@ -79,7 +82,7 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
       return Response.json(provider, { status: providerStatus });
     },
     Request, Response, URL, Blob, AbortSignal, Uint8Array, TextEncoder, TextDecoder,
-    crypto: globalThis.crypto, atob, console: { error() {} },
+    crypto: globalThis.crypto, atob, Image, console: { error() {} },
   });
   script.runInContext(context);
   return {
@@ -129,6 +132,16 @@ test('eligible staging creator requests one low-quality image and stores private
   assert.ok(!Object.hasOwn(payload, 'style'));
   assert.equal(app.calls.uploads[0].path, `${owner}/${requestId}.jpg`);
   assert.equal(app.calls.uploads[0].options.upsert, false);
+  assert.equal(app.calls.uploads[1].path, `${owner}/${requestId}.post.jpg`);
+  assert.equal(app.calls.uploads[1].options.upsert, false);
+  assert.equal(app.calls.uploads[1].options.contentType, 'image/jpeg');
+  assert.ok(app.calls.uploads[1].bytes.length <= 500 * 1024);
+  const posted = await Image.decode(app.calls.uploads[1].bytes);
+  assert.deepEqual([posted.width, posted.height], [640, 360]);
+  assert.equal(app.calls.updates[0].post_bytes, app.calls.uploads[1].bytes.length);
+  assert.equal(app.calls.updates[0].post_sha256,
+    Buffer.from(await globalThis.crypto.subtle.digest('SHA-256', app.calls.uploads[1].bytes)).toString('hex'));
+  assert.equal(app.calls.signs[0], `${owner}/${requestId}.post.jpg`);
   assert.equal(app.calls.signs.length, 1);
   assert.ok(!source.includes('ad-images'));
 });
@@ -205,6 +218,8 @@ test('square request uses supported square size and accepts its image', async ()
   assert.equal(result.status, 200);
   assert.equal(app.calls.provider[0].body.size, '1024x1024');
   assert.match(app.calls.provider[0].body.prompt, /Loose hand-drawn lines/);
+  const posted = await Image.decode(app.calls.uploads[1].bytes);
+  assert.deepEqual([posted.width, posted.height], [640, 640]);
 });
 
 test('freeform prompt permits detailed fictional imagery under the same output limits', async () => {
@@ -224,4 +239,15 @@ test('provider error consumes the reservation without uploading or retrying', as
   assert.equal(app.calls.provider.length, 1);
   assert.equal(app.calls.uploads.length, 0);
   assert.ok(app.calls.updates.some(update => update.status === 'failed'));
+});
+
+test('canonical decode and second private upload failures never complete a draft', async () => {
+  const truncated = landscape.subarray(0, 200);
+  const invalid = fixture({ provider: { data: [{ b64_json: truncated.toString('base64') }] } });
+  assert.equal((await invalid.run()).status, 503);
+  assert.equal(invalid.calls.uploads.length, 0);
+  const failed = fixture({ failPostUpload: true });
+  assert.equal((await failed.run()).status, 503);
+  assert.equal(failed.calls.removes[0][0], `${owner}/${requestId}.jpg`);
+  assert.ok(failed.calls.updates.every(update => update.status !== 'completed'));
 });

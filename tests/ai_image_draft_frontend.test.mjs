@@ -7,21 +7,10 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = html.indexOf('function aiDraftKey()');
 const end = html.indexOf('/* ========================================\n   POST AD', start);
 const client = html.slice(start, end);
-const jpeg = readFileSync(new URL('./fixtures/images/valid.jpg', import.meta.url));
-
-test('creator previews a small JPEG before explicitly selecting it, with stable retry ID', async () => {
+test('creator previews the server JPEG before explicitly selecting it, with stable retry ID', async () => {
   const values = new Map();
   const storage = new Map();
   const invoked = [];
-  const quality = [];
-  const canvas = {
-    width: 0, height: 0,
-    getContext() { return { imageSmoothingEnabled: true, drawImage() {} }; },
-    toBlob(callback, mime, factor) {
-      quality.push(factor);
-      callback(new Blob([jpeg], { type: mime }));
-    },
-  };
   const element = (id, defaults = {}) => {
     if (!values.has(id)) values.set(id, { hidden: true, innerText: '', value: '', ...defaults });
     return values.get(id);
@@ -30,23 +19,22 @@ test('creator previews a small JPEG before explicitly selecting it, with stable 
   element('aiImageStyle', { value: 'pixel_art' });
   element('aiImageAspect', { value: '16:9' });
   element('newImage', { value: '', files: [], addEventListener() {} });
-  element('aiImagePreviewImage', { removeAttribute() {} });
+  element('aiImagePreviewImage', { removeAttribute() {}, async decode() {} });
   const context = vm.createContext({
     currentUser: { id: 'creator-1' }, PROJECT_REF: 'test-project',
     FEATURES: { aiImageDrafts: true },
     generatedDraftFile: null, generatedDraftUrl: null,
     generatedDraftRequestId: null, previewDraftFile: null,
-    document: { getElementById: element, createElement: name => {
-      assert.equal(name, 'canvas'); return canvas;
+    document: { getElementById: element, createElement() {
+      throw new Error('No browser image derivative');
     } },
     localStorage: {
       getItem: key => storage.get(key) ?? null,
       setItem: (key,value) => storage.set(key,value),
       removeItem: key => storage.delete(key),
     },
-    crypto: globalThis.crypto, URL, Blob, File, Response,
-    createImageBitmap: async () => ({ width: 1024, height: 768, close() {} }),
-    fetch: async () => new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } }),
+    crypto: globalThis.crypto, URL,
+    fetch: async () => { throw new Error('No browser image fetch or conversion'); },
     db: { functions: { async invoke(name, { body }) {
       invoked.push({ name, body });
       return { data: { request_id: body.request_id, url: 'https://private.example/draft' }, error: null };
@@ -59,17 +47,48 @@ test('creator previews a small JPEG before explicitly selecting it, with stable 
   assert.equal(invoked.length, 1);
   assert.equal(invoked[0].name, 'generate-ai-image');
   assert.equal(storage.size, 1);
-  assert.equal(canvas.width, 640);
-  assert.equal(canvas.height, 480);
-  assert.deepEqual(quality, [.68]);
+  assert.equal(element('aiImagePreviewImage').src, 'https://private.example/draft');
   assert.equal(element('aiImagePreview').hidden, false);
   assert.equal(context.generatedDraftFile, null);
   context.chooseAiDraft();
-  assert.equal(context.generatedDraftFile.type, 'image/jpeg');
-  assert.ok(context.generatedDraftFile.size <= 500 * 1024);
+  assert.equal(context.generatedDraftFile, true);
   assert.equal(context.generatedDraftRequestId, invoked[0].body.request_id);
   element('aiImagePrompt').value = 'A changed idea';
   await context.generateAiDraft();
   assert.equal(invoked.length, 1);
   assert.match(element('aiImageStatus').innerText, /previous draft/);
+});
+
+test('selected AI draft posts by ID through trusted function, with no browser upload or ad INSERT', async () => {
+  const start = html.indexOf('async function postAd()');
+  const end = html.indexOf('/* ========================================\n   POST PAGE', start);
+  const values = new Map([
+    ['newTitle',{value:'A tiny world'}], ['newCaption',{value:'A friendly planet'}],
+    ['newImage',{value:'',files:[]}],
+  ]);
+  const calls = [];
+  const context = vm.createContext({
+    FEATURES:{adImages:true,aiImageDrafts:true},
+    currentUser:{id:'00000000-0000-4000-8000-000000000001'},
+    generatedDraftFile:true,
+    generatedDraftRequestId:'00000000-0000-4000-8000-000000000321',
+    document:{getElementById:id=>values.get(id)},
+    defaultPromotionAllocation:()=>({}),
+    db:{functions:{async invoke(name, options) {
+      calls.push([name,options.body]); return {data:{status:'submitted',ad_id:7},error:null};
+    }},storage:{from(){throw new Error('Browser must not upload AI bytes');}},
+      from(){throw new Error('Browser must not insert AI ads');}},
+    discardAiDraft(){calls.push(['discard']);},
+    async loadAds(){calls.push(['load']);},
+    alert(message){calls.push(['alert',message]);},
+    showProfile(){},profileSection(){},showLogin(){throw new Error('Unexpected login');},
+  });
+  vm.runInContext(html.slice(start,end),context);
+  await context.postAd();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])),['submit-ai-ad',{
+    request_id:'00000000-0000-4000-8000-000000000321',
+    title:'A tiny world',caption:'A friendly planet',
+  }]);
+  assert.equal(values.get('newTitle').value,'');
+  assert.ok(calls.some(([kind])=>kind==='discard'));
 });

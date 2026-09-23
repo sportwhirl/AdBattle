@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { loadOwnedImage, requireSupportedImage } from "../_shared/storage-scan-policy.ts";
 
 /*
   ============================================================
@@ -11,8 +12,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
   2. Load the ad from Supabase using service_role.
   3. Validate immutable text fields.
   4. Inspect URLs found in title/caption.
-  5. Verify the image belongs to this user's AdBattle folder.
-  6. Download the image with a strict byte limit.
+  5. Verify the image belongs to this user's private upload folder.
+  6. Download it with a strict byte and dimension limit.
   7. Validate MIME + magic bytes.
   8. SHA-256 hash the exact image bytes.
   9. Run OpenAI omni-moderation-latest on text + image.
@@ -43,9 +44,6 @@ const POLICY_MODEL =
 const SCAN_VERSION =
   "adbattle-scanner-v2-2026-09-responses";
 
-const MAX_IMAGE_BYTES =
-  12 * 1024 * 1024;
-
 const MAX_TITLE_LENGTH =
   140;
 
@@ -55,8 +53,7 @@ const MAX_CAPTION_LENGTH =
 const MAX_URLS =
   4;
 
-const IMAGE_BUCKET_PREFIX =
-  `${SUPABASE_URL}/storage/v1/object/public/ad-images/`;
+const PENDING_IMAGE_BUCKET = "ad-pending-images";
 
 const URL_SHORTENER_HOSTS =
   new Set([
@@ -350,35 +347,6 @@ function inspectUrl(
   }
 }
 
-function imageMagicType(
-  bytes: Uint8Array,
-) {
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  ) {
-    return "image/jpeg";
-  }
-
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-
-  return null;
-}
-
 async function sha256Hex(
   bytes: Uint8Array,
 ) {
@@ -441,163 +409,6 @@ function bytesToBase64(
   }
 
   return btoa(binary);
-}
-
-async function fetchImageLimited(
-  imageUrl: string,
-) {
-  const controller =
-    new AbortController();
-
-  const timeout =
-    setTimeout(
-      () =>
-        controller.abort(),
-      15_000,
-    );
-
-  try {
-    const response =
-      await fetch(
-        imageUrl,
-        {
-          method: "GET",
-          signal:
-            controller.signal,
-          redirect: "error",
-        },
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        `Image fetch returned ${response.status}.`,
-      );
-    }
-
-    const declaredLength =
-      Number(
-        response.headers.get(
-          "content-length",
-        ) || 0,
-      );
-
-    if (
-      declaredLength >
-      MAX_IMAGE_BYTES
-    ) {
-      throw new Error(
-        "Image exceeds the 12 MB scanner limit.",
-      );
-    }
-
-    if (!response.body) {
-      throw new Error(
-        "Image response had no body.",
-      );
-    }
-
-    const reader =
-      response.body
-        .getReader();
-
-    const chunks:
-      Uint8Array[] = [];
-
-    let total = 0;
-
-    while (true) {
-      const {
-        done,
-        value,
-      } =
-        await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      if (!value) {
-        continue;
-      }
-
-      total +=
-        value.byteLength;
-
-      if (
-        total >
-        MAX_IMAGE_BYTES
-      ) {
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore
-        }
-
-        throw new Error(
-          "Image exceeds the 12 MB scanner limit.",
-        );
-      }
-
-      chunks.push(value);
-    }
-
-    const bytes =
-      new Uint8Array(total);
-
-    let offset = 0;
-
-    for (
-      const chunk of chunks
-    ) {
-      bytes.set(
-        chunk,
-        offset,
-      );
-
-      offset +=
-        chunk.byteLength;
-    }
-
-    const headerType =
-      (
-        response.headers.get(
-          "content-type",
-        ) || ""
-      )
-        .split(";")[0]
-        .trim()
-        .toLowerCase();
-
-    const magicType =
-      imageMagicType(bytes);
-
-    if (!magicType) {
-      throw new Error(
-        "Image bytes do not match a supported image format.",
-      );
-    }
-
-    if (
-      headerType &&
-      headerType !== magicType
-    ) {
-      throw new Error(
-        `Image MIME mismatch: server says ${headerType}, bytes are ${magicType}.`,
-      );
-    }
-
-    return {
-      bytes,
-      contentType:
-        magicType,
-      byteLength:
-        total,
-    };
-  } finally {
-    clearTimeout(
-      timeout,
-    );
-  }
 }
 
 function getMaxModerationScore(
@@ -1277,7 +1088,7 @@ Deno.serve(
             user_id,
             title,
             caption,
-            image_url,
+            image_storage_path,
             promotion_allocation,
             moderation_status,
             safety_status,
@@ -1551,59 +1362,7 @@ Deno.serve(
         },
       );
 
-      /*
-        --------------------------------------------------------
-        STAGE 3: image ownership, network fetch, MIME, magic bytes
-        --------------------------------------------------------
-      */
-
-      const expectedPrefix =
-        `${IMAGE_BUCKET_PREFIX}${ad.user_id}/`;
-
-      if (
-        typeof ad.image_url !==
-          "string" ||
-        !ad.image_url.startsWith(
-          expectedPrefix,
-        )
-      ) {
-        const reason =
-          "Image must come from the posting user's AdBattle image folder.";
-
-        await addAuditEvent(
-          admin,
-          adId,
-          "image_validation",
-          "rejected",
-          reason,
-          {
-            expected_prefix:
-              expectedPrefix,
-          },
-        );
-
-        await finalize(
-          admin,
-          adId,
-          "rejected",
-          reason,
-          100,
-          null,
-          {
-            image_validation:
-              reason,
-          },
-        );
-
-        return json({
-          ok:
-            true,
-          status:
-            "rejected",
-          reason,
-        });
-      }
-
+      /* STAGE 3: read the same private object that duplicate screening reads. */
       let image:
         {
           bytes:
@@ -1615,10 +1374,14 @@ Deno.serve(
         };
 
       try {
-        image =
-          await fetchImageLimited(
-            ad.image_url,
-          );
+        const bytes = await loadOwnedImage(
+          admin.storage.from(PENDING_IMAGE_BUCKET), ad.user_id, ad.image_storage_path,
+        );
+        // The storage policy validates JPEG/PNG magic bytes, metadata MIME,
+        // dimensions, and the exact byte count before either remote model sees it.
+        const contentType = bytes[0] === 0xff ? "image/jpeg" : "image/png";
+        requireSupportedImage(bytes, contentType);
+        image = { bytes, contentType, byteLength: bytes.length };
       } catch (
         imageError
       ) {

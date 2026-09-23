@@ -3,7 +3,8 @@
 This integration is limited to the adbattle-test project
 (nccqnrcdygujulrnwair) at http://localhost:8000. The public frontend feature
 flag is false. The Edge Function also requires the exact test project URL,
-origin, and ADBATTLE_AI_IMAGE_ENABLED=true. Do not deploy this to the public
+origin, and ADBATTLE_AI_IMAGE_ENABLED=true. Posting additionally requires
+ADBATTLE_AI_IMAGE_POST_ENABLED=true. Do not deploy this to the public
 site before deciding a generation budget and completing the separate youth
 access gates. The server also requires an admin-owned
 `app_metadata.ai_image_adult_test_approved` claim on the verified Auth user.
@@ -41,24 +42,29 @@ children under 13, alongside the applicable parental consent path.
    minimum-area and dimension rules is 1280x720. The server validates the
    raw `data[0].b64_json`, expected dimensions, JPEG markers, and an 8 MiB
    byte ceiling. It never sends the browser's raw provider settings.
-5. The unmodified provider image is saved to the private ai-image-drafts
-   bucket under the owner's path. The creator fetches it through a ten-minute
-   signed URL. The server keeps a SHA-256 checksum, model, prompt/style hash,
-   and request status. A completed request can receive another signed URL
-   without another model call.
-6. The browser converts the draft to a JPEG at most 640 pixels along its long
-   side and 500 KiB. The creator reviews it, then chooses Use this image or
-   Discard draft. Generation never posts an ad. Explicit submission uses the
-   existing public ad-images upload and both independent scanners.
+5. The unmodified provider image is saved privately under the owner's path.
+   The server also decodes and resizes it to a canonical 640×640 or 640×360
+   JPEG at most 500 KiB. Pixel art uses nearest-neighbor resizing; other
+   styles use a bounded bilinear resize. Both objects and their SHA-256 hashes are stored
+   in the private ai-image-drafts bucket. The creator previews only the
+   canonical image through a ten-minute signed URL. A completed request can
+   receive another signed URL without another model call.
+6. The creator chooses Use this image or Discard draft. Generation never posts
+   an ad. Explicit submission sends only the source request ID, title, and
+   caption to the staging-only submit-ai-ad function. The server verifies the
+   private JPEG's hash, format, dimensions, and byte count before copying its
+   exact bytes to the private ad-pending-images bucket. The safety and
+   duplicate scanners inspect those bytes; publication compares both scanner
+   hashes and a fresh private download against the canonical hash before
+   service-only copying to the public bucket.
 
-The ad insert trigger verifies that the AI draft belongs to the submitting
-creator and completed, then sets durable ai_generated provenance and a source
-request ID. New fixed-column read RPCs expose a Made with AdBattle AI badge on
-public and owner cards; existing RPC signatures remain intact. The badge
-is an attribution hint: the ad references a completed draft owned by the
-creator. The resized uploaded bytes are not cryptographically bound to the
-private source image, so exact media provenance remains a release gate. Users
-may also use other AI tools outside AdBattle without this badge.
+Only a service-role insert can attach an AI draft to an ad. The ad trigger
+checks the completed owner draft, stamps its immutable canonical hash and
+ai_generated provenance, and refuses browser-supplied AI source IDs. The
+publisher refuses mismatched scan or source hashes before public upload. The
+fixed-column read RPCs expose a Made with AdBattle AI badge on public and owner
+cards; existing RPC signatures remain intact. Users may also use other AI
+tools outside AdBattle without this badge.
 
 No wallet, Support, creator, or promotion funds are debited by generation.
 The private source has no AdBattle watermark. Public export/watermark behavior
@@ -66,19 +72,27 @@ remains a separate media pipeline.
 
 ## Staging setup and review
 
-Apply migrations `20260923162944_ai_image_draft_quota.sql` and
-`20260923170351_openai_image_draft_model.sql` to adbattle-test only at first.
+Apply migrations `20260923162944_ai_image_draft_quota.sql`,
+`20260923170000_private_pending_images.sql`,
+`20260923170351_openai_image_draft_model.sql`, and
+`20260923180000_ai_canonical_post.sql` in timestamp order to adbattle-test
+only after the private-media migration's cleanup preflight passes.
 The first creates a private 8 MiB JPEG/PNG bucket, a request table with RLS
 and no browser grants, a service-only reservation RPC, and the provenance
-trigger/read RPCs. The second switches the default model for new reservation
-rows to Flare without rewriting existing draft history. Inspect the exact
-project and private bucket settings before enabling the function. Deploy only
-generate-ai-image to test with JWT verification on. The dashboard editor may
+trigger/read RPCs. The model migration switches the default model for new
+reservation rows to Flare without rewriting existing draft history. The
+canonical-post migration adds the byte binding and a backoff queue for
+publication retries. Older completed draft rows without canonical fields
+cannot be posted; make a new draft rather than silently trusting the browser.
+Inspect the exact project and private bucket settings before enabling the
+functions. Deploy generate-ai-image and submit-ai-ad to test with JWT
+verification on. The dashboard editor may
 need the shared http.ts file copied locally, as described for existing
 functions in the Supabase README.
 
 Set `OPENAI_API_KEY` as an Edge Function secret and set
-`ADBATTLE_AI_IMAGE_ENABLED=true` only in adbattle-test. The same server key is
+`ADBATTLE_AI_IMAGE_ENABLED=true` and `ADBATTLE_AI_IMAGE_POST_ENABLED=true`
+only in adbattle-test. The same server key is
 used for prompt policy screening and image generation. Provision the adult
 test approval claim through a privileged Auth administrator after confirming
 the tester's eligibility; missing or false claims fail before quota
@@ -92,12 +106,13 @@ make no paid generation request. OpenAI account
 access to Flare, any organization verification, actual output shape/latency,
 and provider usage or invoice cost must be checked in restricted staging.
 
-The browser must fetch the signed private URL from localhost to receive image
-bytes for canvas conversion. Verify that hosted Storage sends the needed CORS
-headers in this smoke test; the private bucket does not exist in the current
-hosted staging project, so this path cannot be checked before staging setup.
-If the download fails, the saved request ID remains and recovery asks the
-server for a fresh signed URL without another image call.
+The browser displays the signed private canonical URL directly; it never
+compresses or uploads the AI post bytes. Confirm that hosted Edge Functions
+can bundle and run the pinned image decoder/encoder within their CPU and
+memory limits before enabling posting. The private buckets do not exist in
+the current hosted staging project, so the end-to-end path cannot be checked
+before staging setup. If preview expires, the saved request ID can obtain a
+fresh signed URL without another image call.
 
 After a lost response, keep the saved request ID and prompt and recover the
 draft. A three-minute abandoned reservation becomes unknown, remains counted

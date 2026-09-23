@@ -67,14 +67,12 @@ These are creative directions, not a claim that an image with one extra object
 or color can be reliably rejected by an automated pixel counter. The hard
 technical and publication gates below are enforced separately.
 
-The limits below are the **target public contract**. The staging browser
-converts an AI draft to a 640px/500KiB JPEG, but the existing post endpoint
-and image scanner accept larger ordinary uploads; the AI-origin trigger does
-not yet bind the posted bytes cryptographically to the private draft. A server
-check of exact dimensions, size, and provenance is required before public AI
-creation. Current ordinary posts upload to a public bucket before scans run;
-an all-ages release also requires private pending media and an age-suitable
-review gate for every ad, including non-AI uploads.
+The limits below are the **target public contract**. Staging now creates a
+canonical 640px/500KiB JPEG on the server and binds its SHA-256 to the AI ad;
+ordinary image uploads can be larger. Both kinds of ad enter private pending
+storage and require safety, duplicate, and exact-byte publication checks. A
+public all-ages release still needs age and guardian entitlements, review
+capacity, hosted verification, and provider approval.
 
 | Asset | Generation request | Public delivery limit | Behavior |
 | --- | --- | --- | --- |
@@ -111,25 +109,21 @@ original upload instead. No automatic costly rerolls.
    Prompt length is bounded, and the server owns the optional style wrapper, model,
    duration, and resolution. Client-supplied settings cannot raise them.
 4. The creator reviews the generated draft and may discard it. "Use image"
-   attaches a compact JPEG to the existing form; posting is a separate,
-   explicit action with title and caption. Generated draft bytes stay private
-   or in browser memory until that action, not in the public ad bucket.
-5. On submission, the public version must validate exact bytes, owner path,
-   MIME/magic, dimensions, file size, and immutable ad data **server-side**.
-   The current staging slice relies on browser compression for the 640px/
-   500KiB AI draft budget; a server gate and source-byte binding are still
-   missing. The existing JPEG/PNG duplicate and safety scanners gate image
-   approval, but pending ordinary uploads are already publicly addressable.
-   Move them to private storage before an all-ages release. A generated image
-   receives no moderation shortcut.
+   selects the completed request ID; posting is a separate, explicit action
+   with title and caption. Source and compact derivative stay in private
+   storage until approved publication. The browser cannot supply AI post bytes.
+5. On submission, the staging server validates exact canonical bytes, owner
+   path, MIME/magic, dimensions, file size, and SHA-256 before private pending
+   upload. Both JPEG/PNG scanners gate image approval. The publisher verifies
+   the two scan hashes and fresh private bytes before service-only public copy.
+   A generated image receives no moderation shortcut.
 6. Video is **not** submitted through the image URL or the image scanner.
    Its future schema, frame/audio review, poster/preview pipeline, and final
    gate must be implemented and tested before video ads can become public.
-7. Keep an AI-origin flag and provider/model audit internally. The image
-   staging slice verifies that a completed draft belongs to the creator, but
-   browser recompression means its posted bytes are not yet cryptographically
-   bound to the private source. Exact checksum binding is a release gate for
-   public provenance claims. Show an
+7. Keep an AI-origin flag and provider/model audit internally. Staging stamps
+   the source request ID and canonical derivative hash on the ad; the posted
+   image must match before publication. Hosted verification remains a release
+   gate for the public badge. Show an
    AI-created label in the page chrome, not burned onto the artwork. Never
    expose a provider key, raw provider errors, or a service-role key to the
    browser.
