@@ -1,0 +1,11 @@
+[Unit]
+Description=Read-only AdBattle test wallet monitor
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/AdBattle-staging/scripts/monitor_wallet_health.py --notify-desktop
+TimeoutStartSec=90
+UMask=0077
+NoNewPrivileges=true
+# Findings/delivery failures are recorded by the runner and checked again by the timer.
+SuccessExitStatus=1 2

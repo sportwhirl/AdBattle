@@ -710,6 +710,18 @@ settlement/Stripe races, and production-schema compatibility are separate checks
 
 ## Production prerequisites
 
+### Independent staging monitoring
+
+The optional [Linux staging monitor](../scripts/README-wallet-monitor.md) runs
+the read-only wallet health report using a local systemd user timer independent
+of the settlement cron job. It stores private incident history and sends local
+desktop problem/recovery notifications. Setup is manual after merge; it runs
+only while the computer/session is available and is not continuous production
+monitoring. No hosted migration, wallet repair, payment, or notification service
+is enabled by merging its code.
+
+### Live-mode requirements
+
 The wallet creates stored-value, refund, dispute, tax, and money-transmission
 questions that are not solved by application code. Keep this in Stripe test
 mode until Stripe approves the flow and qualified legal/accounting review is
