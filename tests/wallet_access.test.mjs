@@ -19,7 +19,8 @@ async function fixture(db, broadDefaults = false) {
   // legacy supports table already has its intended grants from the base schema.
   if (broadDefaults) await db.exec('alter default privileges in schema public grant all on tables to anon,authenticated,service_role');
   for (const file of ['20260920_wallet_ledger.sql','20260921_wallet_safety.sql',
-    '20260922_wallet_capability_recovery.sql','20260923_wallet_balance_recovery.sql']) {
+    '20260922_wallet_capability_recovery.sql','20260923_wallet_balance_recovery.sql',
+    '20260923093000_paid_seeds.sql']) {
     await db.exec(readFileSync(new URL('../supabase/migrations/'+file, import.meta.url),'utf8')
       .replace('create extension if not exists pgcrypto;',''));
   }
@@ -41,7 +42,7 @@ test('read-only access audit detects grants, columns, RLS, roles, RPCs and views
     const good = await check();
     await db.exec('rollback');
     assert.equal(good.audit_status,'PASS');
-    assert.equal(Number(good.checks_total),178);
+    assert.equal(Number(good.checks_total),205);
     assert.equal(Number(good.nonpassing_checks),0);
     assert.deepEqual(good.findings,[]);
     const cases = [
@@ -54,6 +55,10 @@ test('read-only access audit detects grants, columns, RLS, roles, RPCs and views
       ['role inheritance','grant service_role to authenticated','service_role_membership','authenticated'],
       ['client RPC','grant execute on function spend_wallet_support(uuid,bigint,bigint,uuid) to authenticated',
         'function_privilege','authenticated:public.spend_wallet_support(uuid,bigint,bigint,uuid)'],
+      ['Seed table read','grant select on ad_seeds to authenticated',
+        'table_privilege','authenticated:public.ad_seeds:SELECT'],
+      ['Seed RPC','grant execute on function seed_ad_from_wallet(uuid,bigint,uuid) to authenticated',
+        'function_privilege','authenticated:public.seed_ad_from_wallet(uuid,bigint,uuid)'],
       ['service bypass','grant execute on function prepare_wallet_transfer_before_recovery(uuid) to service_role',
         'function_privilege','service_role:public.prepare_wallet_transfer_before_recovery(uuid)'],
       ['missing RPC','alter function retry_wallet_settlement(uuid,text) rename to renamed_retry',
@@ -98,7 +103,7 @@ test('forward repair removes the 15 hosted grants without changing data or serve
     await db.query('select spend_wallet_support($1,1,1000,gen_random_uuid())',[owner]);
     await db.query('select * from claim_due_wallet_settlements(1)');
     const snapshot = async () => ({
-      data: await Promise.all([...walletTables,'supports','wallet_transfer_guards','wallet_payment_risks',
+      data: await Promise.all([...walletTables,'ad_seeds','supports','wallet_transfer_guards','wallet_payment_risks',
         'wallet_payment_risk_events'].map(async t=>(await db.query(`select to_jsonb(t) as row from public.${t} t order by to_jsonb(t)::text`)).rows)),
       policies: (await db.query("select * from pg_policies where schemaname='public' order by tablename,policyname")).rows,
       functions: (await db.query(`select p.oid, p.proacl, pg_get_functiondef(p.oid) as definition from pg_proc p
@@ -118,7 +123,7 @@ test('forward repair removes the 15 hosted grants without changing data or serve
       await db.exec(repair);
       const good = await check();
       assert.equal(good.audit_status,'PASS');
-      assert.equal(Number(good.checks_total),178);
+      assert.equal(Number(good.checks_total),205);
       assert.equal(Number(good.nonpassing_checks),0);
       assert.deepEqual(good.findings,[]);
       assert.deepEqual(await snapshot(),before);

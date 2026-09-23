@@ -9,6 +9,13 @@ wallet and batched creator settlements.
 - The full top-up is credited to their AdBattle balance after the signed
   Stripe webhook confirms payment.
 - They can then support any approved ad with any whole-cent amount from $0.01.
+- Each account can Seed an approved ad once. A Seed immediately spends $0.01
+  from the account balance, records that cent as Support, and cannot be undone
+  by the user.
+- The Support control offers the distinct Fibonacci-cent amounts from $0.01
+  through $41.81; its final slider stop opens a typed custom amount of $50.00
+  or more. The database continues to accept arbitrary whole-cent Support so
+  previously saved retries are never stranded.
 - Each Support accrues 90% to the creator and 10% to AdBattle.
 - Stripe charges and transfer fees are paid by the platform, reducing
   AdBattle's 10%; they never reduce the creator's 90% ledger credit.
@@ -24,7 +31,8 @@ Do not publish the updated root `index.html` until steps 1–5 are complete.
    `20260920_wallet_ledger.sql`, `20260921_wallet_safety.sql`,
    `20260922_wallet_capability_recovery.sql`,
    `20260923_wallet_balance_recovery.sql`, then
-   `20260923_wallet_table_privileges.sql` from `migrations/` in the Supabase SQL
+   `20260923_wallet_table_privileges.sql`, then
+   `20260923093000_paid_seeds.sql` from `migrations/` in the Supabase SQL
    editor. For an existing installation, apply only missing migrations in that
    order. The safety and recovery migrations are one-time and transactional;
    do not rerun them after success because they rename internal RPCs. Take a
@@ -94,10 +102,44 @@ select cron.schedule(
    - $10 top-up credits exactly $10 to the wallet once.
    - A duplicate webhook does not credit twice.
    - $0.01 Support debits exactly one cent.
+   - A first Seed debits exactly one cent and creates one permanent marker.
+   - Retrying that Seed with the same or a new request ID never debits again.
    - Gross ad Support increases immediately.
    - The creator ledger receives $0.009 and AdBattle receives $0.001.
    - Crossing $10 creates one $9 creator transfer.
    - Re-running the worker cannot duplicate that transfer.
+
+### Paid Seed rollout
+
+Apply the paid-Seed change backend first, then publish the frontend:
+
+1. Confirm all preceding wallet migrations are present, then apply only
+   `migrations/20260923093000_paid_seeds.sql`.
+2. Deploy `support-from-wallet` from the same reviewed commit.
+3. Publish `frontend-config.js` and `index.html`.
+
+The migration keeps the private service-role grant on the original Support
+primitive during this transition, so the previously deployed Edge Function
+continues recording ordinary Support between steps 1 and 2. The updated Edge
+Function sends all browser actions through purpose-aware Seed or Support
+wrappers. Do not publish the frontend before both wrappers exist and the Edge
+Function is updated.
+
+Legacy `likes` are free and reversible, so they are never relabeled,
+retrocharged, or included in paid Seed counts. The migration locks that table,
+removes every write policy and client/service write privilege, and leaves
+temporary read access for cached older pages. It expects the one known unpaid
+self-like and archives it in place. If any non-owner Like, orphan, or null-key
+row exists at migration time, the entire migration stops with
+`LEGACY_LIKES_REQUIRE_REVIEW`; inspect the data instead of deleting it or
+weakening the check.
+
+Verify in test mode that one Seed produces exactly one `ad_seeds` row, one
+one-cent `supports` row with `source='wallet_seed'`, one wallet debit, and
+the exact 9,000/1,000 creator/platform microdollar split. Verify same-ID and
+different-ID repeats do not charge again, cross-purpose request-ID reuse
+fails, an own-ad Seed fails, and an ordinary Support still records through the
+new wrapper.
 
 ### Staging top-up and one-cent Support runner
 
@@ -204,8 +246,9 @@ or hosted migration is needed to use these tools.
 1. In **adbattle-test** (`nccqnrcdygujulrnwair`) SQL Editor, run the entire
    [`staging/check_wallet_access.sql`](staging/check_wallet_access.sql).
    It is a read-only catalog SELECT. Expect `audit_status=PASS`,
-   `nonpassing_checks=0`, and `findings=[]`. The current schema produces 178
-   checks. Keep the report separately from the runner's output.
+   `nonpassing_checks=0`, and `findings=[]`. With paid Seeds installed, the
+   current schema produces 205 checks. Keep the report separately from the
+   runner's output.
 2. If it reports `REVIEW_REQUIRED`, inspect/share `findings` before proceeding.
    Missing objects, unexpected overloads and client-readable dependent views
    are not passing checks. The audit includes inherited/PUBLIC and column
@@ -246,7 +289,7 @@ or hosted migration is needed to use these tools.
 The hosted runner verifies Auth accepts two distinct ordinary sessions, A can
 read its populated owner rows, B cannot read those same rows through explicit
 owner filters or unfiltered reads, anonymous reads are denied, and both users
-are denied the private risk/event/transfer-guard tables. It reads all pages
+are denied the private risk/event/transfer-guard/Seed tables. It reads all pages
 using exact counts and aborts above 5,000 rows per result. A-to-B isolation has
 a positive foreign-row control only if B already owns rows; an empty B account
 does not establish that direction by itself. `supports` remains intentionally
@@ -365,13 +408,14 @@ key (or legacy `anon` key); never use a secret/service-role key. The tracked
 its response in memory. Do not save the key in that file, shell history, a URL,
 or a committed environment file.
 
-The limited staging schema keeps likes and creator onboarding disabled, while
-ad image posting is enabled for end-to-end scanner testing against the
-`ad-images` bucket. No requests are made to the missing `likes` table,
-`sync-connect-status`, or `create-connect-account`. Login, ad posting, approved
-ad loading, wallet balances, pending creator balance, top-ups, and wallet Support
-remain available under the existing RLS policies. This is a UI capability
-switch, not a database-permission bypass.
+The limited staging schema has no legacy `likes` table; paid Seeds use the
+private `ad_seeds` table and narrow read/write RPCs instead. Ad image posting is
+enabled for end-to-end scanner testing against the `ad-images` bucket, while
+creator onboarding remains disabled. No requests are made to the missing
+`likes` table, `sync-connect-status`, or `create-connect-account`. Login, ad
+posting, approved ad loading, wallet balances, pending creator balance, top-ups,
+paid Seeds, and wallet Support remain available under the existing RLS policies.
+This is a UI capability switch, not a database-permission bypass.
 
 Browser Support and top-up retry records are keyed by Supabase project and user.
 Both UUIDs are written to `localStorage` before their Edge Function request.
@@ -421,7 +465,7 @@ key.
 After reviewing the diff, redeploy these functions to adbattle-test:
 
 - `create-wallet-checkout` — CORS plus configured success/cancel destination.
-- `support-from-wallet` — CORS validation.
+- `support-from-wallet` — CORS validation plus purpose-aware Seed/Support routing.
 - `create-checkout-session` — CORS validation on the retired fail-closed route.
 
 Do not redeploy `stripe-webhook` or `settle-wallet-support` for this frontend
@@ -690,14 +734,16 @@ on a Unix socket, ignores inherited PostgreSQL connection settings, and accepts
 no database URL or credentials. It stops the server and removes the cluster
 on completion. It never contacts Supabase or Stripe.
 
-The minimal legacy fixture and all five wallet migrations are applied without
-rewriting the SQL. RPC calls run as `service_role` on independent connections.
+The minimal legacy fixture, all five wallet migrations, and the paid-Seed
+migration are applied without rewriting the SQL. RPC calls run as
+`service_role` on independent connections.
 A separate transaction holds the relevant wallet or ad lock; the test checks
 `pg_stat_activity` and `pg_blocking_pids` to prove the requests overlap before
 releasing that lock. A missing overlap or timeout fails the test.
 
-Seven scenarios cover duplicate one-cent requests; conflicting amounts or ads
-under the same request UUID; competing requests that exceed the balance;
+Eight scenarios cover duplicate one-cent requests; concurrent distinct Seed
+requests for the same account/ad; conflicting amounts or ads under the same
+request UUID; competing requests that exceed the balance;
 distinct affordable requests; two wallets supporting the same ad; and a
 waiting Support request encountering a newly committed refund hold. Assertions
 check RPC outcomes, exact debit/Support counts and identities, running ledger

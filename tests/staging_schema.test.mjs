@@ -17,7 +17,7 @@ test('supplied staging schema supports all wallet migrations and real wallet RPC
     const base = readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url), 'utf8');
     assert.ok(!base.includes('bmsrdzqprxvldltaislp'));
     await db.exec(base);
-    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260922_duplicate_screening.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql']) {
+    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260922_duplicate_screening.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql', '20260923093000_paid_seeds.sql']) {
       const sql = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
       await db.exec(sql.replace('create extension if not exists pgcrypto;', ''));
     }
@@ -32,14 +32,27 @@ test('supplied staging schema supports all wallet migrations and real wallet RPC
     await db.query('select record_wallet_topup($1,$2,$3,1000)', ['cs_test','pi_test',supporter]);
     await db.query("select record_ad_duplicate_scan($1,$2,$3,$4)", [ad.id,'11'.repeat(32),'0123456789abcdef','dhash-9x8-luma-v1']);
     await db.query("select record_ad_safety_scan($1,'passed',null)", [ad.id]);
-    await db.query('select spend_wallet_support($1,$2,1,gen_random_uuid())', [supporter,ad.id]);
-    const split = (await db.query('select creator_amount_micros,platform_amount_micros from supports')).rows[0];
-    assert.equal(split.creator_amount_micros,9000);
-    assert.equal(split.platform_amount_micros,1000);
-    assert.equal((await db.query('select available_cents from wallets')).rows[0].available_cents,999);
+    await db.exec('set role service_role');
+    await db.query('select seed_ad_from_wallet($1,$2,gen_random_uuid())', [supporter,ad.id]);
+    await db.query('select support_ad_from_wallet($1,$2,2,gen_random_uuid())', [supporter,ad.id]);
+    await db.exec('reset role');
+    const splits = (await db.query(
+      'select creator_amount_micros,platform_amount_micros,source from supports order by id',
+    )).rows;
+    assert.deepEqual(splits, [
+      { creator_amount_micros: 9000, platform_amount_micros: 1000, source: 'wallet_seed' },
+      { creator_amount_micros: 18000, platform_amount_micros: 2000, source: 'wallet' },
+    ]);
+    assert.equal((await db.query('select available_cents from wallets')).rows[0].available_cents,997);
+    assert.equal(Number((await db.query('select seed_count from get_seed_counts()')).rows[0].seed_count),1);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [supporter]);
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select * from get_my_seeded_ad_ids()')).rows, [{ ad_id: ad.id }]);
+    await assert.rejects(db.query('select * from ad_seeds'), /permission denied/);
+    await db.exec('reset role');
     await assert.rejects(db.exec(base), /Expected an empty test project/);
     await db.exec('rollback');
-    assert.equal((await db.query('select count(*)::int as n from supports')).rows[0].n,1);
+    assert.equal((await db.query('select count(*)::int as n from supports')).rows[0].n,2);
   } finally {
     await db.close();
   }
