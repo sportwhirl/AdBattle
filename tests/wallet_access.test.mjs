@@ -6,24 +6,32 @@ import { PGlite } from '@electric-sql/pglite';
 
 const audit = readFileSync(new URL('../supabase/staging/check_wallet_access.sql', import.meta.url), 'utf8');
 const repair = readFileSync(new URL('../supabase/migrations/20260923_wallet_table_privileges.sql', import.meta.url), 'utf8');
+const seedPrivilegeRepair = readFileSync(
+  new URL('../supabase/migrations/20260923164351_paid_seed_read_rpc_privileges.sql', import.meta.url),
+  'utf8',
+);
 const walletTables = ['wallets','wallet_topups','wallet_transactions','ad_settlement_state','support_settlements'];
 
-async function fixture(db, broadDefaults = false) {
+async function fixture(db, broadDefaults = false, includeSeedPrivilegeRepair = true) {
   await db.exec(`create role anon; create role authenticated; create role service_role;
     create schema auth; create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema public,auth to anon,authenticated,service_role;`);
   await db.exec(readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url),'utf8'));
-  // Model broad hosted defaults for newly created wallet tables. The existing
-  // legacy supports table already has its intended grants from the base schema.
-  if (broadDefaults) await db.exec('alter default privileges in schema public grant all on tables to anon,authenticated,service_role');
+  // Model broad hosted defaults for newly created wallet tables and functions.
+  // The existing legacy supports table already has its intended base grants.
+  if (broadDefaults) await db.exec(`
+    alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
+    alter default privileges in schema public grant execute on functions to service_role;
+  `);
   for (const file of ['20260920_wallet_ledger.sql','20260921_wallet_safety.sql',
     '20260922_wallet_capability_recovery.sql','20260923_wallet_balance_recovery.sql',
     '20260923093000_paid_seeds.sql']) {
     await db.exec(readFileSync(new URL('../supabase/migrations/'+file, import.meta.url),'utf8')
       .replace('create extension if not exists pgcrypto;',''));
   }
+  if (includeSeedPrivilegeRepair) await db.exec(seedPrivilegeRepair);
 }
 
 test('hosted access runner offline tests', () => {
@@ -136,6 +144,48 @@ test('forward repair removes the 15 hosted grants without changing data or serve
     await db.query('select record_wallet_topup($1,$2,$3,1000)',['cs_access','pi_access',owner]);
     await db.exec('reset role');
     assert.deepEqual(await snapshot(),before);
+  } finally { await db.close(); }
+});
+
+test('paid Seed forward repair removes hosted read-RPC grants only', async () => {
+  const db = new PGlite();
+  try {
+    await fixture(db, true, false);
+    await db.exec(repair);
+    const check = async () => (await db.query(audit)).rows[0];
+    const bad = await check();
+    assert.equal(bad.audit_status,'REVIEW_REQUIRED');
+    assert.equal(Number(bad.nonpassing_checks),2);
+    assert.deepEqual(bad.findings.map(f=>f.object_name).sort(),[
+      'service_role:public.get_my_seeded_ad_ids()',
+      'service_role:public.get_seed_counts()',
+    ]);
+    const before = await Promise.all([
+      db.query('select to_jsonb(t) as row from wallets t order by user_id'),
+      db.query('select to_jsonb(t) as row from wallet_transactions t order by id'),
+      db.query('select to_jsonb(t) as row from supports t order by id'),
+      db.query('select to_jsonb(t) as row from ad_seeds t order by user_id,ad_id'),
+    ]);
+    for (let attempt=0; attempt<2; attempt++) {
+      await db.exec(seedPrivilegeRepair);
+      const good = await check();
+      assert.equal(good.audit_status,'PASS');
+      assert.equal(Number(good.checks_total),205);
+      assert.equal(Number(good.nonpassing_checks),0);
+      assert.deepEqual(good.findings,[]);
+    }
+    assert.deepEqual(await Promise.all([
+      db.query('select to_jsonb(t) as row from wallets t order by user_id'),
+      db.query('select to_jsonb(t) as row from wallet_transactions t order by id'),
+      db.query('select to_jsonb(t) as row from supports t order by id'),
+      db.query('select to_jsonb(t) as row from ad_seeds t order by user_id,ad_id'),
+    ]),before);
+    await db.exec('set role service_role');
+    assert.equal((await db.query(`select has_function_privilege(
+      'service_role','public.seed_ad_from_wallet(uuid,bigint,uuid)','execute') as allowed`)).rows[0].allowed,true);
+    await assert.rejects(db.query('select * from get_seed_counts()'),/permission denied/);
+    await assert.rejects(db.query('select * from get_my_seeded_ad_ids()'),/permission denied/);
+    await db.exec('reset role');
   } finally { await db.close(); }
 });
 

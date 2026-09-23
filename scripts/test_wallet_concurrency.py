@@ -28,6 +28,7 @@ MIGRATIONS = (
     "20260923_wallet_balance_recovery.sql",
     "20260923_wallet_table_privileges.sql",
     "20260923093000_paid_seeds.sql",
+    "20260923164351_paid_seed_read_rpc_privileges.sql",
 )
 
 
