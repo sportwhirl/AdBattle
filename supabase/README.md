@@ -32,11 +32,13 @@ Do not publish the updated root `index.html` until steps 1–5 are complete.
    `20260922_wallet_capability_recovery.sql`,
    `20260923_wallet_balance_recovery.sql`, then
    `20260923_wallet_table_privileges.sql`, then
-   `20260923093000_paid_seeds.sql` from `migrations/` in the Supabase SQL
-   editor. For an existing installation, apply only missing migrations in that
-   order. The safety and recovery migrations are one-time and transactional;
-   do not rerun them after success because they rename internal RPCs. Take a
-   backup and inspect the actual existing schema before applying migrations.
+   `20260923093000_paid_seeds.sql`, then
+   `20260923164351_paid_seed_read_rpc_privileges.sql` from `migrations/` in the
+   Supabase SQL editor. For an existing installation, apply only missing
+   migrations in that order. The safety and recovery migrations are one-time
+   and transactional; do not rerun them after success because they rename
+   internal RPCs. Take a backup and inspect the actual existing schema before
+   applying migrations.
 2. Set the `SETTLEMENT_CRON_SECRET` Edge Function secret to a new random value.
    Existing `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` secrets remain in use.
 3. Deploy these functions:
@@ -114,7 +116,10 @@ select cron.schedule(
 Apply the paid-Seed change backend first, then publish the frontend:
 
 1. Confirm all preceding wallet migrations are present, then apply only
-   `migrations/20260923093000_paid_seeds.sql`.
+   `migrations/20260923093000_paid_seeds.sql`, followed by
+   `migrations/20260923164351_paid_seed_read_rpc_privileges.sql`. If the first
+   migration already succeeded, do not rerun it; apply only the missing
+   forward privilege repair.
 2. Deploy `support-from-wallet` from the same reviewed commit.
 3. Publish `frontend-config.js` and `index.html`.
 
