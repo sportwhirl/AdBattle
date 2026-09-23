@@ -2,10 +2,10 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { corsPreflightResponse, jsonResponse, parseBearerToken } from "../_shared/http.ts";
 
 // Draft generation is deliberately restricted to the local adbattle-test origin
-// and project. The browser never receives GEMINI_API_KEY or a service-role key.
+// and project. The browser never receives OPENAI_API_KEY or a service-role key.
 const STAGING_URL = "https://nccqnrcdygujulrnwair.supabase.co";
 const STAGING_ORIGIN = "http://localhost:8000";
-const MODEL = "gemini-3.1-flash-lite-image";
+const MODEL = "gpt-image-2.5-flare";
 const DRAFT_BUCKET = "ai-image-drafts";
 const MAX_PROVIDER_RESPONSE_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -14,9 +14,11 @@ const STYLES = Object.freeze({
   flat_illustration: "Clean flat illustration with broad color fields, few details, and simple shapes.",
   simple_3d: "Playful simple 3D shapes, soft lighting, and uncomplicated surfaces.",
   hand_drawn: "Loose hand-drawn lines, expressive marks, simple forms, and a limited palette.",
-  freeform_simple: "Interpret the creative request freely while keeping the composition simple and uncluttered.",
+  freeform_simple: "Follow the creator's own visual style direction in the creative request.",
 });
 const ASPECT_RATIOS = Object.freeze(["1:1", "16:9"]);
+// Both dimensions must be multiples of 16 and the area at least 655,360 px.
+const IMAGE_SIZES = Object.freeze({ "1:1": "1024x1024", "16:9": "1280x720" });
 
 function draftRequest(body: unknown) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
@@ -103,19 +105,23 @@ async function screenPrompt(prompt: string, style: string, apiKey: string, model
   return decision.decision;
 }
 
-function geminiRequest(prompt: string, style: string, aspectRatio: string) {
+function openAiImageRequest(prompt: string, style: string, aspectRatio: string) {
   return {
     model: MODEL,
-    store: false,
-    input: [
+    prompt: [
       "Create exactly one original advertisement image draft from this request.",
-      `Style: ${STYLES[style as keyof typeof STYLES]}`,
-      "Use a clear focal point, modest detail, and no photographic fine texture.",
+      `Optional visual style direction: ${STYLES[style as keyof typeof STYLES]}`,
+      "Keep the image legible at small display sizes while following the creator's safe scene and detail choices.",
       "The creator will review this draft before posting. Do not add an AdBattle logo or watermark.",
       `Creative request: ${prompt}`,
     ].join("\n"),
-    response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: aspectRatio, image_size: "1K" },
-    generation_config: { thinking_level: "minimal" },
+    size: IMAGE_SIZES[aspectRatio as keyof typeof IMAGE_SIZES],
+    quality: "low",
+    n: 1,
+    output_format: "jpeg",
+    output_compression: 70,
+    background: "opaque",
+    moderation: "auto",
   };
 }
 
@@ -142,32 +148,48 @@ async function boundedJson(response: Response, maxBytes: number) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function imageFromGemini(interaction: any) {
-  if (interaction?.status !== "completed" || !Array.isArray(interaction.steps)) {
-    throw new Error("IMAGE_NOT_COMPLETED");
+function jpegDimensions(bytes: Uint8Array) {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 4 < bytes.length) {
+    if (bytes[offset++] !== 0xff) return null;
+    while (bytes[offset] === 0xff) offset++;
+    const marker = bytes[offset++];
+    if (marker === 0xd9 || marker === 0xda) return null;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (offset + 2 > bytes.length) return null;
+    const length = (bytes[offset] << 8) | bytes[offset + 1];
+    if (length < 2 || offset + length > bytes.length) return null;
+    if ([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)) {
+      if (length < 7 || bytes[offset + 2] !== 8) return null;
+      return { height: (bytes[offset + 3] << 8) | bytes[offset + 4],
+        width: (bytes[offset + 5] << 8) | bytes[offset + 6] };
+    }
+    offset += length;
   }
-  const images = interaction.steps
-    .filter((step: any) => step?.type === "model_output")
-    .flatMap((step: any) => Array.isArray(step.content) ? step.content : [])
-    .filter((block: any) => block?.type === "image");
-  if (images.length !== 1) throw new Error("EXPECTED_ONE_IMAGE");
-  const image = images[0];
-  const mime = image.mime_type;
-  const base64 = image.data;
-  if (!["image/jpeg", "image/png"].includes(mime) || typeof base64 !== "string" ||
+  return null;
+}
+
+function imageFromOpenAI(result: any, aspectRatio: string) {
+  const expectedSize = IMAGE_SIZES[aspectRatio as keyof typeof IMAGE_SIZES];
+  if (!Array.isArray(result?.data) || result.data.length !== 1 ||
+      (result.output_format !== undefined && result.output_format !== "jpeg") ||
+      (result.size !== undefined && result.size !== expectedSize)) {
+    throw new Error("EXPECTED_ONE_IMAGE");
+  }
+  const base64 = result.data[0]?.b64_json;
+  if (typeof base64 !== "string" ||
       base64.length > Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 8 ||
       !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error("INVALID_IMAGE_OUTPUT");
   let decoded: string;
   try { decoded = atob(base64); } catch { throw new Error("INVALID_IMAGE_OUTPUT"); }
   if (!decoded.length || decoded.length > MAX_IMAGE_BYTES) throw new Error("INVALID_IMAGE_OUTPUT");
   const bytes = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
-  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const png = bytes.length >= 8 && [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]
-    .every((byte, index) => bytes[index] === byte);
-  if ((mime === "image/jpeg" && !jpeg) || (mime === "image/png" && !png)) {
+  const dimensions = jpegDimensions(bytes);
+  if (!dimensions || `${dimensions.width}x${dimensions.height}` !== expectedSize) {
     throw new Error("INVALID_IMAGE_OUTPUT");
   }
-  return { bytes, mime, extension: jpeg ? "jpg" : "png" };
+  return { bytes, mime: "image/jpeg", extension: "jpg" };
 }
 
 async function signedDraftUrl(admin: any, path: string) {
@@ -185,13 +207,12 @@ Deno.serve(async (request) => {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const policyKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
   const policyModel = Deno.env.get("ADBATTLE_POLICY_MODEL") || "gpt-5.6-luna";
   const userLimit = safeLimit(Deno.env.get("ADBATTLE_AI_IMAGE_USER_DAY_LIMIT"), 3, 3);
   const globalLimit = safeLimit(Deno.env.get("ADBATTLE_AI_IMAGE_GLOBAL_DAY_LIMIT"), 30, 30);
   if (url !== STAGING_URL || Deno.env.get("ADBATTLE_AI_IMAGE_ENABLED") !== "true" ||
-      !anonKey || !serviceKey || !apiKey || !policyKey || userLimit === null || globalLimit === null) {
+      !anonKey || !serviceKey || !apiKey || userLimit === null || globalLimit === null) {
     return jsonResponse(request, { error: "IMAGE_GENERATION_UNAVAILABLE" }, 503);
   }
   const token = parseBearerToken(request);
@@ -200,6 +221,11 @@ Deno.serve(async (request) => {
   const { data: { user } = {}, error: authError } = await authClient.auth.getUser(token);
   if (authError || !user || user.is_anonymous) {
     return jsonResponse(request, { error: "LOGIN_REQUIRED" }, 401);
+  }
+  // Restricted staging tests require an admin-owned claim on the verified
+  // Auth user. Public youth eligibility is a separate release gate.
+  if (user.app_metadata?.ai_image_adult_test_approved !== true) {
+    return jsonResponse(request, { error: "ELIGIBILITY_REQUIRED" }, 403);
   }
 
   const contentLength = Number(request.headers.get("content-length") || 0);
@@ -243,16 +269,16 @@ Deno.serve(async (request) => {
   // reserved request ID, even after a timeout with an uncertain paid outcome.
   let completedPath = "";
   try {
-    const preflight = await screenPrompt(draft.prompt, draft.style, policyKey, policyModel);
+    const preflight = await screenPrompt(draft.prompt, draft.style, apiKey, policyModel);
     if (preflight !== "allow") throw new Error("PROMPT_POLICY_HELD");
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
-      headers: { "x-goog-api-key": apiKey, "content-type": "application/json" },
-      body: JSON.stringify(geminiRequest(draft.prompt, draft.style, draft.aspectRatio)),
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(openAiImageRequest(draft.prompt, draft.style, draft.aspectRatio)),
       signal: AbortSignal.timeout(60_000),
     });
     if (!response.ok) throw new Error("PROVIDER_ERROR");
-    const image = imageFromGemini(await boundedJson(response, MAX_PROVIDER_RESPONSE_BYTES));
+    const image = imageFromOpenAI(await boundedJson(response, MAX_PROVIDER_RESPONSE_BYTES), draft.aspectRatio);
     const path = `${user.id}/${draft.requestId}.${image.extension}`;
     const outputHash = await sha256Hex(image.bytes);
     const bucket = admin.storage.from(DRAFT_BUCKET);

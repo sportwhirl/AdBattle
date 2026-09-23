@@ -4,11 +4,33 @@
 
 ## Release gate and scope
 
-Google's [Gemini Developer API terms](https://ai.google.dev/gemini-api/terms) and [Google Cloud Service Specific Terms, section 20(d)](https://cloud.google.com/terms/service-terms) both prohibit using the relevant generative AI service as part of an application directed toward **or likely to be accessed by** people under 18. The [Cloud Services Summary](https://cloud.google.com/terms/services) includes the renamed Vertex AI foundation-model API in Generative AI Services. AdBattle currently has no age controls. A server-side call, moving to Vertex/Agent Platform, or adding an age gate by itself is not an established exception. **Do not enable Google generation on the public AdBattle site until the actual audience/access model and applicable terms are resolved with Google or qualified counsel.** Restricted staging with authorized adult testers can implement and measure this design.
+The product target is creative access for all ages. The
+[youth access plan](YOUTH_ACCESS_PLAN.md) defines account, consent, privacy,
+and moderation gates. Google's
+[Gemini API terms](https://ai.google.dev/gemini-api/terms) prohibit an API client likely to be
+accessed by under-18s, so Gemini is not this app's public video route. The
+staging job adapter targets Luma Ray 3.2 for approved **adult testers only**.
+Luma's [individual terms](https://lumalabs.ai/legal/terms-of-service) say
+under-13 users are unauthorized; its
+[API terms](https://lumalabs.ai/legal/api-terms-of-use) define downstream API users.
+Do not route child video requests to it without explicit provider permission.
+Confirm the teen path, commercial use, and 360p draft-tier publishing in
+writing before a public switch. AI-assisted animation from approved image
+generation is a separate proposed route, not part of this job scaffold.
 
-This feature creates a **draft before posting**. The creator can inspect it and either discard it or submit one immutable ad. It does not edit posted media, change the wallet ledger, spend promotion money, or change the existing Support and Seed rules. The first version is one original, 10-second, 360p, 24-fps clip with a deliberate simple visual style; 16:9 and 9:16 are the permitted aspect ratios. The gallery serves a poster first, then a tiny muted hover derivative, then the full video only on user action. These are proposed AdBattle limits, not Google policy or a claim that simple artwork costs fewer model tokens.
+This feature creates a **draft before posting**. The creator can inspect it and either discard it or submit one immutable ad. It does not edit posted media, change the wallet ledger, spend promotion money, or change the existing Support and Seed rules. The first version is one original, 10-second, 360p, 24-fps clip; 16:9 and 9:16 are the permitted aspect ratios. The gallery serves a poster first, then a tiny muted hover derivative, then the full video only on user action. These are proposed AdBattle delivery limits, not provider policy or a claim that simple artwork costs fewer model tokens.
 
-Initial proposed style presets are **pixel art, flat illustration, simple low-poly 3D, loose hand-drawn, and other simple style**. Creators choose the scene, characters, humor, colors, pacing, and one preset; the server adds that preset and the output limits to the prompt. Photorealism and high-detail cinematic rendering are outside this first product tier. Require original or licensed reference material and original characters; hold copied brands/characters, real-person impersonation, recognizable voice clones, known songs, and claims the scanner cannot verify. The first release produces a silent full clip and a silent hover clip. The model can deviate from a preset, so inspect the actual output rather than treating prompt text as enforcement. These are proposed **AdBattle editorial rules**, not a list of Google's API restrictions. Low-detail style mainly gives the gallery a coherent look; model choice, duration, and measured output tokens determine generation cost, while transcode settings determine delivery bytes.
+Optional style directions are **pixel art, flat illustration, low-poly 3D,
+loose hand-drawn, and the creator's own style**. Creators choose the scene,
+characters, humor, colors, pacing, and prompt freely within safety rules.
+Photorealistic fictional art and detailed ideas may be proposed; the small
+public file can lose fine detail, so preview legibility. Hold copied
+brands/characters, deceptive real-person impersonation, recognizable voice
+clones, known songs, and claims the scanner cannot verify. The first release
+produces a silent full clip and a silent hover clip. The model can deviate from
+a style request, so inspect the actual output. Low-detail style is an option;
+model choice and duration determine generation cost, while transcoding
+determines delivery bytes.
 
 ## Existing integration points
 
@@ -21,15 +43,37 @@ There is a critical publication invariant: **a video poster passing the existing
 
 ## Provider and cost assumptions
 
-The Gemini Developer API's stable [`gemini-omni-1.1-flash`](https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash) supports 3–10 seconds at 360p, 720p, 1080p, or 4K and 24 fps. Google recommends Omni for general short video and [documents its Interactions workflow](https://ai.google.dev/gemini-api/docs/omni). The [Interactions API reference](https://ai.google.dev/api/interactions-api) supports `background`, `store`, retrieval by interaction ID, `response_format.duration`, resolution, delivery, and aspect ratio. Google's [Cloud video example](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/video/generate-videos-from-text) spells duration as `"10s"`; verify that exact value against the selected endpoint with one staging request. Google's [Developer API pricing](https://ai.google.dev/gemini-api/docs/pricing) quotes approximately $0.10 per second at **720p** through output-token billing. It does not publish a guaranteed 360p discount. Record actual `usage` and invoice cost before showing any user-facing price.
+Luma's [Ray 3.2 API](https://docs.agents.lumalabs.ai/api/resources/generations/methods/create)
+offers 10-second standard-dynamic-range video at 360p. Its [published
+pay-as-you-go price](https://docs.agents.lumalabs.ai/guides/pricing) is $0.18
+for one 10-second `type:"video"` 360p generation, subject to change. Shared
+capacity has no latency SLA. Record actual provider charge and wait time
+before setting a user-facing allowance or promise. Luma describes 360p as a
+draft tier; confirm public commercial publishing rights. Keep image generation
+as a separate OpenAI job and budget.
 
-Cloud/Agent Platform uses a different [Omni ID, `gemini-omni-1.1-flash-preview`](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/omni-1-1-flash). It is Preview even though the Developer API model is GA; Cloud's model card has inconsistent PayGo statements. The Cloud endpoint's quota and price are unverified for this project and Developer API pricing must not be copied to it. The 1K [Flash Lite image model](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-image) may generate draft stills, but it is a separate job and budget. Imagen is [shut down in the Gemini API](https://ai.google.dev/gemini-api/docs/image-generation).
-
-The provider's filters and invisible SynthID are additional controls, not AdBattle approval. Retain the unmodified provider original privately; do not assume transcoding preserves an invisible watermark or provenance metadata. [Google's generative AI use policy](https://policies.google.com/terms/generative-ai/use-policy) and [Gemini API terms](https://ai.google.dev/gemini-api/terms) still apply to prompts, references, and outputs.
+Provider filters are only a first layer, not AdBattle approval. Retain the
+unmodified provider original privately and label generated media in the app;
+do not assume transcoding preserves provenance metadata.
 
 ## Database and access design
 
-Use a private, unexposed `internal.ai_video_jobs` table, an append-only `internal.ai_video_job_events` table, and an immutable `internal.ai_video_scan_results` table keyed by ad and scan version with source/full/hover hashes, sampled-frame manifest hash, result, and timestamp. No browser role receives direct INSERT, UPDATE, DELETE, or SELECT on these tables. Expose narrow authenticated create, status, publish, and discard Edge Functions (or carefully limited owner RPCs). **Every client-facing endpoint** verifies the JWT using Supabase Auth, derives `user_id` from that verification, and never trusts a browser-supplied owner ID. The locked transaction compares that verified user with the job owner. A status response returns only the caller's job ID, public-safe status, and timestamps; when ready, an owner-bound function may issue a short-lived signed preview URL for private draft media. The service-role key and Google credential remain server-side.
+For a **future publication backend**, use a private, unexposed
+`internal.ai_video_jobs` table, an append-only event table, and an immutable
+scan-result table keyed by ad and scan version with source/full/hover hashes,
+sampled-frame manifest hash, result, and timestamp. No browser role receives
+direct access to those future private tables. The existing **staging scaffold**
+instead uses `public.ai_video_draft_jobs` with owner-only RLS and safe-column
+SELECT grants; provider IDs, URLs, prompts, and reviewer fields are not
+browser-readable. Expose narrow authenticated create, status, publish, and
+discard Edge Functions for a public version. **Every client-facing endpoint**
+verifies the JWT using Supabase Auth, derives `user_id` from that verification,
+and never trusts a browser-supplied owner ID. The locked transaction compares
+that verified user with the job owner. A status response returns only the
+caller's job ID, public-safe status, and timestamps; when ready, an owner-bound
+function may issue a short-lived signed preview URL for private draft media.
+The service-role key and Luma credential remain server-side. Public routes
+must recheck server-owned age/guardian entitlements in addition to JWT ownership.
 
 Minimum job columns:
 
@@ -38,7 +82,7 @@ Minimum job columns:
 | `id uuid`, `user_id uuid`, `client_request_id uuid`, `request_sha256 bytea` | `unique(user_id, client_request_id)`; retries with an identical hash return the same job, changed body returns 409. |
 | `prompt`, `style_preset`, `duration_seconds`, `resolution`, `aspect_ratio`, `provider`, `model` | Immutable after creation; initially 10, `360p`, and allowlisted aspect/style. Bounded prompt length and reference rights attestation. |
 | `status`, `lease_owner`, `lease_expires_at`, `next_poll_at`, `created_at`, `updated_at` | Only a worker changes state via compare-and-swap/row-lock RPCs; lease expiry never authorizes a second ambiguous provider POST. |
-| `provider_request_started_at`, `provider_interaction_id`, `provider_file_uri`, `provider_status`, `provider_usage` | Provider ID unique when non-null. Persist the returned ID and any validated Files API URI from the initial response before scheduling a poll. Keep only bounded diagnostic data; never log prompt/media/API keys. |
+| `provider_request_started_at`, `provider_generation_id`, `provider_output_url`, `provider_status`, `provider_usage` | Provider ID unique when non-null. Persist the generation ID before polling. A completed output URL expires; download promptly with a host allowlist and byte cap. Keep only bounded diagnostics; never log prompt/media/API keys or expose the URL. |
 | `original_private_path`, `poster_private_path`, `hover_private_path`, `full_private_path`, `original_sha256`, `poster_sha256`, `full_sha256`, `hover_sha256` | Paths are server-created in owner/job namespaces; immutable hashes bind scans and published assets to one output. |
 | `publish_request_sha256`, `ad_id`, `error_code`, `review_reason_code` | `ad_id` unique. A repeat publish with identical fields returns the same ad; changed fields fail. No raw provider error or private URI in browser responses. |
 
@@ -114,7 +158,7 @@ PostgreSQL cannot use `CREATE OR REPLACE FUNCTION` to change the existing table-
 | `queued` | Authenticated request committed and quota reserved; claim to `dispatching`, or `cancelled` before dispatch. |
 | `dispatching` | One worker has committed `provider_request_started_at` **before** HTTP POST. Valid accepted response with ID → `generating`; known definite rejection (for example a clearly unaccepted 429) → bounded backoff/`queued` or `failed`; timeout, 5xx, malformed response, lost response, or crash without ID → `dispatch_uncertain`. |
 | `dispatch_uncertain` | No automatic second POST. Operator checks provider usage/logs and any known request correlation; if an actual provider ID is proven, record it and resume `generating`. Otherwise cancel/close the job after reconciliation. A new request requires a new explicit action and quota/billing accounting. |
-| `generating` | Poll GET by persisted interaction ID; `in_progress` stays, `completed` → `processing`, provider terminal failure → `failed`, policy block → `rejected`; cancel only with documented provider cancellation and confirmation. |
+| `generating` | Poll GET by persisted generation ID; `queued`/`processing` stays, `completed` → `processing` for AdBattle media handling, provider terminal failure → `failed`, policy block → `rejected`; cancel only with documented provider cancellation and confirmation. |
 | `processing` | Download bounded original, decode and transcode, then validate and scan. Safe → `ready_draft`; ambiguous → `held`; technical failure → `failed`; prohibited → `rejected`. |
 | `ready_draft` | Owner can preview and submit, moving atomically to `posted`, or discard/cancel. The draft is not public or Support-eligible. |
 | `posted` | Terminal job state with one `ad_id`; ad remains `pending_scan` until poster/text, duplicate, and video scans pass. Ad moderation may later be rejected/removed without changing this job history. |
@@ -124,34 +168,44 @@ The job table is the source of truth; Supabase Queues can carry wake-up messages
 
 ## Provider REST and response handling
 
-For the Gemini Developer API staging adapter, use a server-only POST to `https://generativelanguage.googleapis.com/v1beta/interactions` with `x-goog-api-key`. The exact payload is to be confirmed against a live staging call:
+For the Luma Agents staging adapter, use a server-only POST to
+`https://agents.lumalabs.ai/v1/generations` with a Bearer key. The exact
+payload is:
 
 ```json
 {
-  "model": "gemini-omni-1.1-flash",
-  "input": "An original, simple flat illustration ...",
-  "background": true,
-  "store": true,
-  "stream": false,
-  "response_format": {
-    "type": "video",
-    "duration": "10s",
-    "resolution": "360p",
-    "aspect_ratio": "16:9",
-    "delivery": "uri"
-  }
+  "model": "ray-3.2",
+  "type": "video",
+  "prompt": "An original scene in the creator's chosen style ...",
+  "aspect_ratio": "16:9",
+  "video": { "duration": "10s", "resolution": "360p" }
 }
 ```
 
-Do not put prompts or keys in URLs, browser code, or logs. Parse the raw REST `id`, `status`, `errors`, `usage`, and `steps[].content[]`; `output_video` in SDK examples is a convenience accessor, not a guaranteed top-level REST field. On completion accept exactly one video content block with `mime_type='video/mp4'` and either `uri` or base64 `data`; reject missing/multiple/unknown output. Poll `GET /v1beta/interactions/{id}` with bounded exponential backoff and a maximum age, then reconcile aged jobs without sending another POST. Google documents [cancel and GET](https://ai.google.dev/api/interactions-api) and [URI/File delivery](https://ai.google.dev/gemini-api/docs/omni). **A URI is guaranteed only in the initial POST response or SSE stream.** Persist a validated Files API URI from that response when available, poll that file to `ACTIVE`, then download. A later interaction GET currently may return inline base64 even if creation requested URI, so support a bounded inline fallback when no initial URI was available. Do not assume URI delivery prevents a large response. Restrict downloads to Google's known API/file endpoint, authenticate server-side, enforce a hard byte cap while streaming, and avoid storing base64 in audit rows. Unrecognized response shapes fail closed. A container worker is preferable for the final download; Supabase Edge's [memory/CPU/wall-clock limits](https://supabase.com/docs/guides/functions/limits) apply even to [background tasks](https://supabase.com/docs/guides/functions/background-tasks).
+Do not put prompts or keys in URLs, browser code, or logs. Persist the raw
+generation UUID from the accepted POST and poll
+`GET /v1/generations/{id}` with a bounded interval and maximum age. Accept
+only documented queued/processing/completed/failed states. Completion carries
+a presigned output URL that expires in about an hour; store it privately,
+restrict its host and redirects, enforce a hard byte cap while streaming, and
+download promptly to private storage. Unrecognized response shapes fail
+closed. The staging scaffold stops at private job status; it does **not**
+download or publish video. A constrained container worker is preferable for
+the final download/transcode; Supabase Edge's
+[resource limits](https://supabase.com/docs/guides/functions/limits) apply even
+to [background tasks](https://supabase.com/docs/guides/functions/background-tasks).
 
-Provider POST idempotency is **not documented** in the Interactions API. Local request UUIDs protect AdBattle's own inserts, not a billable provider call whose response was lost. The staging scaffold calls this conservative state `dispatch_unknown`; the full design table above calls it `dispatch_uncertain`. Both mean no second provider POST and operator reconciliation. If the provider later adds a documented idempotency mechanism, it can be adopted after testing without weakening this default.
+Provider POST idempotency is not assumed. Local request UUIDs protect
+AdBattle's own inserts, not a billable provider call whose response was lost.
+The staging scaffold calls this conservative state `dispatch_unknown`; the
+full design table above calls it `dispatch_uncertain`. Both mean no second
+provider POST and operator reconciliation.
 
 ## Media validation, moderation, and publication
 
 Keep FFmpeg/ffprobe in a constrained container worker, not an Edge Function. [Supabase Storage uploads](https://supabase.com/docs/guides/storage/uploads/standard-uploads) work best under 6 MB; use [resumable upload](https://supabase.com/docs/guides/storage/uploads/resumable-uploads) for larger objects, and enforce the project's [Storage object limit](https://supabase.com/docs/guides/storage/uploads/file-limits). Supabase documents image transformations, not a native video-transcoding service. The worker must use a temporary directory with size/time limits, fixed tool arguments, no shell interpolation of user prompts or filenames, and reject external/extra streams or unparseable media.
 
-Initial staging acceptance budgets (to be tuned after real samples): one H.264 MP4 input up to 30 MiB, 8–12 seconds for the requested ten-second output, matching 16:9 or 9:16 geometry and 12–60 fps, one video stream (the processor discards any audio). The bounded offline processor normalizes to a silent 10.0-second, 24-fps, 360p full MP4 of at most 5 MiB, a 360p JPEG poster of at most 100 KiB, and, if its hard cap is met, a separate silent four-second, 13-fps, 360p hover MP4 of at most 500 KiB. An oversized hover falls back to the poster; any other required-output failure fails the draft. These are **site delivery** budgets. Re-encoding and style presets do not imply a Google generation discount. Keep original bytes and SHA-256 privately; record derivative hashes, dimensions, durations, codecs, and byte sizes.
+Initial staging acceptance budgets (to be tuned after real samples): one H.264 MP4 input up to 30 MiB, 8–12 seconds for the requested ten-second output, matching 16:9 or 9:16 geometry and 12–60 fps, one video stream (the processor discards any audio). The bounded offline processor normalizes to a silent 10.0-second, 24-fps, 360p full MP4 of at most 5 MiB, a 360p JPEG poster of at most 100 KiB, and, if its hard cap is met, a separate silent four-second, 13-fps, 360p hover MP4 of at most 500 KiB. An oversized hover falls back to the poster; any other required-output failure fails the draft. These are **site delivery** budgets. Re-encoding and style presets do not imply a provider generation discount. Keep original bytes and SHA-256 privately; record derivative hashes, dimensions, durations, codecs, and byte sizes.
 
 Before a draft is offered, evaluate prompt and references, validate the generated file, and perform a preliminary content check. At posting, scan the complete ad context: title, caption, poster, video frames across the timeline (including first/last and scene changes), OCR/text overlays, and a speech transcript plus audio-risk review. The existing `scan-ad` and duplicate scanner handle the poster; add a video-specific scanner and immutable scan version/audit events. Compare exact video SHA-256 and sampled frame fingerprints to prior posted clips and hold suspicious duplicates. Automated samples can miss a brief unsafe frame; uncertain or high-risk cases require human review. A model's refusal/safety pass does not replace AdBattle policy. Do not claim that a generated soundtrack is free of rights issues.
 
@@ -164,10 +218,10 @@ The gallery renders `<img loading="lazy">` with an accessible play button. It do
 ## Verification and rollout
 
 1. **Local schema tests:** Apply the proposed migration to the repo's PGlite fixture and a disposable PostgreSQL instance. Verify old approved image rows stay approved; video poster safety + duplicate pass cannot approve a pending/held/failed video; only video pass completes the gate; removed remains removed; an owner cannot set video columns, query private job rows, or execute service RPCs. Check `get_public_ads()` never exposes pending or private media, and `get_my_ads()` exposes only the caller's safe fields. Run Supabase advisors before a real migration.
-2. **Mock provider tests:** Simulate accepted/in-progress/completed URI and inline data; definite rejection, 429, 5xx, timeout, malformed JSON, missing ID, blocked, and cancelled. Assert one provider POST maximum after ambiguous outcomes, persistent interaction ID before polling, duplicate queue-message safety, bounded response/download bytes, immutable request hash, quotas, and atomic one-ad publication.
+2. **Mock provider tests:** Simulate accepted/queued/processing/completed states and expiring output URLs; definite rejection, 429, 5xx, timeout, malformed JSON, missing ID, blocked, and cancelled. Assert one provider POST maximum after ambiguous outcomes, persistent generation ID before polling, duplicate queue-message safety, bounded response/download bytes, immutable request hash, quotas, and atomic one-ad publication.
 3. **Fixture media tests:** Exercise invalid magic/container, truncation, codec/track anomalies, duration/dimension/file-size boundaries, failed transcodes, speech and scene-change extraction, frame/audio policy holds, fingerprint duplicate, and storage copy failure. Verify no public path or approval is recorded after any failure.
 4. **Browser tests:** Image cards still render; video cards issue no video requests on initial gallery load; hover fetch is conditional and muted; mobile/keyboard/reduced-motion/data-saver behavior, poster fallback, owner pending state, and explicit play work.
-5. **Restricted `adbattle-test` staging:** Deploy schema gate and code from one reviewed commit with generation disabled. Run authorization checks with two ordinary users, then enable one paid 10-second/360p Google test only for approved adult testers. Record real output dimensions, response shape, generation time, provider usage/billing, storage/transcode bytes, review results, and cancellation/retry behavior. Keep wallet and Stripe test mode unchanged.
-6. **Public release:** Remains blocked on Google audience/terms resolution, verified provider access/price, validated transcoding and moderation operations, per-user/global cost controls, and a review process. Do not enable this through a feature flag alone before those gates pass.
+5. **Restricted `adbattle-test` staging:** Deploy schema gate and code from one reviewed commit with generation disabled. Run authorization checks with two ordinary users, then enable one paid 10-second/360p Luma test only for approved adult testers. Record real output dimensions, response shape, generation time, provider billing, storage/transcode bytes, review results, and cancellation/retry behavior. Keep wallet and Stripe test mode unchanged.
+6. **Public release:** Remains blocked on the youth access plan, written provider clearance for the age band and use, verified access/price, validated transcoding and moderation operations, per-user/global cost controls, and a review process. Do not enable this through a feature flag alone before those gates pass.
 
 No live provider call, paid generation, hosted migration, or Edge deployment was performed. The separate offline FFmpeg processor passes synthetic fixtures for the size and format caps, but is not connected to the job worker. Without an authorized paid API key, actual 360p billing, `"10s"` behavior, provider quota, and response shape remain unverified. Real provider samples and full media moderation are still needed before publication.

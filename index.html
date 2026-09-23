@@ -1165,14 +1165,14 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
         <strong>Create an image draft with AI</strong>
         <p>Staging only. You can preview or discard it before posting. Up to three generations per day.</p>
         <label for="aiImagePrompt">Describe your ad image</label>
-        <textarea id="aiImagePrompt" maxlength="400" placeholder="A funny visual scene for your ad"></textarea>
-        <label for="aiImageStyle">Style</label>
+        <textarea id="aiImagePrompt" maxlength="400" placeholder="Describe your scene and any visual style you want"></textarea>
+        <label for="aiImageStyle">Optional style direction</label>
         <select id="aiImageStyle">
+            <option value="freeform_simple">Your own style</option>
             <option value="pixel_art">Pixel art</option>
             <option value="flat_illustration">Flat illustration</option>
             <option value="simple_3d">Simple 3D</option>
             <option value="hand_drawn">Loose hand-drawn</option>
-            <option value="freeform_simple">Freeform, simple</option>
         </select>
         <label for="aiImageAspect">Shape</label>
         <select id="aiImageAspect">
@@ -3036,6 +3036,7 @@ function restorePendingAiDraft() {
 }
 
 function aiDraftErrorMessage(message) {
+    if (message.includes("ELIGIBILITY_REQUIRED")) return "AI image drafts are limited to approved adult staging testers.";
     if (message.includes("DAILY_GENERATION_LIMIT")) return "The daily AI image limit is reached.";
     if (message.includes("GENERATION_IN_PROGRESS")) return "That image is still generating. Try recovery shortly.";
     if (message.includes("PROMPT_NEEDS_REVIEW")) return "This ad idea needs review. Discard it to try another idea.";

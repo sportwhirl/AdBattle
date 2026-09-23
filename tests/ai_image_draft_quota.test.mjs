@@ -5,6 +5,8 @@ import { PGlite } from '@electric-sql/pglite';
 
 const migration = readFileSync(
   new URL('../supabase/migrations/20260923162944_ai_image_draft_quota.sql', import.meta.url), 'utf8');
+const modelMigration = readFileSync(
+  new URL('../supabase/migrations/20260923170351_openai_image_draft_model.sql', import.meta.url), 'utf8');
 const base = readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url), 'utf8');
 const duplicate = readFileSync(new URL('../supabase/migrations/20260922_duplicate_screening.sql', import.meta.url), 'utf8');
 const alice = '00000000-0000-4000-8000-000000000001';
@@ -38,6 +40,12 @@ test('private draft quota is atomic, one-active, service-only and idempotent', a
         [user, request, hash, 'pixel_art', '16:9', userCap, globalCap]).then(result => result.rows[0]);
 
     assert.equal((await reserve(alice,id(100))).reservation_status, 'reserved');
+    assert.equal((await db.query('select model from ai_image_draft_requests where request_id=$1',
+      [id(100)])).rows[0].model, 'gemini-3.1-flash-lite-image');
+    await db.exec(modelMigration);
+    await db.exec(modelMigration);
+    assert.equal((await db.query('select model from ai_image_draft_requests where request_id=$1',
+      [id(100)])).rows[0].model, 'gemini-3.1-flash-lite-image');
     assert.equal((await reserve(alice,id(100))).reservation_status, 'reserved_replay');
     assert.equal((await reserve(alice,id(101))).reservation_status, 'active');
     assert.equal((await db.query('select count(*)::int n from ai_image_draft_requests')).rows[0].n, 1);
@@ -62,6 +70,8 @@ test('private draft quota is atomic, one-active, service-only and idempotent', a
       reservation_status:'completed',draft_path:`${alice}/draft.jpg`
     });
     assert.equal((await reserve(alice,id(102))).reservation_status, 'reserved');
+    assert.equal((await db.query('select model from ai_image_draft_requests where request_id=$1',
+      [id(102)])).rows[0].model, 'gpt-image-2.5-flare');
     await db.query("update ai_image_draft_requests set status='failed' where request_id=$1", [id(102)]);
     assert.equal((await reserve(alice,id(103))).reservation_status, 'reserved');
     await db.query("update ai_image_draft_requests set status='unknown' where request_id=$1", [id(103)]);

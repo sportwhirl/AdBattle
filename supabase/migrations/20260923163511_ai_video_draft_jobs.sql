@@ -10,21 +10,21 @@ create table public.ai_video_draft_jobs (
   style text not null default 'freeform_simple'
     check (style in ('pixel_art', 'flat_illustration', 'simple_3d',
       'hand_drawn', 'freeform_simple')),
-  model text not null default 'gemini-omni-1.1-flash'
-    check (model = 'gemini-omni-1.1-flash'),
+  model text not null default 'ray-3.2'
+    check (model = 'ray-3.2'),
   duration text not null default '10s' check (duration = '10s'),
   resolution text not null default '360p' check (resolution = '360p'),
   status text not null default 'pending_review' check (status in (
     'pending_review', 'queued', 'dispatching', 'dispatch_unknown',
-    'in_progress', 'polling', 'waiting_for_file', 'ready_for_processing',
+    'in_progress', 'polling', 'ready_for_processing',
     'failed', 'rejected', 'needs_review'
   )),
   reviewed_at timestamptz,
   reviewed_by text,
   reviewed_request_hash text,
-  provider_interaction_id text unique,
-  provider_file_name text,
-  provider_file_uri text,
+  provider_generation_id uuid unique,
+  provider_output_url text check (char_length(provider_output_url) <= 8192),
+  provider_deadline_at timestamptz,
   next_poll_at timestamptz,
   error_code text,
   created_at timestamptz not null default now(),
@@ -38,12 +38,16 @@ create table public.ai_video_draft_jobs (
     status in ('pending_review', 'rejected') or reviewed_at is not null
   ),
   constraint ai_video_provider_id_required check (
-    status not in ('in_progress', 'polling', 'waiting_for_file',
-      'ready_for_processing') or provider_interaction_id is not null
+    status not in ('in_progress', 'polling', 'ready_for_processing') or
+    provider_generation_id is not null
   ),
-  constraint ai_video_file_required check (
+  constraint ai_video_output_required check (
     status <> 'ready_for_processing' or
-    (provider_file_name is not null and provider_file_uri is not null)
+    provider_output_url is not null
+  ),
+  constraint ai_video_poll_deadline_required check (
+    status not in ('in_progress', 'polling') or
+    provider_deadline_at is not null
   )
 );
 
@@ -57,7 +61,8 @@ begin
   new.created_at := now();
   new.updated_at := new.created_at;
   if new.status <> 'pending_review' or new.reviewed_at is not null or
-      new.provider_interaction_id is not null then
+      new.provider_generation_id is not null or new.provider_output_url is not null or
+      new.provider_deadline_at is not null then
     raise exception 'AI_VIDEO_INVALID_INITIAL_STATE' using errcode = 'P0001';
   end if;
   day_start := ((now() at time zone 'utc')::date)::timestamp at time zone 'utc';
@@ -96,12 +101,12 @@ for each row execute function public.enforce_ai_video_draft_insert();
 create unique index ai_video_draft_one_active_per_user
 on public.ai_video_draft_jobs(user_id)
 where status in ('pending_review', 'queued', 'dispatching',
-  'dispatch_unknown', 'in_progress', 'polling', 'waiting_for_file',
+  'dispatch_unknown', 'in_progress', 'polling',
   'needs_review');
 
 create index ai_video_draft_created_at on public.ai_video_draft_jobs(created_at);
 create index ai_video_draft_due_poll on public.ai_video_draft_jobs(next_poll_at)
-where status in ('in_progress', 'polling', 'waiting_for_file');
+where status in ('in_progress', 'polling');
 create index ai_video_draft_queued on public.ai_video_draft_jobs(created_at)
 where status = 'queued';
 

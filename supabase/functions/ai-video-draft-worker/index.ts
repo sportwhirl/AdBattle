@@ -1,11 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
-import { assertStaging, boundedJson, fileNameFromUri, interactionResult,
+import { adultTestApproved, assertStaging, boundedJson, generationIdValid, generationResult,
   paidDispatchOnce, providerCall, STAGING_URL } from '../_shared/ai-video-draft.mjs';
 import { isUuid } from '../_shared/http.ts';
 
 const JOBS = 'ai_video_draft_jobs';
 const REVIEW_ATTESTATION = 'I reviewed this exact prompt against the AdBattle video safety rules';
-const FIELDS = 'id,user_id,request_id,request_hash,prompt,aspect_ratio,style,status,reviewed_at,reviewed_request_hash,provider_interaction_id,provider_file_name,provider_file_uri,next_poll_at';
+const FIELDS = 'id,user_id,request_id,request_hash,prompt,aspect_ratio,style,status,reviewed_at,reviewed_request_hash,provider_generation_id,provider_output_url,provider_deadline_at,next_poll_at';
 function response(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), { status,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   }
 
   if (body?.action === 'dispatch') {
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    const apiKey = Deno.env.get('LUMA_AGENTS_API_KEY');
     if (!apiKey) return response({ error: 'Provider is not configured.' }, 503);
     const { data: jobs, error } = await db.from(JOBS).select(FIELDS).eq('status', 'queued')
       .not('reviewed_at', 'is', null).order('created_at').limit(1);
@@ -71,16 +71,23 @@ Deno.serve(async (req) => {
     const job = jobs?.[0];
     if (!job) return response({ status: 'idle' });
     if (job.reviewed_request_hash !== job.request_hash) return response({ error: 'Review binding failed.' }, 409);
+    const { data: account, error: accountError } = await db.auth.admin.getUserById(job.user_id);
+    if (accountError || !account?.user) return response({ error: 'Adult staging eligibility could not be checked.' }, 503);
+    if (!adultTestApproved(account.user)) {
+      await db.from(JOBS).update({ status: 'needs_review', error_code: 'ADULT_TEST_ACCESS_REVOKED',
+        updated_at: now }).eq('id', job.id).eq('status', 'queued');
+      return response({ error: 'Staging eligibility is unavailable.' }, 403);
+    }
     const claim = await db.from(JOBS).update({ status: 'dispatching', updated_at: now })
       .eq('id', job.id).eq('status', 'queued').eq('request_hash', job.request_hash)
       .select('id').maybeSingle();
     if (claim.error) return response({ error: 'Claim failed.' }, 503);
     if (!claim.data) return response({ status: 'claimed_elsewhere' });
     // Once claimed, NEVER POST this job again. A crash, timeout, malformed
-    // reply or lost DB write may mean Google already accepted the paid call.
+    // reply or lost DB write may mean Luma already accepted the paid call.
     try {
       const result = await paidDispatchOnce(job,
-        (providerBody: Record<string, unknown>) => providerCall(fetch, apiKey, 'interactions', {
+        (providerBody: Record<string, unknown>) => providerCall(fetch, apiKey, 'generations', {
           method: 'POST', body: JSON.stringify(providerBody),
         }),
         async (patch: Record<string, unknown>, providerId?: string | null) => {
@@ -91,7 +98,7 @@ Deno.serve(async (req) => {
             if (!saved.error && saved.data) return;
           }
           console.error('AI_VIDEO_PROVIDER_ID_PERSIST_FAILED', { job_id: job.id,
-            provider_interaction_id: providerId || null });
+            provider_generation_id: providerId || null });
           throw new Error('AI_VIDEO_PERSIST_FAILED');
         }, later);
       return response({ job_id: job.id, status: result.status }, 202);
@@ -99,10 +106,10 @@ Deno.serve(async (req) => {
   }
 
   if (body?.action === 'poll') {
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    const apiKey = Deno.env.get('LUMA_AGENTS_API_KEY');
     if (!apiKey) return response({ error: 'Provider is not configured.' }, 503);
     const { data: jobs, error } = await db.from(JOBS).select(FIELDS)
-      .in('status', ['in_progress', 'polling', 'waiting_for_file'])
+      .in('status', ['in_progress', 'polling'])
       .lte('next_poll_at', now).order('next_poll_at').limit(1);
     if (error) return response({ error: 'Poll claim failed.' }, 503);
     const job = jobs?.[0];
@@ -114,38 +121,28 @@ Deno.serve(async (req) => {
     if (!claim.data) return response({ status: 'claimed_elsewhere' });
     let patch: Record<string, unknown>;
     try {
-      if (job.provider_file_name) {
-        if (fileNameFromUri(job.provider_file_uri) !== job.provider_file_name) throw new Error('INVALID_FILE_REFERENCE');
-        const file = await providerCall(fetch, apiKey, job.provider_file_name);
-        if (file?.name !== job.provider_file_name) throw new Error('INVALID_FILE_REFERENCE');
-        const state = typeof file.state === 'object' ? file.state?.name : file.state;
-        if (state === 'ACTIVE') patch = { status: 'ready_for_processing', next_poll_at: null, error_code: null };
-        else if (state === 'PROCESSING') patch = { status: 'waiting_for_file', next_poll_at: later(30) };
-        else if (state === 'FAILED') patch = { status: 'failed', next_poll_at: null, error_code: 'PROVIDER_FILE_FAILED' };
-        else patch = { status: 'needs_review', next_poll_at: null, error_code: 'UNKNOWN_FILE_STATE' };
+      if (!generationIdValid(job.provider_generation_id)) throw new Error('INVALID_GENERATION');
+      if (!job.provider_deadline_at || Date.now() >= Date.parse(job.provider_deadline_at)) {
+        patch = { status: 'needs_review', next_poll_at: null, error_code: 'PROVIDER_POLL_DEADLINE' };
       } else {
-        if (typeof job.provider_interaction_id !== 'string' ||
-            !/^[A-Za-z0-9_-]{1,256}$/.test(job.provider_interaction_id)) throw new Error('INVALID_INTERACTION');
         const raw = await providerCall(fetch, apiKey,
-          `interactions/${encodeURIComponent(job.provider_interaction_id)}`);
-        const result = interactionResult(raw, job.provider_interaction_id);
+          `generations/${encodeURIComponent(job.provider_generation_id)}`);
+        const result = generationResult(raw, job.provider_generation_id);
         if (result.kind === 'in_progress') patch = { status: 'in_progress', next_poll_at: later(30) };
-        else if (result.kind === 'file_pending') patch = { status: 'waiting_for_file',
-          provider_file_name: result.file_name, provider_file_uri: result.file_uri,
-          next_poll_at: later(15) };
+        else if (result.kind === 'ready') patch = { status: 'ready_for_processing',
+          provider_output_url: result.output_url, next_poll_at: null, error_code: null };
         else patch = { status: result.kind === 'failed' ? 'failed' : 'needs_review',
           error_code: result.code, next_poll_at: null };
       }
     } catch (error) {
       const malformed = error instanceof Error &&
-        ['PROVIDER_RESPONSE_TOO_LARGE', 'INVALID_PROVIDER_JSON', 'INVALID_FILE_REFERENCE',
-          'INVALID_INTERACTION'].includes(error.message);
+        ['PROVIDER_RESPONSE_TOO_LARGE', 'INVALID_PROVIDER_JSON',
+          'INVALID_GENERATION'].includes(error.message);
       // Bad or oversized responses need manual review; transient GET failures
-      // can be retried without starting another paid interaction.
+      // can be retried without starting another paid generation.
       patch = malformed
         ? { status: 'needs_review', next_poll_at: null, error_code: 'INVALID_PROVIDER_RESPONSE' }
-        : { status: job.provider_file_name ? 'waiting_for_file' : 'in_progress',
-            next_poll_at: later(60), error_code: 'PROVIDER_POLL_ERROR' };
+        : { status: 'in_progress', next_poll_at: later(60), error_code: 'PROVIDER_POLL_ERROR' };
     }
     const saved = await db.from(JOBS).update({ ...patch, updated_at: new Date().toISOString() })
       .eq('id', job.id).eq('status', 'polling').select('id').maybeSingle();

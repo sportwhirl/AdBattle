@@ -6,12 +6,10 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('../supabase/functions/generate-ai-image/index.ts', import.meta.url), 'utf8');
 const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')));
-const jpeg = readFileSync(new URL('./fixtures/images/valid.jpg', import.meta.url));
-const imageBlock = { type: 'image', mime_type: 'image/jpeg', data: jpeg.toString('base64') };
-const good = { status: 'completed', steps: [
-  { type: 'thought', summary: [] },
-  { type: 'model_output', content: [imageBlock] },
-] };
+const landscape = readFileSync(new URL('./fixtures/images/openai_1280x720.jpg', import.meta.url));
+const square = readFileSync(new URL('./fixtures/images/openai_1024x1024.jpg', import.meta.url));
+const good = { data: [{ b64_json: landscape.toString('base64') }],
+  output_format: 'jpeg', size: '1280x720' };
 const allowPolicy = { status: 'completed', output: [
   { type: 'reasoning', summary: [] },
   { type: 'message', role: 'assistant', status: 'completed', content: [
@@ -23,7 +21,8 @@ const owner = '00000000-0000-4000-8000-000000000001';
 const origin = 'http://localhost:8000';
 
 function fixture({ reservation = 'reserved', provider = good, project = 'https://nccqnrcdygujulrnwair.supabase.co',
-                   enabled = 'true', user = { id: owner }, providerStatus = 200,
+                   enabled = 'true', user = { id: owner, app_metadata: { ai_image_adult_test_approved: true } },
+                   providerStatus = 200, apiKey = 'private-openai-test-key',
                    policy = allowPolicy } = {}) {
   const calls = { provider: [], policy: [], rpc: [], uploads: [], signs: [], updates: [] };
   let handler;
@@ -60,8 +59,7 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
   };
   const env = {
     SUPABASE_URL: project, SUPABASE_ANON_KEY: 'anon-test-key',
-    SUPABASE_SERVICE_ROLE_KEY: 'service-test-key', GEMINI_API_KEY: 'private-gemini-test-key',
-    OPENAI_API_KEY: 'private-policy-test-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-test-key', OPENAI_API_KEY: apiKey,
     ADBATTLE_AI_IMAGE_ENABLED: enabled,
   };
   const context = vm.createContext({
@@ -76,7 +74,7 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
         calls.policy.push({ body: JSON.parse(options.body), headers: options.headers });
         return Response.json(policy);
       }
-      assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/interactions');
+      assert.equal(url, 'https://api.openai.com/v1/images/generations');
       calls.provider.push({ body: JSON.parse(options.body), headers: options.headers });
       return Response.json(provider, { status: providerStatus });
     },
@@ -103,7 +101,7 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
   };
 }
 
-test('authenticated staging generation requests one 1K image and stores private draft only', async () => {
+test('eligible staging creator requests one low-quality image and stores private draft only', async () => {
   const app = fixture();
   const result = await app.run();
   assert.equal(result.status, 200);
@@ -116,22 +114,26 @@ test('authenticated staging generation requests one 1K image and stores private 
   assert.equal(app.calls.provider.length, 1);
   assert.equal(app.calls.policy.length, 1);
   assert.equal(app.calls.policy[0].body.store, false);
-  assert.equal(app.calls.policy[0].headers.authorization, 'Bearer private-policy-test-key');
+  assert.equal(app.calls.policy[0].headers.authorization, 'Bearer private-openai-test-key');
   const payload = app.calls.provider[0].body;
-  assert.equal(payload.model, 'gemini-3.1-flash-lite-image');
-  assert.equal(payload.store, false);
-  assert.deepEqual(JSON.parse(JSON.stringify(payload.response_format)), {
-    type: 'image', mime_type: 'image/jpeg', aspect_ratio: '16:9', image_size: '1K',
-  });
-  assert.equal(payload.generation_config.thinking_level, 'minimal');
-  assert.equal(app.calls.provider[0].headers['x-goog-api-key'], 'private-gemini-test-key');
+  assert.equal(payload.model, 'gpt-image-2.5-flare');
+  assert.equal(payload.size, '1280x720');
+  assert.equal(payload.quality, 'low');
+  assert.equal(payload.n, 1);
+  assert.equal(payload.output_format, 'jpeg');
+  assert.equal(payload.moderation, 'auto');
+  assert.equal(payload.background, 'opaque');
+  assert.match(payload.prompt, /Coarse, readable pixel art/);
+  assert.equal(app.calls.provider[0].headers.authorization, 'Bearer private-openai-test-key');
+  assert.ok(!Object.hasOwn(payload, 'response_format'));
+  assert.ok(!Object.hasOwn(payload, 'style'));
   assert.equal(app.calls.uploads[0].path, `${owner}/${requestId}.jpg`);
   assert.equal(app.calls.uploads[0].options.upsert, false);
   assert.equal(app.calls.signs.length, 1);
   assert.ok(!source.includes('ad-images'));
 });
 
-test('replays, active work, caps, invalid requests, and wrong environment never call Gemini', async () => {
+test('replays, caps, ineligible accounts and wrong environment never call image model', async () => {
   for (const [status, expected] of [['completed',200],['reserved_replay',409],['active',409],
     ['user_limit',429],['global_limit',429],['failed',409],['unknown',409]]) {
     const app = fixture({ reservation: status });
@@ -147,6 +149,14 @@ test('replays, active work, caps, invalid requests, and wrong environment never 
   assert.equal((await anonymous.run()).status, 401);
   assert.equal(anonymous.calls.rpc.length, 0);
   assert.equal(anonymous.calls.provider.length, 0);
+  const ineligible = fixture({ user: { id: owner,
+    user_metadata: { ai_image_adult_test_approved: true } } });
+  assert.equal((await ineligible.run()).status, 403);
+  assert.equal(ineligible.calls.rpc.length, 0);
+  assert.equal(ineligible.calls.provider.length, 0);
+  const missingKey = fixture({ apiKey: '' });
+  assert.equal((await missingKey.run()).status, 503);
+  assert.equal(missingKey.calls.rpc.length, 0);
   const app = fixture();
   assert.equal((await app.run({ body: { style: 'photorealistic' } })).status, 400);
   assert.equal((await app.run({ body: { aspect_ratio: '4:3' } })).status, 400);
@@ -155,12 +165,14 @@ test('replays, active work, caps, invalid requests, and wrong environment never 
   assert.equal(app.calls.provider.length, 0);
 });
 
-test('malformed or incomplete provider image fails closed and consumes reservation', async () => {
+test('malformed, wrong-size or duplicate provider images fail closed and consume reservation', async () => {
   for (const provider of [
-    { ...good, status: 'incomplete' },
-    { status: 'completed', output_image: imageBlock },
-    { ...good, steps: [{ type: 'model_output', content: [{ ...imageBlock, mime_type:'video/mp4' }] }] },
-    { ...good, steps: [{ type: 'model_output', content: [imageBlock,imageBlock] }] },
+    { data: [] },
+    { data: [{ b64_json: landscape.toString('base64') }, { b64_json: landscape.toString('base64') }] },
+    { data: [{ b64_json: square.toString('base64') }] },
+    { data: [{ b64_json: 'not base64!' }] },
+    { ...good, output_format: 'png' },
+    { ...good, size: '1024x1024' },
   ]) {
     const app = fixture({ provider });
     const result = await app.run();
@@ -171,7 +183,7 @@ test('malformed or incomplete provider image fails closed and consumes reservati
   }
 });
 
-test('held, rejected, or malformed prompt policy never reaches paid Gemini', async () => {
+test('held, rejected, or malformed prompt policy never reaches paid image model', async () => {
   for (const value of [
     { decision: 'hold', reason: 'regulated' },
     { decision: 'reject', reason: 'prohibited' },
@@ -185,4 +197,31 @@ test('held, rejected, or malformed prompt policy never reaches paid Gemini', asy
     assert.equal(app.calls.provider.length, 0);
     assert.equal(app.calls.uploads.length, 0);
   }
+});
+
+test('square request uses supported square size and accepts its image', async () => {
+  const app = fixture({ provider: { data: [{ b64_json: square.toString('base64') }] } });
+  const result = await app.run({ body: { aspect_ratio: '1:1', style: 'hand_drawn' } });
+  assert.equal(result.status, 200);
+  assert.equal(app.calls.provider[0].body.size, '1024x1024');
+  assert.match(app.calls.provider[0].body.prompt, /Loose hand-drawn lines/);
+});
+
+test('freeform prompt permits detailed fictional imagery under the same output limits', async () => {
+  const app = fixture();
+  const request = 'A detailed photorealistic scene of a fictional dragon in a toy shop';
+  const result = await app.run({ body: { prompt: request, style: 'freeform_simple' } });
+  assert.equal(result.status, 200);
+  assert.match(app.calls.provider[0].body.prompt, /Follow the creator's own visual style direction/);
+  assert.match(app.calls.provider[0].body.prompt, /detailed photorealistic scene/);
+  assert.equal(app.calls.provider[0].body.quality, 'low');
+  assert.ok(!app.calls.provider[0].body.prompt.includes('no photographic fine texture'));
+});
+
+test('provider error consumes the reservation without uploading or retrying', async () => {
+  const app = fixture({ providerStatus: 429 });
+  assert.equal((await app.run()).status, 503);
+  assert.equal(app.calls.provider.length, 1);
+  assert.equal(app.calls.uploads.length, 0);
+  assert.ok(app.calls.updates.some(update => update.status === 'failed'));
 });

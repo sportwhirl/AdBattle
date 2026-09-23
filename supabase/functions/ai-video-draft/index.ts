@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
-import { assertStaging, boundedJson, draftHash, normalizeDraft,
+import { adultTestApproved, assertStaging, boundedJson, draftHash, normalizeDraft,
   STAGING_ORIGIN, STAGING_URL } from '../_shared/ai-video-draft.mjs';
 import { isUuid, parseBearerToken } from '../_shared/http.ts';
 
@@ -48,6 +48,9 @@ Deno.serve(async (req) => {
       .eq('id', body.job_id).eq('user_id', user.id).maybeSingle();
     if (error) return reply(req, { error: 'Could not read draft.' }, 503);
     return data ? reply(req, { job: summary(data) }) : reply(req, { error: 'Draft not found.' }, 404);
+  }
+  if (!adultTestApproved(user)) {
+    return reply(req, { error: 'Video drafts are limited to approved adult staging testers.' }, 403);
   }
   if (body?.action !== 'create' || !isUuid(body.request_id)) {
     return reply(req, { error: 'Invalid draft request.' }, 400);

@@ -10,28 +10,32 @@ is downloaded, transcoded, displayed, published, or inserted into `ads`.
 
 | Item | Value |
 | --- | --- |
-| Provider | Google Gemini Interactions REST API |
-| Model | `gemini-omni-1.1-flash` |
+| Provider | Luma Agents REST API candidate, subject to audience permission |
+| Model | `ray-3.2` |
 | Duration | `10s` |
 | Resolution | `360p` |
 | Aspect | `16:9` or `9:16` |
-| Delivery | `uri`, not inline base64 |
-| Execution | `background: true`, `store: true`, `stream: false` |
+| Delivery | Async generation; one private presigned MP4 URL on completion |
+| Execution | `POST /v1/generations`, separate `GET /v1/generations/{id}` |
 | Style | `freeform_simple` (default), `pixel_art`, `flat_illustration`, `simple_3d`, `hand_drawn` |
 | Prompt | 12–600 normalized characters; text only |
 
-The prompt wrapper asks for simple shapes, restrained detail, and clear motion.
-Style is a creative direction, not a guarantee that the provider will obey it.
-The output may have a soundtrack. No reference uploads, edit, extension,
-photorealistic preset, model override, provider settings, or arbitrary durations
-are accepted. Resolution controls dimensions, but the model/provider determines
-render time, actual bytes, codec, bitrate and billable video generation. A lower
-resolution alone does not prove lower token cost. Treat 10 seconds of generation
-as a paid operation even if the output is rejected.
+The default freeform option lets the creator choose the visual style; the four
+named presets only guide the provider. The wrapper asks that the key subject
+remain legible at 360p. The output may have a soundtrack, which a future
+processor must strip before any public version. No reference uploads, edit,
+extension, web search grounding, HDR, model override, or arbitrary durations
+are accepted. Luma documents 360p as a lower-cost draft tier, but actual bytes,
+codec, run time and billable cost need real staging measurement. Treat a
+10-second generation as paid even if the output is rejected.
 
 ## Request and review flow
 
 `ai-video-draft` is a signed-in user Edge Function (`verify_jwt = true`). It
+requires the server-owned Auth `app_metadata.ai_video_adult_test_approved` claim
+to be exactly `true` for creation. The worker checks the user's current server
+claim again immediately before dispatch. This is a staging adult-test gate,
+not a public age-verification or guardian-permission system. It
 accepts `POST` with `Authorization: Bearer <user access token>`, a valid client
 UUID and JSON:
 
@@ -45,14 +49,14 @@ aspect under the same UUID returns 409. `POST {"action":"status","job_id":"..."}
 shows only the caller's job and sanitized status, never a provider ID or URI.
 The endpoint only gives browser CORS to `http://localhost:8000`. It requires
 the exact staging `SUPABASE_URL` plus
-`ADBATTLE_AI_STAGING_ENABLED=video-drafts-v1`. User requests never call Gemini.
+`ADBATTLE_AI_STAGING_ENABLED=video-drafts-v1`. User requests never call Luma.
 
 The migration's insert trigger serializes quota decisions. It allows one
 attempt per user per UTC day and five attempts globally per UTC day. Rejected
 and failed jobs still count; another active job also occupies the user's slot
 across midnight. The request identity and output choices cannot be edited.
 Authenticated users have an owner-only RLS SELECT policy for safe columns and
-no direct write privileges. Provider IDs, file URIs, prompts and reviewer names
+no direct write privileges. Provider IDs, signed URLs, prompts and reviewer names
 are not readable through the browser's table grants.
 
 **Manual pre-provider safety gate:** The worker's private `inspect` action
@@ -64,12 +68,15 @@ The `approve` action requires the literal attestation below. The paid worker
 claims only approved rows with the same immutable hash. This is a deliberate
 human review gate, not an automatic classifier. No unattended review/approval
 cron exists. A review process and provider terms assessment are still needed
-before any public or youth-facing creation feature.
+before any public or youth-facing creation feature. Public video creation stays
+disabled. Luma is a candidate only; written provider permission for an app
+accessible by under-13 users, or another compatible provider, is required
+before that use case can be implemented.
 
 `ai-video-draft-worker` requires a secret header of at least 32 characters,
 `x-adbattle-video-worker-secret`, disallows requests with a browser Origin, and
 has `verify_jwt = false` because it authenticates the private worker secret.
-Provision `ADBATTLE_VIDEO_WORKER_SECRET` and `GEMINI_API_KEY` as Edge Function
+Provision `ADBATTLE_VIDEO_WORKER_SECRET` and `LUMA_AGENTS_API_KEY` as Edge Function
 secrets only in staging; never put them in frontend config. Its private POST
 actions are:
 
@@ -79,7 +86,7 @@ actions are:
 | `approve` | `job_id`, `request_hash`, `reviewer`, `review_attestation` | Moves reviewed prompt to `queued` |
 | `reject` | `job_id`, `request_hash`, `reviewer` | Rejects without provider call |
 | `dispatch` | none | Claims at most one queued job and makes one paid POST |
-| `poll` | none | Claims at most one due interaction/file GET |
+| `poll` | none | Claims at most one due generation GET |
 
 Approval attestation value:
 
@@ -97,22 +104,24 @@ The worker changes `queued` to `dispatching` **before** POSTing. It never POSTs
 that job again if the request times out, crashes, returns malformed or oversized
 JSON, or loses its response. It records `dispatch_unknown` when possible and
 needs operator reconciliation against provider records. If saving a known
-interaction ID fails, the worker retries only that database write, then logs
-the job ID and interaction ID for private reconciliation. Do not reset the
+generation ID fails, the worker retries only that database write, then logs
+the job ID and generation ID for private reconciliation. Do not reset the
 status to `queued` or generate a new UUID to work around uncertainty.
 
 The response reader checks `Content-Length` and enforces a 128 KiB streaming
-limit before JSON parsing. REST `status` and `model_output` video URI are
-validated; the Omni REST `output_video.uri` alias is also recognized. Inline
-video data, multiple/conflicting URIs, unknown statuses, unexpected model or
-unexpected hosts go to review. Successful completion first waits for Google's
-Files API to say `ACTIVE`; only then does the job become
-`ready_for_processing`. GET polling can be retried after a lease timeout. The
-provider URI remains private in the database, and the public API never returns
-it. The worker never downloads or stores video bytes.
+limit before JSON parsing. A Luma response must identify Ray 3.2 and a video
+generation with a UUID. `queued` and `processing` are polled via GET; `failed`
+is terminal. `completed` requires exactly one video output with a bounded HTTPS
+URL. IP literals, local/opaque hosts, URL credentials, fragments, and oversized
+URLs are held for review. The worker does not fetch the URL. GET polling can be
+retried after a lease timeout, with a ten-minute processing deadline before
+manual review. A completed generation becomes `ready_for_processing`; the
+presigned URL remains private and is never returned to a user. It expires after
+about an hour and can be refreshed by another private generation GET.
 
-**Still to build:** a private processor must retrieve the active file before
-provider retention expires, impose byte/duration/codec bounds, transcode a
+**Still to build:** a private processor must refresh and retrieve the signed
+URL, enforce a host allowlist, DNS/IP and redirect checks, byte/duration/codec
+bounds, and transcode a
 small preview, scan the actual media and audio, save it in private staging
 storage, and expose it only after moderation and publication policy. A separate
 creator review/post flow, costs/billing display, accessible previews, lifecycle
@@ -123,7 +132,7 @@ change. `ready_for_processing` is not an ad and not a public URL.
 
 Run `npm ci --ignore-scripts`, then `node --test tests/ai_video_draft.test.mjs`
 to check the real migration in PGlite and mocked REST responses. There is no
-hosted migration, real Google call, browser integration or cron in these tests.
+hosted migration, real Luma call, browser integration or cron in these tests.
 After review, an operator may apply only the generated
 `migrations/20260923163511_ai_video_draft_jobs.sql` to **adbattle-test** and
 deploy only these two Edge Functions there. Review the hosted schema first,
@@ -132,6 +141,6 @@ Configure the staging opt-in and secrets on that project only. Start with one
 test user and a manually reviewed prompt; inspect the private job and provider
 usage before considering a scheduler.
 
-Provider references: [Omni Flash video output and Files API](https://ai.google.dev/gemini-api/docs/omni),
-[Interactions REST resource and statuses](https://ai.google.dev/api/interactions-api-v1),
-[background execution](https://ai.google.dev/gemini-api/docs/background-execution).
+Provider references: [Luma Agents quickstart](https://docs.agents.lumalabs.ai/),
+[Ray 3.2 generation and response](https://docs.agents.lumalabs.ai/guides/videos/generation/),
+[Generations REST schema](https://docs.agents.lumalabs.ai/api/resources/generations/methods/create).

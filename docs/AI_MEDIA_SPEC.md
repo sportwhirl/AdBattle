@@ -2,12 +2,14 @@
 
 Status: proposed product rules and implementation gates, 2026-09-23. The
 image draft feature is the first staging slice; video publishing is a separate
-change. Neither feature is enabled on the production site by this document.
+change. The target is creative access for **all ages**, with parent-controlled
+access for children. The [youth access plan](YOUTH_ACCESS_PLAN.md) is a public
+release gate. Neither AI feature is enabled on the production site.
 
 ## Product intent
 
 Give a creator an easy way to turn an original idea into a small, expressive ad.
-Deliberately simple graphics are part of the look. The creator still chooses the
+Simple graphics are an available style, not a restriction. The creator still chooses the
 idea, title, caption, and whether to submit the finished ad. Posting remains
 irreversible under the existing product rule. Generation alone never posts an
 ad or spends the creator's promotion money or a supporter's wallet balance.
@@ -22,47 +24,61 @@ lower model bill. Measure actual provider usage before public pricing.
 
 | Task | Staging choice | Reason |
 | --- | --- | --- |
-| Image draft | Gemini 3.1 Flash Lite Image, one 1K output | Published rate is about $0.0336 per image plus input; Google offers a fast 1K model. |
-| Exactly 10-second video | Gemini Omni 1.1 Flash, 360p request | Supports 3–10 seconds and a 360p output setting. Published 720p effective rate is about $0.10/second; 360p bill must be measured. |
-| OpenAI image alternative | GPT Image 2.5 Flare, low quality | Valid fallback if Gemini terms, quality, or cost do not fit; its minimum generated area is greater than a 640×360 display copy. |
+| Image draft | OpenAI GPT Image 2.5 Flare, low quality | The Images API can use an approved Zero Data Retention project; downscale provider output to the site budget. Minor end users require parent/guardian consent. |
+| Exactly 10-second model video | Luma Agents Ray 3.2, 360p candidate | Staging job scaffold only. Published pay-as-you-go price is $0.18 for 10s standard 360p, subject to change. Under-13 access needs an explicit provider agreement or another backend. |
+| All-ages motion alternative | AI-assisted animation from generated stills | Offline processor implemented for one or two approved JPEG/PNG stills: fixed pan/zoom, cut/dissolve, 10-second 360p derivatives. No account/API/gallery integration yet. It is not freeform model-generated motion. |
+| All-ages true video research | Self-hosted LTX-2.5 candidate | Its community license permits SaaS within conditions and has no stated end-user age floor. GPU cost, latency, output quality, downstream terms, and child-safety operation need validation before choosing it. |
 | OpenAI video | Do not start a Sora integration | OpenAI lists the Videos API and Sora 2 shutdown for 2026-09-24 with no replacement. |
 
-Sources: [Google image guide](https://ai.google.dev/gemini-api/docs/image-generation),
-[Google Omni guide](https://ai.google.dev/gemini-api/docs/omni),
-[Google pricing](https://ai.google.dev/gemini-api/docs/pricing),
-[OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation),
+Sources: [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation),
+[OpenAI under-18 guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance),
+[OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data),
+[Luma video pricing](https://docs.agents.lumalabs.ai/guides/pricing),
+[Luma API terms](https://lumalabs.ai/legal/api-terms-of-use),
 [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
 Recheck model availability, price, and terms before deployment.
 
 Google's [Gemini API terms](https://ai.google.dev/gemini-api/terms) require
 users of its API to be at least 18 and prohibit API clients directed toward or
-likely to be accessed by people under 18. AdBattle has no established age
-gate. Keep the integration confined to adult-operated, local staging until a
-public-audience route is settled; an adult-only button on an otherwise open
-site is not assumed to resolve that wording. The same terms describe the API
-as for professional/business development, not consumer use. AdBattle's public
-creator use case needs a provider-terms review on both points. Confirm the
-account's paid tier and regional availability before using a real key.
+likely to be accessed by people under 18. Gemini is not a fit for AdBattle's
+general-audience application under that wording. OpenAI requires guardian
+consent for minors; its under-18 guidance requires approved ZDR before
+processing under-13/applicable-age personal data. The current staging function
+is limited to approved adult testers, which is not a public youth entitlement.
+Luma's standard terms say under-13 users are unauthorized, and the API terms
+define downstream API users. Do not route a child's request to Luma on a
+presumed exception. Confirm teen access, commercial publishing, and 360p
+draft-tier output rights in writing before public model video creation.
 
 ## Creative format
 
-The initial creation form offers **pixel art, flat illustration, simple 3D,
-and loose hand-drawn** presets, plus an **other simple style** option. A
-creator may describe imaginative scenes in any of these modes; no single
-house style is imposed. The wrapper requests one clear idea, a bold focal
-subject, simple background, readable contrast, and little fine texture.
-Photorealistic impersonation, named artist imitation, and copied third-party
-characters are not offered as presets. Do not require the model to put the
-title, price, disclosures, or small print inside pixels. Keep exact ad words
-in the editable HTML title/caption fields and review them with the visual.
+The initial creation form offers optional **pixel art, flat illustration,
+simple 3D, loose hand-drawn, and your own style** directions. A creator may
+describe any policy-compliant, imaginative scene or visual style. Low
+resolution is a delivery budget, not an artistic genre restriction. A clear
+focal subject and contrast are useful guidance because fine detail may become
+illegible after downscaling. Photorealistic fictional art is allowed after
+review. Deceptive real-person impersonation, named artist imitation, and
+copied third-party characters/marks without rights are held or refused. Keep
+exact titles, prices, disclosures, and small print in editable HTML
+title/caption fields and review them with the visual.
 
 These are creative directions, not a claim that an image with one extra object
 or color can be reliably rejected by an automated pixel counter. The hard
 technical and publication gates below are enforced separately.
 
+The limits below are the **target public contract**. The staging browser
+converts an AI draft to a 640px/500KiB JPEG, but the existing post endpoint
+and image scanner accept larger ordinary uploads; the AI-origin trigger does
+not yet bind the posted bytes cryptographically to the private draft. A server
+check of exact dimensions, size, and provenance is required before public AI
+creation. Current ordinary posts upload to a public bucket before scans run;
+an all-ages release also requires private pending media and an age-suitable
+review gate for every ad, including non-AI uploads.
+
 | Asset | Generation request | Public delivery limit | Behavior |
 | --- | --- | --- | --- |
-| Still image | One 1K image, 1:1 or 16:9 | JPEG or PNG, longest edge <= 640 px, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. |
+| Still image | One low-quality OpenAI image, square or wide; provider output exceeds delivery dimensions | JPEG or PNG, longest edge <= 640 px, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. |
 | Video | Request one 10-second 16:9 or 9:16 clip at 360p; verify actual duration and frame rate | Silent H.264 MP4, 360p, <= 5 MiB; separate poster <= 100 KiB; separate 3–5-second muted hover clip, 12–15 fps, target 150–400 KiB and hard cap 500 KiB | Poster loads first. Hover starts after a short delay, only one in view plays, and leaves stop playback. Touch requires a tap. Full clip loads only on opening. |
 
 The video provider's original is kept private for provenance and processing;
@@ -80,7 +96,9 @@ original upload instead. No automatic costly rerolls.
 
 ## Creation and publication rules
 
-1. Only an authenticated staging creator can request generation. Screen the
+1. Only an authenticated, server-approved adult staging tester can request
+   generation now. A public release must verify age and guardian entitlements
+   on the server for every generation and publication action. Screen the
    freeform prompt against AdBattle's content rules before any paid generation.
    Each request has a stable client request ID. Reserve quota before the provider call;
    a lost response must not buy a second output. One in-flight job per user.
@@ -90,16 +108,20 @@ original upload instead. No automatic costly rerolls.
    guard. Failed jobs do not silently retry paid generation.
 3. Only text-to-image and text-to-video are in the first version. No uploaded
    likeness, voice, soundtrack, logo, or reference image is sent to a provider.
-   Prompt length is bounded, and the server owns the style wrapper, model,
+   Prompt length is bounded, and the server owns the optional style wrapper, model,
    duration, and resolution. Client-supplied settings cannot raise them.
 4. The creator reviews the generated draft and may discard it. "Use image"
    attaches a compact JPEG to the existing form; posting is a separate,
    explicit action with title and caption. Generated draft bytes stay private
    or in browser memory until that action, not in the public ad bucket.
-5. On submission, validate exact bytes, owner path, MIME/magic, dimensions,
-   file size, and immutable ad data. The existing JPEG/PNG duplicate and
-   safety scanners gate image publication. A generated image receives no
-   moderation shortcut.
+5. On submission, the public version must validate exact bytes, owner path,
+   MIME/magic, dimensions, file size, and immutable ad data **server-side**.
+   The current staging slice relies on browser compression for the 640px/
+   500KiB AI draft budget; a server gate and source-byte binding are still
+   missing. The existing JPEG/PNG duplicate and safety scanners gate image
+   approval, but pending ordinary uploads are already publicly addressable.
+   Move them to private storage before an all-ages release. A generated image
+   receives no moderation shortcut.
 6. Video is **not** submitted through the image URL or the image scanner.
    Its future schema, frame/audio review, poster/preview pipeline, and final
    gate must be implemented and tested before video ads can become public.
@@ -126,6 +148,13 @@ If rights or a factual claim cannot be checked automatically, hold it rather
 than imply automatic approval. Clearly nonconsensual intimate content and
 deceptive impersonation are rejected. No classifier alone establishes permission.
 
+For an all-ages public gallery, a manual hold is not permission to show
+age-restricted goods, gambling, adult content, predatory claims, or unsafe
+outbound links to children. Review the existing upload/gallery pipeline as
+well as generated output before claiming the public feed is suitable for the
+youngest audience. Provide reporting, prompt takedown, and child-safety
+escalation. Do not send known or suspected CSAM to a general moderation API.
+
 For video, sample frames over the entire clip, inspect visual text and all
 scene changes, verify the silent public derivative, and require a human to
 watch the entire final clip in the first video release. Review any retained
@@ -150,17 +179,22 @@ The AI-created page label is separate from both watermark versions.
 
 1. Stage image drafts behind a staging-only feature flag, private server key,
    server quota, mocked endpoint tests, and the existing post/scan path.
-2. Make a dedicated video job, storage, and moderation design with an async
-   worker/transcoder. Validate Google's REST `steps` response and media bytes;
-   do not rely on SDK-only `output_video`. Test 10-second duration and actual
-   360p billing with a real staging key under a small budget.
+2. Make a dedicated Luma candidate video job, storage, and moderation design
+   with an async worker/transcoder. Validate the REST generation ID, status,
+   expiring output URL, and media bytes. Test duration and actual 360p billing
+   with a real staging key under a small budget only after provider review.
 3. Add video-specific schema/RLS, private source and public derivatives,
    gallery rendering, poster-first loading, frame review, and an independent
    publication gate. Test safe and held outputs before any public toggle.
-4. Resolve the Gemini API audience terms, public generation payment/quota,
-   accessibility and mobile playback, support moderation staffing, and
-   production spend limits. Until these decisions and hosted checks pass,
-   production generation stays disabled.
+   The offline still animation processor can feed this future video gate after
+   the source stills, final clip, and exact bytes are reviewed.
+4. Implement the all-ages account, guardian-consent, approved OpenAI ZDR,
+   server-entitlement, child-safety, and privacy gates in
+   [the youth plan](YOUTH_ACCESS_PLAN.md). A true model-video route for children
+   needs provider permission or a separate lawful architecture. Verify
+   accessibility, mobile playback, moderation staffing, production spend
+   limits, and payment age rules. Production generation remains disabled until
+   these gates and hosted checks pass.
 
 Staging changes must never debit the Support wallet, use restricted promotion
 funds, or modify the live site or production database implicitly.
