@@ -1,0 +1,29 @@
+name: Wallet PostgreSQL concurrency
+
+on:
+  pull_request:
+    branches: [wallet-ledger-90-10]
+    paths:
+      - '.github/workflows/wallet-concurrency.yml'
+      - 'scripts/test_wallet_concurrency.py'
+      - 'tests/fixtures/wallet_concurrency.sql'
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  concurrency:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16
+      - name: Test concurrent wallet transactions
+        run: python3 scripts/test_wallet_concurrency.py --postgres-bin /usr/lib/postgresql/16/bin

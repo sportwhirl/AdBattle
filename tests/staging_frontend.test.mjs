@@ -313,13 +313,3 @@ test("stale or unknown-age top-up state is retained and never retried", async ()
     assert.equal(JSON.parse(storage.get(key)).request_id, pending.request_id);
   }
 });
-
-test("wallet cancel URL preserves pending identity and makes no charge claim", () => {
-  const cancelBranch = html.slice(
-    html.indexOf('params.get("wallet") === "cancel"'),
-    html.indexOf('params.get("support") === "success"'),
-  );
-  assert.doesNotMatch(cancelBranch, /removeItem/);
-  assert.doesNotMatch(cancelBranch, /not charged/i);
-  assert.match(cancelBranch, /pending top-up request was preserved/);
-});

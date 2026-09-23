@@ -29,7 +29,7 @@ before(async () => {
     insert into public.ads(id,user_id) values (1,'${creator}');
     insert into public.creator_accounts values ('${creator}','acct_original',true,true,true);
   `);
-  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql']) {
+  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql']) {
     let sql = readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8');
     // PGlite has builtin gen_random_uuid; it does not ship the pgcrypto extension.
     sql = sql.replace('create extension if not exists pgcrypto;', '');
@@ -116,6 +116,63 @@ test('capability recovery records one key without changing identity, destination
   } finally { await db.exec('reset role'); }
 });
 
+test('balance recovery independently enforces predecessor, funds, roles and every existing guard', async () => {
+  const key=`adbattle-settlement-${settlementId}-capability-recovery-1`;
+  const args=[settlementId,key,'req_balanceRejected','balance_insufficient',1912,'req_balanceSnapshot'];
+  const rpc='select authorize_wallet_balance_recovery($1,$2,$3,$4,$5,$6) as result';
+  const before=await scalar('select * from wallet_transfer_guards where settlement_id=$1',[settlementId]);
+  const beforeState=await scalar('select * from ad_settlement_state where ad_id=1');
+  const beforeSettlement=await scalar('select * from support_settlements where id=$1',[settlementId]);
+  for(const patch of [
+    {1:`adbattle-settlement-${settlementId}`},{1:key+'-other'},{2:null},
+    {3:'api_error'},{4:null},{4:899},{5:null},{5:'req_balanceRejected'},
+  ]) {
+    const bad=[...args]; for(const [index,value] of Object.entries(patch)) bad[index]=value;
+    await assert.rejects(db.query(rpc,bad),/INVALID_BALANCE|BALANCE_TOO_LOW/);
+  }
+  for(const mutate of [
+    "update wallet_transfer_guards set manual_review=true",
+    "update wallet_transfer_guards set first_attempt_at=now()-interval '21 hours'",
+    "update wallet_transfer_guards set first_attempt_at=null",
+    "update wallet_transfer_guards set capability_recovery_key=null, capability_recovery_request_id=null, capability_recovered_at=null",
+    "update creator_accounts set payouts_enabled=false",
+    "update creator_accounts set stripe_account_id='acct_other'",
+    "update ad_settlement_state set active_settlement_id=null",
+    "update support_settlements set status='succeeded'",
+    `select record_wallet_payment_risk('pi_1','${supporter}',0,true,'evt_guard','charge.dispute.created')`,
+  ]) {
+    await db.exec('begin');
+    try {
+      await db.exec(mutate);
+      await assert.rejects(db.query(rpc,args),/RECOVERY_/);
+    } finally { await db.exec('rollback'); }
+  }
+  for(const role of ['anon','authenticated']) {
+    await db.exec('set role '+role);
+    try { await assert.rejects(db.query(rpc,args),/permission denied/); }
+    finally { await db.exec('reset role'); }
+  }
+  await db.exec('set role service_role');
+  try {
+    await assert.rejects(db.query('select prepare_wallet_transfer_before_balance_recovery($1)',[settlementId]),/permission denied/);
+    const first=(await scalar(rpc,args)).result;
+    const repeat=(await scalar(rpc,args)).result;
+    assert.equal(first.created,true); assert.equal(repeat.created,false);
+    assert.equal(first.idempotency_key,`adbattle-settlement-${settlementId}-balance-recovery-1`);
+    assert.equal(repeat.idempotency_key,first.idempotency_key);
+    const ready=(await scalar('select prepare_wallet_transfer($1) as result',[settlementId])).result;
+    assert.equal(ready.idempotency_key,first.idempotency_key);
+    assert.equal(ready.balance_recovery_supported,true);
+  } finally { await db.exec('reset role'); }
+  const after=await scalar('select * from wallet_transfer_guards where settlement_id=$1',[settlementId]);
+  for(const name of Object.keys(before).filter(k=>!k.startsWith('balance_'))) assert.deepEqual(after[name],before[name]);
+  assert.equal(after.balance_recovery_request_id,'req_balanceRejected');
+  assert.equal(after.balance_recovery_balance_request_id,'req_balanceSnapshot');
+  assert.equal(after.balance_recovery_available_cents,1912);
+  assert.deepEqual(await scalar('select * from ad_settlement_state where ad_id=1'),beforeState);
+  assert.deepEqual(await scalar('select * from support_settlements where id=$1',[settlementId]),beforeSettlement);
+});
+
 test('expired transfer cannot POST again; completion can reconcile it without paying again', async () => {
   await db.query("update wallet_transfer_guards set first_attempt_at=now()-interval '21 hours' where settlement_id=$1",[settlementId]);
   const held = (await scalar('select prepare_wallet_transfer($1) as guard',[settlementId])).guard;
@@ -123,9 +180,13 @@ test('expired transfer cannot POST again; completion can reconcile it without pa
   assert.equal(held.reason,'manual_review');
   await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',
     [settlementId,`adbattle-settlement-${settlementId}`,'req_verified','insufficient_capabilities_for_transfer']),/RECOVERY_BLOCKED/);
+  const balanceArgs=[settlementId,`adbattle-settlement-${settlementId}-capability-recovery-1`,
+    'req_balanceRejected','balance_insufficient',1912,'req_balanceSnapshot'];
+  await assert.rejects(db.query('select authorize_wallet_balance_recovery($1,$2,$3,$4,$5,$6)',balanceArgs),/RECOVERY_BLOCKED/);
   await db.query('select complete_wallet_settlement($1,$2)',[settlementId,'tr_verified']);
   const duplicate = await scalar('select complete_wallet_settlement($1,$2) as completed',[settlementId,'tr_verified']);
   assert.equal(duplicate.completed,false);
+  await assert.rejects(db.query('select authorize_wallet_balance_recovery($1,$2,$3,$4,$5,$6)',balanceArgs),/RECOVERY_REQUIRES/);
   await assert.rejects(db.query('select authorize_wallet_capability_recovery($1,$2,$3,$4)',
     [settlementId,`adbattle-settlement-${settlementId}`,'req_verified','insufficient_capabilities_for_transfer']),/RECOVERY_REQUIRES/);
   assert.equal((await scalar('select pending_creator_micros from ad_settlement_state where ad_id=1')).pending_creator_micros,0);
@@ -164,6 +225,34 @@ test('recovery evidence cannot be partial, malformed or reused for another settl
   assert.equal(guard.capability_recovery_key,null);
   assert.equal(guard.capability_recovery_request_id,null);
   assert.equal(guard.capability_recovered_at,null);
+});
+
+test('balance recovery audit cannot be partial, malformed, lack its predecessor or reuse Stripe evidence',async()=>{
+  const key=`adbattle-settlement-${inFlightSettlementId}-balance-recovery-1`;
+  const at=new Date().toISOString();
+  const update=`update wallet_transfer_guards set balance_recovery_key=$2,
+    balance_recovery_request_id=$3,balance_recovery_balance_request_id=$4,
+    balance_recovery_available_cents=$5,balance_recovered_at=$6 where settlement_id=$1`;
+  const valid=[key,'req_newReject','req_newBalance',1912,at];
+  // A full audit without a prior capability recovery must also be rejected.
+  await assert.rejects(db.query(update,[inFlightSettlementId,...valid]),/wallet_balance_recovery_complete/);
+  await db.query(`update wallet_transfer_guards set capability_recovery_key=$2,
+    capability_recovery_request_id='req_previous',capability_recovered_at=now() where settlement_id=$1`,
+    [inFlightSettlementId,`adbattle-settlement-${inFlightSettlementId}-capability-recovery-1`]);
+  for(let i=0;i<valid.length;i++) {
+    const partial=[...valid]; partial[i]=null;
+    await assert.rejects(db.query(update,[inFlightSettlementId,...partial]),/wallet_balance_recovery_complete/);
+  }
+  for(const patch of [{0:key+'-other'},{1:'bad'},{2:'bad'},{2:'req_newReject'},{3:0}]) {
+    const bad=[...valid]; for(const [index,value] of Object.entries(patch)) bad[index]=value;
+    await assert.rejects(db.query(update,[inFlightSettlementId,...bad]),/wallet_balance_recovery_complete/);
+  }
+  for(const patch of [{1:'req_balanceRejected'},{2:'req_balanceSnapshot'}]) {
+    const duplicate=[...valid]; for(const [index,value] of Object.entries(patch)) duplicate[index]=value;
+    await assert.rejects(db.query(update,[inFlightSettlementId,...duplicate]),/unique constraint/);
+  }
+  assert.equal((await scalar('select balance_recovery_key from wallet_transfer_guards where settlement_id=$1',
+    [inFlightSettlementId])).balance_recovery_key,null);
 });
 
 test('refunds debit only the cumulative delta, ignoring duplicates and old snapshots', async () => {

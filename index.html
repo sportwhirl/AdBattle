@@ -28,7 +28,7 @@ header {
 .topbar {
     width: min(1200px, 94%);
     margin: auto;
-    padding: 22px 0;
+    padding: 12px 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -36,13 +36,65 @@ header {
 }
 
 .logo {
-    font-size: 1.8rem;
-    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: min(240px, 25vw);
+    min-width: 185px;
+    height: 104px;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: pointer;
 }
 
-.logo span {
-    color: #654cff;
+.logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.icon-button,
+.like-count,
+.money {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5em;
+}
+
+.icon-button::before,
+.like-count::before,
+.money::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 1.75em;
+    height: 1.75em;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.seed-mark::before,
+.like-count::before {
+    background-image: url("./assets/seed-icon.png");
+}
+
+.support-mark::before,
+.money::before {
+    background-image: url("./assets/support-icon.png");
+}
+
+nav .icon-button::before {
+    width: 1.6em;
+    height: 1.6em;
+}
+
+.stats .like-count,
+.stats .money {
+    justify-content: flex-start;
 }
 
 nav {
@@ -221,9 +273,9 @@ nav .post-button:hover {
 }
 
 .like-button.liked {
-    background: #202124;
-    border-color: #202124;
-    color: white;
+    background: #edf8df;
+    border-color: #79a64a;
+    color: #254014;
 }
 
 .like-button:disabled {
@@ -822,6 +874,12 @@ nav .post-button:hover {
         padding: 17px 0;
     }
 
+    .logo {
+        width: 220px;
+        min-width: 0;
+        height: 96px;
+    }
+
     nav {
         justify-content: center;
         flex-wrap: wrap;
@@ -862,24 +920,25 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
 
 <header>
     <div class="topbar">
-        <div class="logo" onclick="showSupported()">
-            Ad<span>Battle</span>
-        </div>
+        <button class="logo" type="button" onclick="showSupported()" aria-label="AdBattle home">
+            <img src="./assets/adbattle-logo.png" alt="AdBattle">
+        </button>
 
         <nav>
             <button
                 id="supportedNav"
-                class="active"
+                class="active icon-button support-mark"
                 onclick="showSupported()"
             >
-                ⚡ Most Supported
+                Most Supported
             </button>
 
             <button
                 id="likedNav"
+                class="icon-button seed-mark"
                 onclick="showMostLiked()"
             >
-                ♡ Most Liked
+                Most Seeded
             </button>
 
             <button
@@ -915,7 +974,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
     <h2>Log In</h2>
 
     <p class="auth-description">
-        Log in to post ads, like ads and manage your profile.
+        Log in to post ads, seed ads and manage your profile.
     </p>
 
     <label>Email</label>
@@ -965,7 +1024,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
     <input
         id="newImage"
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png"
     >
 
     <div class="ai-video-help">
@@ -1114,7 +1173,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
                 id="myLikesTab"
                 onclick="profileSection('liked')"
             >
-                Liked
+                Seeded
             </button>
 
             <button
@@ -1216,7 +1275,7 @@ function applyEnvironmentConfiguration() {
         const likedNav = document.getElementById("likedNav");
         const myLikesTab = document.getElementById("myLikesTab");
         likedNav.disabled = true;
-        likedNav.title = "Likes are unavailable in the staging schema.";
+        likedNav.title = "Seeding is unavailable in the staging schema.";
         myLikesTab.disabled = true;
         myLikesTab.title = likedNav.title;
     }
@@ -1352,13 +1411,24 @@ async function functionErrorMessage(
 ======================================== */
 
 async function loadWalletBalance() {
-    if (!currentUser) {
+    const loadId = ++walletLoadId;
+    const userId = currentUser?.id;
+    if (!userId) {
         walletBalanceCents = 0;
         walletBalance.innerText = "$0.00";
         walletMessage.innerText =
             "Your full top-up becomes available to support ads.";
+        showWalletReturnMessage();
         return;
     }
+
+    // Read the receipt first so the following balance includes its committed credit.
+    try {
+        await reconcilePendingTopup();
+    } catch (error) {
+        console.error("Couldn't read top-up retry state:", error);
+    }
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
 
     const {
         data,
@@ -1366,9 +1436,10 @@ async function loadWalletBalance() {
     } = await db
         .from("wallets")
         .select("available_cents, status")
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .maybeSingle();
 
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
     if (error) {
         console.error(
             "Couldn't load wallet balance:",
@@ -1377,6 +1448,7 @@ async function loadWalletBalance() {
 
         walletMessage.innerText =
             "Couldn't load your balance right now.";
+        showWalletReturnMessage(false);
         return;
     }
 
@@ -1388,10 +1460,10 @@ async function loadWalletBalance() {
 
     walletMessage.innerText =
         data?.status === "frozen"
-            ? "This balance is temporarily unavailable."
+            ? "Your balance is on hold for payment review; Support is unavailable."
             : "Your full top-up becomes available to support ads.";
 
-    await reconcilePendingTopup();
+    showWalletReturnMessage(true, data?.status);
 }
 
 async function loadCreatorBalance() {
@@ -1438,6 +1510,42 @@ function readPendingTopup() {
     return raw ? JSON.parse(raw) : null;
 }
 
+let walletLoadId = 0;
+// Page-local receipt evidence keeps refreshes from reverting to a verification
+// message after reconciliation removes the pending request. Never trust the URL.
+let recordedTopup = null;
+
+function showWalletReturnMessage(balanceLoaded = false, walletStatus = null) {
+    const result = new URLSearchParams(window.location.search).get("wallet");
+    if (result !== "success" && result !== "cancel") return;
+    if (!currentUser) {
+        showReturnMessage("Log in to check the result of your top-up.");
+        return;
+    }
+    if (!balanceLoaded) {
+        showReturnMessage("Your balance could not be verified. Refresh to check again before retrying your top-up.");
+        return;
+    }
+
+    let message;
+    let confirmed = false;
+    try {
+        if (readPendingTopup()) {
+            message = "Your top-up has not been verified yet. Its pending request has been preserved. Refresh to check again before retrying.";
+        } else if (recordedTopup?.key === pendingTopupKey()) {
+            message = `Your ${formatCents(recordedTopup.amount_cents)} top-up was recorded.`;
+            confirmed = recordedTopup.status === "paid";
+        } else {
+            message = "Checkout returned. Your recorded balance is shown below.";
+        }
+    } catch (error) {
+        message = "Your pending top-up could not be verified. Keep its saved request and refresh before retrying.";
+    }
+    const held = walletStatus === "frozen";
+    if (held) message += " Your balance is on hold for payment review; Support is unavailable.";
+    showReturnMessage(message, confirmed && !held);
+}
+
 const TOPUP_RETRY_LIMIT_MS = 20 * 60 * 60 * 1000;
 
 function assertPendingTopupRetryable(pending, now = Date.now()) {
@@ -1463,21 +1571,29 @@ function stripeTestSessionId(url) {
 
 async function reconcilePendingTopup() {
     if (!currentUser) return false;
+    const userId = currentUser.id;
     const key = pendingTopupKey();
-    const pending = readPendingTopup();
+    const raw = localStorage.getItem(key);
+    const pending = raw ? JSON.parse(raw) : null;
     if (!pending?.checkout_session_id) return false;
     const { data, error } = await db
         .from("wallet_topups")
         .select("amount_cents,status")
-        .eq("user_id", currentUser.id)
+        .eq("user_id", userId)
         .eq("stripe_session_id", pending.checkout_session_id);
     if (error) {
         console.error("Couldn't reconcile pending top-up:", error);
         return false;
     }
-    if (data?.length === 1 && data[0].status === "paid" &&
+    // These rows are created atomically with the original credit. A later refund
+    // or dispute changes their status but does not make that Checkout uncertain.
+    if (data?.length === 1 &&
+        ["paid", "partially_refunded", "refunded", "disputed"].includes(data[0].status) &&
         data[0].amount_cents === pending.amount_cents) {
+        // Another tab or auth change must not let this delayed read clear a new request.
+        if (currentUser?.id !== userId || localStorage.getItem(key) !== raw) return false;
         localStorage.removeItem(key);
+        recordedTopup = { key, amount_cents: data[0].amount_cents, status: data[0].status };
         return true;
     }
     return false;
@@ -1764,6 +1880,7 @@ async function logout() {
         "Your full top-up becomes available to support ads.";
     creatorBalanceStatus.innerText =
         "Pending creator balance: $0.00";
+    showWalletReturnMessage();
     updateAccountButton();
 
     await loadAds();
@@ -1843,13 +1960,27 @@ function createCard(ad, rank = null) {
                                             : "Removed"
                             )}
                         </div>
+                        ${
+                            ad.duplicateStatus === "duplicate_same_creator" && ad.duplicateOfAdId
+                                ? `
+                                    <div class="owner-duplicate-message">
+                                        You already posted this image.
+                                        <button type="button" onclick="showExistingAd(${ad.duplicateOfAdId})">
+                                            View existing ad #${ad.duplicateOfAdId}
+                                        </button>
+                                    </div>
+                                `
+                                : ["review_identical", "review_similar"].includes(ad.duplicateStatus)
+                                    ? `<div class="owner-duplicate-message">Image match is being reviewed.</div>`
+                                    : ""
+                        }
                     `
                     : ""
             }
 
             <div class="stats">
                 <span class="like-count">
-                    ♡ ${ad.likes.toLocaleString()} likes
+                    ${ad.likes.toLocaleString()} ${ad.likes === 1 ? "seed" : "seeds"}
                 </span>
 
                 <span class="money">
@@ -1860,29 +1991,29 @@ function createCard(ad, rank = null) {
             <div class="action-buttons">
 
                 <button
-                    class="like-button ${ad.liked ? "liked" : ""}"
+                    class="like-button icon-button seed-mark ${ad.liked ? "liked" : ""}"
                     onclick="toggleLike(${ad.id})"
                     ${(!FEATURES.likes || ad.owner) ? "disabled" : ""}
-                    title="${!FEATURES.likes ? "Likes are unavailable in staging." : ad.owner ? "You can't like your own ad." : ""}"
+                    title="${!FEATURES.likes ? "Seeding is unavailable in staging." : ad.owner ? "You can't seed your own ad." : ""}"
                 >
                     ${
                         !FEATURES.likes
-                            ? "Likes unavailable"
+                            ? "Seeding unavailable"
                             : ad.owner
-                                ? "♡ Your Ad"
-                                : (ad.liked ? "♥ Liked" : "♡ Like")
+                                ? "Your Ad"
+                                : (ad.liked ? "Seeded" : "Seed")
                     }
                 </button>
 
                 <button
-                    class="support-button"
+                    class="support-button icon-button support-mark"
                     onclick="openSupport(${ad.id}, this)"
                     ${ad.moderationStatus !== "approved" ? "disabled" : ""}
                     title="${ad.moderationStatus !== "approved" ? "Support opens after safety approval." : ""}"
                 >
                     ${
                         ad.moderationStatus === "approved"
-                            ? "⚡ Support"
+                            ? "Support"
                             : "Awaiting approval"
                     }
                 </button>
@@ -1925,7 +2056,7 @@ function showSupported() {
 }
 
 /* ========================================
-   MOST LIKED
+   MOST SEEDED
 ======================================== */
 
 function showMostLiked() {
@@ -1939,10 +2070,10 @@ function showMostLiked() {
     gallery.classList.add("show-likes");
 
     pageTitle.innerText =
-        "Most Liked";
+        "Most Seeded";
 
     pageDescription.innerText =
-        "The ads the internet likes most.";
+        "The ads people have seeded most.";
 
     setNav("likedNav");
 
@@ -1969,6 +2100,20 @@ function showCreatorProfile(encodedUserId) {
     renderGallery(creatorAds);
 }
 
+function showExistingAd(id) {
+    const existingAd = ads.find(ad => ad.id === id && ad.owner);
+    if (!currentUser || !existingAd) {
+        alert("That ad is not available in your account.");
+        return;
+    }
+    showGallery();
+    gallery.classList.remove("show-likes");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = "Your existing ad";
+    pageDescription.innerText = `Ad #${existingAd.id}`;
+    renderGallery([existingAd]);
+}
+
 /* ========================================
    GALLERY
 ======================================== */
@@ -1993,12 +2138,12 @@ function renderGallery(list) {
 }
 
 /* ========================================
-   LIKE
+   SEED
 ======================================== */
 
 async function toggleLike(id) {
     if (!FEATURES.likes) {
-        alert("Likes are unavailable in the staging schema.");
+        alert("Seeding is unavailable in the staging schema.");
         return;
     }
     if (!currentUser) {
@@ -2007,7 +2152,7 @@ async function toggleLike(id) {
         document
             .getElementById("authMessage")
             .innerText =
-                "Log in to like ads.";
+                "Log in to seed ads.";
 
         return;
     }
@@ -2018,7 +2163,7 @@ async function toggleLike(id) {
     if (!ad) return;
 
     if (ad.owner) {
-        alert("You can't like your own ad.");
+        alert("You can't seed your own ad.");
         return;
     }
 
@@ -2032,7 +2177,7 @@ async function toggleLike(id) {
         if (error) {
             console.error(error);
             alert(
-                "Couldn't remove like: " +
+                "Couldn't remove seed: " +
                 error.message
             );
             return;
@@ -2048,7 +2193,7 @@ async function toggleLike(id) {
         if (error) {
             console.error(error);
             alert(
-                "Couldn't save like: " +
+                "Couldn't save seed: " +
                 error.message
             );
             return;
@@ -2121,8 +2266,8 @@ async function openSupport(id, button) {
             >
         </div>
 
-        <button class="confirm-support">
-            ⚡ Support
+        <button class="confirm-support icon-button support-mark">
+            Support
         </button>
 
         <button class="cancel-support">
@@ -2164,8 +2309,8 @@ async function openSupport(id, button) {
 
             confirm.innerText =
                 amount > 0
-                    ? `⚡ Support $${amount.toFixed(2)}`
-                    : "⚡ Support";
+                    ? `Support $${amount.toFixed(2)}`
+                    : "Support";
         }
     );
 
@@ -2256,8 +2401,8 @@ async function openSupport(id, button) {
 
             confirm.innerText =
                 currentAmount > 0
-                    ? `⚡ Support $${currentAmount.toFixed(2)}`
-                    : "⚡ Support";
+                    ? `Support $${currentAmount.toFixed(2)}`
+                    : "Support";
         }
     };
 
@@ -2300,6 +2445,11 @@ async function postAd() {
         alert(
             "Please add a title, image and caption."
         );
+        return;
+    }
+
+    if (!["image/jpeg", "image/png"].includes(imageFile.type)) {
+        alert("Please choose a JPEG or PNG image.");
         return;
     }
 
@@ -2359,10 +2509,7 @@ async function postAd() {
     const imageUrl =
         publicUrlData.publicUrl;
 
-    const {
-        data: insertedAd,
-        error: adError
-    } = await db
+    const { error: adError } = await db
         .from("ads")
         .insert({
             user_id: currentUser.id,
@@ -2372,9 +2519,7 @@ async function postAd() {
             image_storage_path: fileName,
             promotion_allocation:
                 promotionAllocation
-        })
-        .select("id")
-        .single();
+        });
 
     if (adError) {
         console.error(
@@ -2401,30 +2546,10 @@ async function postAd() {
     document.getElementById("newCaption").value = "";
     imageInput.value = "";
 
-    const { data: scanResult, error: scanError } = await db.functions.invoke(
-        "scan-ad",
-        { body: { ad_id: insertedAd.id } }
-    );
-
     await loadAds();
 
-    if (scanError) {
-        console.error("Duplicate scan incomplete:", scanError);
-        alert("Ad submitted, but duplicate screening is incomplete. It will remain pending for review.");
-        showProfile();
-        profileSection("myads");
-        return;
-    }
-
-    if (scanResult?.status === "duplicate_same_creator") {
-        alert(`You already submitted this image as ad #${scanResult.matched_ad_id}. The new copy will not be published.`);
-        showProfile();
-        profileSection("myads");
-        return;
-    }
-
     alert(
-        "Ad submitted. It remains private until both safety and duplicate screening are complete."
+        "Ad submitted. It remains pending and private until both safety and duplicate screening are complete."
     );
 
     showProfile();
@@ -2680,7 +2805,7 @@ function showProfile() {
         "Your Profile";
 
     pageDescription.innerText =
-        "Your ads, likes and support.";
+        "Your ads, seeds and support.";
 
     setNav("profileNav");
 
@@ -2746,7 +2871,7 @@ function profileSection(section) {
 
         if (section === "liked") {
             message =
-                "You haven't liked any ads yet.";
+                "You haven't seeded any ads yet.";
         }
 
         if (section === "supported") {
@@ -2883,26 +3008,45 @@ function escapeHTML(text) {
 ======================================== */
 
 async function loadAds() {
-    /* GET ADS */
+    /* GET PUBLIC-SAFE APPROVED ADS */
 
     const {
-        data: adData,
-        error: adError
-    } = await db
-        .from("ads")
-        .select("*")
-        .order(
-            "created_at",
-            { ascending: false }
-        );
+        data: publicAdData,
+        error: publicAdError
+    } = await db.rpc("get_public_ads");
 
-    if (adError) {
+    if (publicAdError) {
         console.error(
-            "Couldn't load ads:",
-            adError
+            "Couldn't load public ads:",
+            publicAdError
         );
         return;
     }
+
+    let ownerAdData = [];
+    if (currentUser) {
+        const {
+            data,
+            error: ownerAdError
+        } = await db.rpc("get_my_ads");
+        if (ownerAdError) {
+            console.error("Couldn't load your ads:", ownerAdError);
+            return;
+        }
+        ownerAdData = data || [];
+    }
+
+    // Owner rows replace their public copies, so approved owner ads appear once
+    // while private pending/review rows remain visible only to their creator.
+    const adRowsById = new Map(
+        (publicAdData || []).map(ad => [ad.id, ad])
+    );
+    ownerAdData.forEach(ad => adRowsById.set(ad.id, ad));
+    const adData = [...adRowsById.values()].sort(
+        (left, right) =>
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime()
+    );
 
     const ownerIds = [...new Set((adData || []).map(ad => ad.user_id).filter(Boolean))];
     let profileData = [];
@@ -2961,6 +3105,7 @@ async function loadAds() {
     }
 
     ads = adData.map(ad => {
+        const isOwner = Boolean(currentUser && ad.user_id === currentUser.id);
         const adLikes =
             likeData.filter(
                 like => like.ad_id === ad.id
@@ -3009,11 +3154,20 @@ async function loadAds() {
                 ad.moderation_reason ||
                 "",
 
+            // Duplicate moderation details are retained only in the owner's
+            // in-memory model and are never rendered on another viewer's card.
+            duplicateStatus:
+                isOwner
+                    ? ad.duplicate_status || "pending"
+                    : null,
+
+            duplicateOfAdId:
+                isOwner && Number.isSafeInteger(Number(ad.duplicate_of_ad_id))
+                    ? Number(ad.duplicate_of_ad_id)
+                    : null,
+
             userSupport,
-            owner:
-                currentUser
-                    ? ad.user_id === currentUser.id
-                    : false
+            owner: isOwner
         };
     });
 }
@@ -3051,11 +3205,6 @@ async function startApp() {
     if (
         params.get("wallet") === "success"
     ) {
-        showReturnMessage(
-            "Payment completed. AdBattle is verifying your new balance with Stripe.",
-            true
-        );
-
         setTimeout(
             async () => {
                 await loadWalletBalance();
@@ -3068,13 +3217,6 @@ async function startApp() {
                 await loadWalletBalance();
             },
             5000
-        );
-
-    } else if (
-        params.get("wallet") === "cancel"
-    ) {
-        showReturnMessage(
-            "Checkout returned without payment confirmation. Your pending top-up request was preserved until its status can be verified."
         );
 
     } else if (
