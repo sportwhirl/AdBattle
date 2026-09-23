@@ -119,6 +119,19 @@ export async function startModeration(root, sdk, config, storage) {
     $("message").textContent = text;
     $("message").className = error ? "error" : "";
   }
+  function reviewComplete(id) {
+    selected = null;
+    $("detail").replaceChildren(
+      node("h2", `Review complete for ad #${id}`),
+      node("p", "No human-review checks remain. Select another ad from the queue."),
+    );
+    for (const button of $("queue").querySelectorAll("button")) {
+      if (button.dataset.id === id) button.remove();
+      else button.classList.toggle("selected", false);
+    }
+    if (!$("queue").children.length)
+      $("queue").append(node("p", "No ads need human review.", "muted"));
+  }
   function resetView() {
     $("workspace").hidden = true;
     $("queue").replaceChildren();
@@ -351,7 +364,7 @@ export async function startModeration(root, sdk, config, storage) {
           )
         )
           return;
-        action(async (ticket) => {
+        return action(async (ticket) => {
           const result = await client.submit(
             detail,
             kind.value,
@@ -395,6 +408,11 @@ export async function startModeration(root, sdk, config, storage) {
     const ticket = epoch;
     const detail = await rpc("moderator_ad", { p_ad_id: id });
     if (ticket !== epoch) return;
+    if (!reviewKinds(detail.ad).length) {
+      reviewComplete(id);
+      message(`Ad #${id} has no remaining human-review checks.`);
+      return;
+    }
     selected = id;
     renderDetail(detail);
     message(`Reviewing ad #${id}.`);
@@ -402,13 +420,24 @@ export async function startModeration(root, sdk, config, storage) {
       b.classList.toggle("selected", b.dataset.id === id);
   }
   async function decisionDone(result, ticket) {
-    await queue();
-    if (ticket !== epoch) return;
-    await loadAd(result.ad_id);
-    if (ticket !== epoch) return;
-    message(
-      `Decision recorded. Ad #${result.ad_id} publication status: ${result.moderation_status}.`,
-    );
+    const summary = `Decision recorded. Ad #${result.ad_id} publication status: ${result.moderation_status}.`;
+    const complete = !reviewKinds(result).length;
+    // A confirmed decision is authoritative even if the follow-up read fails.
+    // Close the completed review before waiting for the queue to reconnect.
+    if (complete) reviewComplete(result.ad_id);
+    message(summary);
+    try {
+      await queue();
+      if (ticket !== epoch) return;
+      if (!complete) await loadAd(result.ad_id);
+      if (ticket === epoch) message(summary);
+    } catch (error) {
+      if (ticket !== epoch) return;
+      if (error?.message === "MODERATOR_ACCESS_REQUIRED" || error?.code === "42501")
+        reportError(error);
+      else
+        message(`${summary} The latest queue could not be loaded. Use Refresh queue to reconnect.`, true);
+    }
   }
   async function action(fn) {
     if (busy) return;
