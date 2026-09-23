@@ -2,8 +2,9 @@
 -- No SET ROLE, DML, RPC execution, payments, secret reads, or schema changes.
 -- Complements scripts/test_wallet_access.py's real two-user REST read checks.
 -- An explicit table/column grant is checked even if RLS currently hides rows.
--- TRUNCATE/REFERENCES/TRIGGER are intentionally included in least-privilege
--- review; they are not claims that PostgREST exposes those SQL operations.
+-- TRUNCATE/REFERENCES/TRIGGER/MAINTAIN and protected identity sequences are
+-- intentionally included in least-privilege review; they are not claims that
+-- PostgREST exposes those SQL operations directly.
 with recursive
 expected_tables(name, client_read) as (values
   ('wallets', true), ('wallet_topups', true), ('wallet_transactions', true),
@@ -21,7 +22,7 @@ client_roles as (
   left join pg_roles r on r.rolname = n.name
 ),
 privileges(name) as (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')),
+  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')),
 table_checks as (
   select 'table_privilege'::text as category,
     r.name || ':public.' || t.name || ':' || p.name as object_name,
@@ -33,6 +34,125 @@ table_checks as (
         then has_any_column_privilege(r.oid, t.oid, p.name) else false end
     end as actual
   from tables t cross join client_roles r cross join privileges p
+),
+expected_sequences(name, required) as (values
+  ('ads_id_seq', true), ('likes_id_seq', false),
+  ('supports_id_seq', true), ('wallet_topups_id_seq', true),
+  ('wallet_transactions_id_seq', true)
+),
+sequences as (
+  select e.name, e.required, c.oid
+  from expected_sequences e
+  left join pg_class c on c.oid = to_regclass('public.' || e.name)
+    and c.relkind = 'S'
+),
+sequence_privileges(name) as (values ('USAGE'), ('SELECT'), ('UPDATE')),
+sequence_checks as (
+  select 'sequence_privilege'::text as category,
+    r.name || ':public.' || s.name || ':' || p.name as object_name,
+    false as expected,
+    case when s.oid is null or r.oid is null then null
+      else has_sequence_privilege(r.oid, s.oid, p.name) end as actual
+  from sequences s cross join client_roles r cross join sequence_privileges p
+  where s.required or s.oid is not null
+),
+legacy_likes as (
+  select c.oid, c.relrowsecurity
+  from pg_class c
+  where c.oid = to_regclass('public.likes')
+    and c.relkind in ('r', 'p')
+),
+legacy_likes_checks as (
+  select 'legacy_likes_read'::text as category,
+    r.name || ':public.likes:SELECT' as object_name,
+    true as expected,
+    has_table_privilege(r.oid, l.oid, 'SELECT') as actual
+  from legacy_likes l cross join client_roles r
+  union all
+  select 'legacy_likes_privilege_boundary',
+    r.name || ':public.likes:unsafe_table_or_column_privileges',
+    false,
+    has_table_privilege(
+      r.oid, l.oid,
+      'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
+    ) or has_any_column_privilege(r.oid, l.oid, 'INSERT,UPDATE,REFERENCES')
+  from legacy_likes l cross join client_roles r
+  union all
+  select 'row_security', 'public.likes', true, relrowsecurity
+  from legacy_likes
+),
+ads_state as (
+  select c.oid, c.relrowsecurity,
+    exists (
+      select 1 from pg_attribute x
+      where x.attrelid = c.oid
+        and x.attname = 'image_storage_path'
+        and x.attnum > 0
+        and not x.attisdropped
+    ) as has_image_storage_path,
+    to_regprocedure('public.get_public_ads()') is not null as has_public_ads_rpc,
+    to_regprocedure('public.get_my_ads()') is not null as has_owner_ads_rpc
+  from (select to_regclass('public.ads') as oid) a
+  left join pg_class c on c.oid = a.oid and c.relkind in ('r', 'p')
+),
+ads_boundary_checks as (
+  select 'ads_privilege_boundary'::text as category,
+    r.name || ':public.ads:unsafe_table_or_column_privileges' as object_name,
+    false as expected,
+    case when a.oid is null or r.oid is null then null else
+      has_table_privilege(
+        r.oid, a.oid, 'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'
+      ) or has_any_column_privilege(r.oid, a.oid, 'UPDATE,REFERENCES')
+    end as actual
+  from client_roles r
+  cross join ads_state a
+  union all
+  select 'ads_insert_boundary',
+    r.name || ':public.ads:exact_insert_columns',
+    true,
+    case when a.oid is null or r.oid is null then null else
+      not has_table_privilege(r.oid, a.oid, 'INSERT')
+      and (
+        select coalesce(array_agg(c.attname::text order by c.attname), array[]::text[])
+        from pg_attribute c
+        where c.attrelid = a.oid
+          and c.attnum > 0
+          and not c.attisdropped
+          and has_column_privilege(r.oid, c.attrelid, c.attnum, 'INSERT')
+      ) = case
+        when r.name <> 'authenticated' then array[]::text[]
+        when a.has_image_storage_path then array[
+          'caption', 'image_storage_path', 'image_url',
+          'promotion_allocation', 'title', 'user_id'
+        ]::text[]
+        else array[
+          'caption', 'image_url', 'promotion_allocation', 'title', 'user_id'
+        ]::text[]
+      end
+    end
+  from client_roles r
+  cross join ads_state a
+  union all
+  select 'ads_read_boundary',
+    r.name || ':public.ads:direct_select',
+    not a.has_image_storage_path,
+    case when a.oid is null or r.oid is null then null
+      when a.has_image_storage_path then
+        has_table_privilege(r.oid, a.oid, 'SELECT')
+        or has_any_column_privilege(r.oid, a.oid, 'SELECT')
+      else has_table_privilege(r.oid, a.oid, 'SELECT')
+    end
+  from client_roles r cross join ads_state a
+  union all
+  select 'ads_read_mode', 'public.ads:coherent_schema', true,
+    case when a.oid is null then null else
+      (a.has_image_storage_path and a.has_public_ads_rpc and a.has_owner_ads_rpc)
+      or (not a.has_image_storage_path and not a.has_public_ads_rpc and not a.has_owner_ads_rpc)
+    end
+  from ads_state a
+  union all
+  select 'row_security', 'public.ads', true, relrowsecurity
+  from ads_state
 ),
 expected_functions(signature, anon_allowed, authenticated_allowed, service_allowed) as (values
   ('public.record_wallet_topup(text,text,uuid,bigint)', false, false, true),
@@ -94,7 +214,10 @@ view_tree(oid) as (
   where rw.ev_class <> parent.oid
 ),
 checks as (
-  select * from table_checks union all select * from function_checks
+  select * from table_checks union all select * from sequence_checks
+  union all select * from legacy_likes_checks
+  union all select * from ads_boundary_checks
+  union all select * from function_checks
   union all select * from rls_checks union all select * from role_checks
 ),
 results as (

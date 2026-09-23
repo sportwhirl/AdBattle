@@ -17,15 +17,22 @@ test('supplied staging schema supports all wallet migrations and real wallet RPC
     const base = readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url), 'utf8');
     assert.ok(!base.includes('bmsrdzqprxvldltaislp'));
     await db.exec(base);
-    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260922_duplicate_screening.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql', '20260923093000_paid_seeds.sql', '20260923164351_paid_seed_read_rpc_privileges.sql']) {
+    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260922_duplicate_screening.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql', '20260923093000_paid_seeds.sql', '20260923164351_paid_seed_read_rpc_privileges.sql', '20260923183000_client_privilege_hardening.sql']) {
       const sql = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
       await db.exec(sql.replace('create extension if not exists pgcrypto;', ''));
     }
     const supporter = '00000000-0000-4000-8000-000000000001';
     const creator = '00000000-0000-4000-8000-000000000002';
     await db.query('insert into auth.users values ($1), ($2)', [supporter, creator]);
-    const ad = (await db.query(`insert into ads(user_id,title,image_url)
-      values ($1,'Synthetic test ad','https://example.invalid/test.png') returning id,moderation_status`, [creator])).rows[0];
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [creator]);
+    await db.exec('set role authenticated');
+    await db.query(`insert into ads(user_id,title,image_url,image_storage_path)
+      values ($1,'Synthetic test ad','https://example.invalid/test.png',$2)`,
+    [creator, `${creator}/synthetic.png`]);
+    await assert.rejects(db.query("select nextval('public.ads_id_seq')"), /permission denied/);
+    await db.exec('reset role');
+    const ad = (await db.query(`select id,moderation_status from ads
+      where user_id=$1 and title='Synthetic test ad'`, [creator])).rows[0];
     assert.equal(ad.moderation_status, 'pending_scan');
     const triggers = await db.query("select tgname from pg_trigger where tgrelid='public.ads'::regclass and not tgisinternal");
     assert.deepEqual(triggers.rows.map(row => row.tgname), ['enforce_ad_screening_gate']);

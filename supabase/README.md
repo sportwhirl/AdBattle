@@ -33,12 +33,16 @@ Do not publish the updated root `index.html` until steps 1–5 are complete.
    `20260923_wallet_balance_recovery.sql`, then
    `20260923_wallet_table_privileges.sql`, then
    `20260923093000_paid_seeds.sql`, then
-   `20260923164351_paid_seed_read_rpc_privileges.sql` from `migrations/` in the
+   `20260923164351_paid_seed_read_rpc_privileges.sql`, then
+   `20260923180000_ad_image_cleanup_policy.sql`, then
+   `20260923183000_client_privilege_hardening.sql` from `migrations/` in the
    Supabase SQL editor. For an existing installation, apply only missing
-   migrations in that order. The safety and recovery migrations are one-time
-   and transactional; do not rerun them after success because they rename
-   internal RPCs. Take a backup and inspect the actual existing schema before
-   applying migrations.
+   migrations in that order. The final hardening migration removes PostgreSQL
+   17 `MAINTAIN` and protected identity-sequence access that can survive broad
+   hosted defaults. The safety and recovery migrations are one-time and
+   transactional; do not rerun them after success because they rename internal
+   RPCs. Take a backup and inspect the actual existing schema before applying
+   migrations.
 2. Set the `SETTLEMENT_CRON_SECRET` Edge Function secret to a new random value.
    Existing `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` secrets remain in use.
 3. Deploy these functions:
@@ -117,9 +121,11 @@ Apply the paid-Seed change backend first, then publish the frontend:
 
 1. Confirm all preceding wallet migrations are present, then apply only
    `migrations/20260923093000_paid_seeds.sql`, followed by
-   `migrations/20260923164351_paid_seed_read_rpc_privileges.sql`. If the first
+   `migrations/20260923164351_paid_seed_read_rpc_privileges.sql`, followed by
+   `migrations/20260923180000_ad_image_cleanup_policy.sql`, followed by
+   `migrations/20260923183000_client_privilege_hardening.sql`. If the first
    migration already succeeded, do not rerun it; apply only the missing
-   forward privilege repair.
+   forward privilege repairs.
 2. Deploy `support-from-wallet` from the same reviewed commit.
 3. Publish `frontend-config.js` and `index.html`.
 
@@ -217,14 +223,14 @@ and multi-connection concurrency checks remain outstanding. Keep all existing
 test-mode, deployment-order, credential-handling, reconciliation-hold, and
 production-launch restrictions in force.
 
-### Repair reviewed extra wallet table permissions
+### Repair reviewed client table and sequence permissions
 
-The hosted adbattle-test audit returned exactly 15 findings: authenticated had
-TRUNCATE, REFERENCES, and TRIGGER on wallets, wallet_topups, wallet_transactions,
-ad_settlement_state, and support_settlements. The ledger migration revoked
-INSERT/UPDATE/DELETE but did not remove these three privileges under broad
-hosted table defaults. This is a least-privilege defect; the findings alone do
-not demonstrate an exploitable browser endpoint or a cross-user data leak.
+The original hosted adbattle-test audit returned 15 findings: authenticated
+had TRUNCATE, REFERENCES, and TRIGGER on wallets, wallet_topups,
+wallet_transactions, ad_settlement_state, and support_settlements. PostgreSQL
+17 also adds MAINTAIN to broad table grants, and table revokes do not remove
+separate identity-sequence privileges. These are least-privilege defects; a
+finding alone does not demonstrate a PostgREST route or cross-user data leak.
 
 After reviewing and merging the repair, in **adbattle-test SQL Editor**, apply
 only [`migrations/20260923_wallet_table_privileges.sql`](migrations/20260923_wallet_table_privileges.sql).
@@ -234,6 +240,18 @@ schema-wide defaults and all financial rows. It uses RESTRICT rather than
 cascading into dependent objects, and rolls back if effective inherited/PUBLIC
 privileges remain or required SELECT access is missing. If it fails, return
 the error for review rather than expanding the revocation scope.
+
+Then apply
+[`migrations/20260923183000_client_privilege_hardening.sql`](migrations/20260923183000_client_privilege_hardening.sql).
+It removes MAINTAIN from the release-scope tables, removes client access to the
+owned identity sequences for ads, supports, top-ups and wallet transactions,
+sets the exact production/staging ad-posting column grants, and completes the
+archived-Like lock when that legacy table exists. It preserves the active ad
+read mode: direct RLS reads for the legacy production schema or reviewed read
+RPCs for duplicate-screening schema. It keeps RLS, active-object service-role
+access, data and schema-wide defaults unchanged. It is transactional,
+repeat-safe, and rejects effective inherited/PUBLIC privileges instead of
+silently reporting success.
 
 Then rerun the complete read-only access audit below and return its full result.
 The permission repair is safe to repeat but earlier safety/recovery migrations
@@ -252,14 +270,16 @@ or hosted migration is needed to use these tools.
    [`staging/check_wallet_access.sql`](staging/check_wallet_access.sql).
    It is a read-only catalog SELECT. Expect `audit_status=PASS`,
    `nonpassing_checks=0`, and `findings=[]`. With paid Seeds installed, the
-   current schema produces 205 checks. Keep the report separately from the
-   runner's output.
+   current schema produces 257 checks when no legacy Likes table exists and
+   268 checks when it does. Keep the report separately from the runner's
+   output.
 2. If it reports `REVIEW_REQUIRED`, inspect/share `findings` before proceeding.
    Missing objects, unexpected overloads and client-readable dependent views
    are not passing checks. The audit includes inherited/PUBLIC and column
    grants, RLS, client bypass roles, protected RPCs, and access to their renamed
-   predecessors. It also flags TRUNCATE/REFERENCES/TRIGGER privileges for
-   least-privilege review even though PostgREST does not expose those operations.
+   predecessors. It also flags TRUNCATE/REFERENCES/TRIGGER/MAINTAIN and protected
+   identity-sequence privileges for least-privilege review even though
+   PostgREST does not expose those SQL operations directly.
    Do not automatically revoke privileges or rerun migrations to suppress a
    finding. A catalog PASS is not proof of row isolation or a universal audit
    of every function/view in the application.
@@ -306,6 +326,11 @@ sessions. Neither report alone proves all authorization boundaries: Edge
 Function request validation, arbitrary app RPC/view paths, or every possible
 role/identity combination require separate tests. Do not claim the hosted
 checks ran merely because the offline regression suite passes.
+
+Hosted projects may have broad default privileges. Every future public table
+or sequence migration must explicitly revoke unneeded `anon` and
+`authenticated` privileges in the same transaction and verify effective
+privileges, including inheritance and PUBLIC grants, before commit.
 
 ### Read-only wallet health report
 
