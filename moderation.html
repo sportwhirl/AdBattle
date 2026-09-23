@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Moderation · AdBattle</title>
+    <link rel="stylesheet" href="moderation.css" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"
+      defer
+    ></script>
+    <script src="adbattle.local-config.js" defer></script>
+    <script src="frontend-config.js" defer></script>
+    <script type="module" src="moderation.mjs"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./">Ad<span>Battle</span></a
+      ><span class="private-label">PRIVATE · MODERATION</span
+      ><span id="environment"></span
+      ><button id="sign-out" hidden>Sign out</button>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">CREATIVE REVIEW</p>
+        <h1>A second look.</h1>
+        <p>Review flagged ads. Record a decision for each screening check.</p>
+      </div>
+      <p id="message" role="status" aria-live="polite">Checking access…</p>
+      <section id="login" class="panel" hidden>
+        <h2>Moderator sign-in</h2>
+        <p>Use the account granted moderation access by your administrator.</p>
+        <form id="login-form">
+          <label
+            >Email<input
+              id="email"
+              type="email"
+              autocomplete="username"
+              required /></label
+          ><label
+            >Password<input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button class="primary" type="submit">Sign in</button>
+        </form>
+      </section>
+      <section id="workspace" hidden>
+        <div class="toolbar">
+          <p id="reviewer"></p>
+          <button id="refresh">Refresh queue</button>
+        </div>
+        <div id="pending" class="notice" hidden>
+          <p>
+            A decision is awaiting confirmation. Retry the saved request to
+            check its outcome.
+          </p>
+          <button id="retry" class="primary">Retry saved decision</button>
+        </div>
+        <div class="layout">
+          <aside class="panel">
+            <h2>Needs review</h2>
+            <p class="muted">Safety holds and duplicate matches</p>
+            <div id="queue"></div>
+            <button id="more" hidden>Load more</button>
+          </aside>
+          <section id="detail" class="panel detail">
+            <h2>Select an ad</h2>
+            <p>
+              Its creative, screening findings, and review history will appear
+              here.
+            </p>
+          </section>
+        </div>
+      </section>
+    </main>
+    <footer>
+      Publication requires both safety and duplicate checks to pass.
+    </footer>
+  </body>
+</html>

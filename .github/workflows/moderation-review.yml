@@ -1,0 +1,27 @@
+name: Private moderation review
+on:
+  pull_request:
+    branches: [wallet-ledger-90-10]
+    paths:
+      - 'moderation.*'
+      - 'supabase/migrations/*moderation_review.sql'
+      - 'supabase/migrations/20260922_duplicate_screening.sql'
+      - 'supabase/MODERATION_REVIEW.md'
+      - 'tests/moderation_*.test.mjs'
+      - '.github/workflows/moderation-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  moderation-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
