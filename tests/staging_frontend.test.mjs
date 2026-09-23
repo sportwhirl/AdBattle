@@ -60,7 +60,7 @@ test("local frontend fails closed unless explicit adbattle-test config is exact"
   assert.equal(config.environment, "staging");
   assert.equal(config.projectRef, "nccqnrcdygujulrnwair");
   assert.deepEqual({ ...config.features }, {
-    likes: false, adImages: false, creatorOnboarding: false,
+    likes: false, adImages: true, creatorOnboarding: false,
   });
   assert.throws(() => AdBattleConfig.resolve(
     { protocol: "http:", hostname: "127.0.0.1", origin: "http://127.0.0.1:8000" },
@@ -169,11 +169,23 @@ test("Checkout redirects come only from validated server configuration", () => {
   assert.match(checkoutTs, /startsWith\("sk_test_"\)/);
 });
 
-test("staging-disabled integrations are gated without aborting ad loading", () => {
+test("staging enables image posting while unavailable integrations remain gated", () => {
   assert.match(html, /if \(FEATURES\.likes\)[\s\S]*?\.from\("likes"\)/);
   assert.match(html, /if \(!FEATURES\.adImages\)[\s\S]*?Ad posting is unavailable/);
   assert.match(html, /if \(!FEATURES\.creatorOnboarding\)[\s\S]*?Creator onboarding is unavailable/);
   assert.match(html, /ADBATTLE TEST · LOCAL STAGING/);
+  const { AdBattleConfig } = configContext();
+  const staging = AdBattleConfig.resolve(
+    { origin: "http://localhost:8000" },
+    {
+      environment: "staging",
+      projectRef: "nccqnrcdygujulrnwair",
+      supabaseUrl: "https://nccqnrcdygujulrnwair.supabase.co",
+      frontendOrigin: "http://localhost:8000",
+      publishableKey: "sb_publishable_test_fixture",
+    },
+  );
+  assert.equal(staging.features.adImages, true);
 });
 
 const topupHelper = html.slice(
