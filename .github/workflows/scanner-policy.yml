@@ -1,0 +1,28 @@
+name: Ad scanner policy responses
+
+on:
+  pull_request:
+    branches: [wallet-ledger-90-10]
+    paths:
+      - '.github/workflows/scanner-policy.yml'
+      - 'supabase/functions/scan-ad/**'
+      - 'tests/safety_scanner.test.mjs'
+      - 'tests/scanner_policy_response.test.mjs'
+      - 'tests/fixtures/images/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scanner-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/safety_scanner.test.mjs tests/scanner_policy_response.test.mjs

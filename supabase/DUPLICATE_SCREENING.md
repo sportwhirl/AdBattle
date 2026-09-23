@@ -48,6 +48,43 @@ exists, even if duplicate screening still keeps the ad pending. Operational
 failures leave safety `pending` so a later webhook delivery can retry. There is
 not yet a separate trusted moderator RPC for resolving a safety `held` state.
 
+### Policy response parsing and staging retry
+
+The safety scanner calls the OpenAI Responses API with raw `fetch`. Generated
+text must be read from assistant messages in `output[].content[]` with type
+`output_text`; the top-level `output_text` shortcut is an SDK helper. Reasoning
+items may appear before the message. See the [official text-generation
+guide](https://developers.openai.com/api/docs/guides/text).
+
+The scanner requires a completed response and completed assistant messages,
+rejects refusals and incomplete/error responses, then validates the policy JSON
+against the requested decision fields before recording a safety result. Missing
+text, malformed decisions, and contradictory approvals leave safety pending
+with a diagnostic error. It never approves because parsing or the API failed.
+Raw model output is not included in policy parsing/HTTP error messages.
+The configured model, reasoning effort, and 700-token output cap are unchanged;
+an incomplete result now reports `max_output_tokens` or `content_filter` when
+provided, rather than being mistaken for missing SDK output.
+
+The staging upload test on 2026-09-23 reached duplicate `passed` but safety
+`pending` with `OpenAI policy review returned no output_text.` After merging
+the parser fix, redeploy only `scan-ad` to **adbattle-test** with its existing
+secrets and private `x-adbattle-scanner-secret` authentication. Preserve
+`verify_jwt=false`: the function itself authenticates that private webhook
+header. No migration or duplicate-scanner deployment is needed for this fix.
+Invoke the existing scanner for the same pending ad ID (for the reported
+`Staging Upload Test`, `{"ad_id":4}`), using the existing private header.
+Do not upload another copy or manually change screening statuses. Check the
+new safety audit and both screening states: publication still requires both
+checks to pass. A valid review may instead hold or reject the ad. Previously
+terminal safety decisions remain skipped, and retrying does not clear them.
+
+`tests/scanner_policy_response.test.mjs` executes the actual handler with mocked
+HTTP and database I/O, covering REST envelopes, reasoning-before-text, split
+text, review/rejection, refusals, incomplete results, invalid decisions, and
+unchanged authentication/terminal-state guards. Hosted retry results must be
+verified separately after deployment.
+
 The safety `scan-ad` function retains its SHA-256 only as moderation audit
 metadata. It does not query other ads, emit duplicate audit stages, or make a
 safety decision from image reuse. All exact/perceptual matching and all
@@ -97,5 +134,6 @@ cover representative pixel fixtures, not the variety of real-world artwork.
 Reviewers must compare images and may clear matches caused by permission,
 common templates, shared source material, or genuinely different ads.
 
-Staging image uploads remain disabled by `frontend-config.js`. No hosted
-backfill or end-to-end storage scan is performed by this repository change.
+Staging image uploads are enabled by the separately merged local-upload change.
+Enabling the browser does not install scanner webhooks, perform the required
+image backfill, or establish a successful end-to-end safety review by itself.
