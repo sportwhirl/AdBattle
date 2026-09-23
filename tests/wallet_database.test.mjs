@@ -29,7 +29,7 @@ before(async () => {
     insert into public.ads(id,user_id) values (1,'${creator}');
     insert into public.creator_accounts values ('${creator}','acct_original',true,true,true);
   `);
-  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260923_wallet_balance_recovery.sql']) {
+  for (const file of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql']) {
     let sql = readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8');
     // PGlite has builtin gen_random_uuid; it does not ship the pgcrypto extension.
     sql = sql.replace('create extension if not exists pgcrypto;', '');

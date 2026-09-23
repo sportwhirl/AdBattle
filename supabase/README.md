@@ -22,8 +22,9 @@ Do not publish the updated root `index.html` until steps 1–5 are complete.
 
 1. For a new installation, apply the migrations in this order:
    `20260920_wallet_ledger.sql`, `20260921_wallet_safety.sql`,
-   `20260922_wallet_capability_recovery.sql`, then
-   `20260923_wallet_balance_recovery.sql` from `migrations/` in the Supabase SQL
+   `20260922_wallet_capability_recovery.sql`,
+   `20260923_wallet_balance_recovery.sql`, then
+   `20260923_wallet_table_privileges.sql` from `migrations/` in the Supabase SQL
    editor. For an existing installation, apply only missing migrations in that
    order. The safety and recovery migrations are one-time and transactional;
    do not rerun them after success because they rename internal RPCs. Take a
@@ -168,6 +169,29 @@ creator settlements and retry behavior, refunds/disputes and reconciliation,
 and multi-connection concurrency checks remain outstanding. Keep all existing
 test-mode, deployment-order, credential-handling, reconciliation-hold, and
 production-launch restrictions in force.
+
+### Repair reviewed extra wallet table permissions
+
+The hosted adbattle-test audit returned exactly 15 findings: authenticated had
+TRUNCATE, REFERENCES, and TRIGGER on wallets, wallet_topups, wallet_transactions,
+ad_settlement_state, and support_settlements. The ledger migration revoked
+INSERT/UPDATE/DELETE but did not remove these three privileges under broad
+hosted table defaults. This is a least-privilege defect; the findings alone do
+not demonstrate an exploitable browser endpoint or a cross-user data leak.
+
+After reviewing and merging the repair, in **adbattle-test SQL Editor**, apply
+only [`migrations/20260923_wallet_table_privileges.sql`](migrations/20260923_wallet_table_privileges.sql).
+It revokes just these three privileges from authenticated on the five named
+tables. It preserves SELECT, RLS policies, RPCs, service_role permissions,
+schema-wide defaults and all financial rows. It uses RESTRICT rather than
+cascading into dependent objects, and rolls back if effective inherited/PUBLIC
+privileges remain or required SELECT access is missing. If it fails, return
+the error for review rather than expanding the revocation scope.
+
+Then rerun the complete read-only access audit below and return its full result.
+The permission repair is safe to repeat but earlier safety/recovery migrations
+are not. No Edge Function or frontend redeployment is required. Hosted Auth/RLS
+isolation still needs the separate two-user runner after the catalog audit passes.
 
 ### Hosted wallet access checks (no wallet mutations)
 
@@ -587,7 +611,7 @@ on a Unix socket, ignores inherited PostgreSQL connection settings, and accepts
 no database URL or credentials. It stops the server and removes the cluster
 on completion. It never contacts Supabase or Stripe.
 
-The minimal legacy fixture and all four wallet migrations are applied without
+The minimal legacy fixture and all five wallet migrations are applied without
 rewriting the SQL. RPC calls run as `service_role` on independent connections.
 A separate transaction holds the relevant wallet or ad lock; the test checks
 `pg_stat_activity` and `pg_blocking_pids` to prove the requests overlap before

@@ -26,6 +26,7 @@ MIGRATIONS = (
     "20260921_wallet_safety.sql",
     "20260922_wallet_capability_recovery.sql",
     "20260923_wallet_balance_recovery.sql",
+    "20260923_wallet_table_privileges.sql",
 )
 
 
