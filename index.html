@@ -1164,10 +1164,12 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
             Account
         </div>
 
-        <label for="creatorHandle">Public creator handle</label>
-        <input id="creatorHandle" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="creator_name">
-        <button class="auth-secondary-button" onclick="saveCreatorHandle()">Save creator handle</button>
-        <div id="creatorHandleMessage" class="creator-balance-status"></div>
+        <div id="creatorIdentity">
+            <label for="creatorHandle">Public creator handle</label>
+            <input id="creatorHandle" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="creator_name">
+            <button class="auth-secondary-button" onclick="saveCreatorHandle()">Save creator handle</button>
+            <div id="creatorHandleMessage" class="creator-balance-status"></div>
+        </div>
 
         <button
             class="logout-button"
@@ -1285,7 +1287,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
 </section>
 
 <!-- SUPABASE LIBRARY -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1"></script>
 
 <script>
 
@@ -1381,6 +1383,9 @@ function applyEnvironmentConfiguration() {
         setupPaymentsButton.disabled = true;
         setupPaymentsButton.title = "Creator onboarding functions are not deployed in staging.";
         paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+    }
+    if (!FEATURES.duplicateScreening) {
+        document.getElementById("creatorIdentity").hidden = true;
     }
 }
 
@@ -1880,7 +1885,7 @@ function updateAccountButton() {
 }
 
 async function loadCreatorHandle() {
-    if (!currentUser) return;
+    if (!currentUser || !FEATURES.duplicateScreening) return;
     const { data, error } = await db.from("creator_profiles")
         .select("handle").eq("user_id", currentUser.id).maybeSingle();
     if (error) {
@@ -1892,7 +1897,7 @@ async function loadCreatorHandle() {
 }
 
 async function saveCreatorHandle() {
-    if (!currentUser) return;
+    if (!currentUser || !FEATURES.duplicateScreening) return;
     const handle = document.getElementById("creatorHandle").value.trim();
     const message = document.getElementById("creatorHandleMessage");
     if (!/^[A-Za-z0-9_]{1,30}$/.test(handle)) {
@@ -2102,13 +2107,19 @@ function createCard(ad, rank = null) {
             >
         </div>
 
-        <div class="creator-attribution">
-            ${
-                ad.creatorHandle
-                    ? `By <a href="#creator/${encodeURIComponent(ad.userId)}" onclick="showCreatorProfile('${encodeURIComponent(ad.userId)}'); return false">@${escapeHTML(ad.creatorHandle)}</a>`
-                    : "Creator name unavailable"
-            }
-        </div>
+        ${
+            FEATURES.duplicateScreening
+                ? `
+                    <div class="creator-attribution">
+                        ${
+                            ad.creatorHandle
+                                ? `By <a href="#creator/${encodeURIComponent(ad.userId)}" onclick="showCreatorProfile('${encodeURIComponent(ad.userId)}'); return false">@${escapeHTML(ad.creatorHandle)}</a>`
+                                : "Creator name unavailable"
+                        }
+                    </div>
+                `
+                : ""
+        }
 
         <div class="caption">
 
@@ -2135,18 +2146,20 @@ function createCard(ad, rank = null) {
                             )}
                         </div>
                         ${
-                            ad.duplicateStatus === "duplicate_same_creator" && ad.duplicateOfAdId
-                                ? `
-                                    <div class="owner-duplicate-message">
-                                        You already posted this image.
-                                        <button type="button" onclick="showExistingAd(${ad.duplicateOfAdId})">
-                                            View existing ad #${ad.duplicateOfAdId}
-                                        </button>
-                                    </div>
-                                `
-                                : ["review_identical", "review_similar"].includes(ad.duplicateStatus)
-                                    ? `<div class="owner-duplicate-message">Image match is being reviewed.</div>`
-                                    : ""
+                            FEATURES.duplicateScreening
+                                ? ad.duplicateStatus === "duplicate_same_creator" && ad.duplicateOfAdId
+                                    ? `
+                                        <div class="owner-duplicate-message">
+                                            You already posted this image.
+                                            <button type="button" onclick="showExistingAd(${ad.duplicateOfAdId})">
+                                                View existing ad #${ad.duplicateOfAdId}
+                                            </button>
+                                        </div>
+                                    `
+                                    : ["review_identical", "review_similar"].includes(ad.duplicateStatus)
+                                        ? `<div class="owner-duplicate-message">Image match is being reviewed.</div>`
+                                        : ""
+                                : ""
                         }
                     `
                     : ""
@@ -3018,17 +3031,22 @@ async function postAd() {
     const imageUrl =
         publicUrlData.publicUrl;
 
+    const adInsert = {
+        user_id: currentUser.id,
+        title,
+        caption,
+        image_url: imageUrl,
+        promotion_allocation:
+            promotionAllocation
+    };
+
+    if (FEATURES.duplicateScreening) {
+        adInsert.image_storage_path = fileName;
+    }
+
     const { error: adError } = await db
         .from("ads")
-        .insert({
-            user_id: currentUser.id,
-            title,
-            caption,
-            image_url: imageUrl,
-            image_storage_path: fileName,
-            promotion_allocation:
-                promotionAllocation
-        });
+        .insert(adInsert);
 
     if (adError) {
         console.error(
@@ -3058,7 +3076,9 @@ async function postAd() {
     await loadAds();
 
     alert(
-        "Ad submitted. It remains pending and private until both safety and duplicate screening are complete."
+        FEATURES.duplicateScreening
+            ? "Ad submitted. It remains pending and private until both safety and duplicate screening are complete."
+            : "Ad submitted. It is locked and will become public after the safety scan approves it."
     );
 
     showProfile();
@@ -3521,49 +3541,67 @@ function escapeHTML(text) {
 ======================================== */
 
 async function loadAds() {
-    /* GET PUBLIC-SAFE APPROVED ADS */
-
-    const {
-        data: publicAdData,
-        error: publicAdError
-    } = await db.rpc("get_public_ads");
-
-    if (publicAdError) {
-        console.error(
-            "Couldn't load public ads:",
-            publicAdError
-        );
-        return;
-    }
-
+    let publicAdData = [];
     let ownerAdData = [];
-    if (currentUser) {
+
+    if (FEATURES.duplicateScreening) {
         const {
             data,
-            error: ownerAdError
-        } = await db.rpc("get_my_ads");
-        if (ownerAdError) {
-            console.error("Couldn't load your ads:", ownerAdError);
+            error
+        } = await db.rpc("get_public_ads");
+        if (error) {
+            console.error("Couldn't load public ads:", error);
             return;
         }
-        ownerAdData = data || [];
+        publicAdData = data || [];
+
+        if (currentUser) {
+            const {
+                data: mine,
+                error: ownerAdError
+            } = await db.rpc("get_my_ads");
+            if (ownerAdError) {
+                console.error("Couldn't load your ads:", ownerAdError);
+                return;
+            }
+            ownerAdData = mine || [];
+        }
+    } else {
+        // Preserve the production query and RLS behavior used before duplicate
+        // screening. Authenticated creators still receive their own private ads.
+        const {
+            data,
+            error
+        } = await db
+            .from("ads")
+            .select("*")
+            .order("created_at", { ascending: false });
+        if (error) {
+            console.error("Couldn't load ads:", error);
+            return;
+        }
+        publicAdData = data || [];
     }
 
-    // Owner rows replace their public copies, so approved owner ads appear once
-    // while private pending/review rows remain visible only to their creator.
-    const adRowsById = new Map(
-        (publicAdData || []).map(ad => [ad.id, ad])
-    );
-    ownerAdData.forEach(ad => adRowsById.set(ad.id, ad));
-    const adData = [...adRowsById.values()].sort(
-        (left, right) =>
-            new Date(right.created_at).getTime() -
-            new Date(left.created_at).getTime()
-    );
+    const adData = FEATURES.duplicateScreening
+        ? (() => {
+            // Owner rows replace their public copies, so approved owner ads
+            // appear once while private review rows remain creator-only.
+            const adRowsById = new Map(
+                publicAdData.map(ad => [ad.id, ad])
+            );
+            ownerAdData.forEach(ad => adRowsById.set(ad.id, ad));
+            return [...adRowsById.values()].sort(
+                (left, right) =>
+                    new Date(right.created_at).getTime() -
+                    new Date(left.created_at).getTime()
+            );
+        })()
+        : publicAdData;
 
     const ownerIds = [...new Set((adData || []).map(ad => ad.user_id).filter(Boolean))];
     let profileData = [];
-    if (ownerIds.length) {
+    if (FEATURES.duplicateScreening && ownerIds.length) {
         const { data, error: profileError } = await db
             .from("creator_profiles")
             .select("user_id,handle")
@@ -3683,12 +3721,13 @@ async function loadAds() {
             // Duplicate moderation details are retained only in the owner's
             // in-memory model and are never rendered on another viewer's card.
             duplicateStatus:
-                isOwner
+                isOwner && FEATURES.duplicateScreening
                     ? ad.duplicate_status || "pending"
                     : null,
 
             duplicateOfAdId:
-                isOwner && Number.isSafeInteger(Number(ad.duplicate_of_ad_id))
+                isOwner && FEATURES.duplicateScreening &&
+                Number.isSafeInteger(Number(ad.duplicate_of_ad_id))
                     ? Number(ad.duplicate_of_ad_id)
                     : null,
 

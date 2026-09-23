@@ -1,5 +1,5 @@
-import Stripe from "npm:stripe@^22";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import Stripe from "npm:stripe@22.6.2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.1";
 
 const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY");
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");

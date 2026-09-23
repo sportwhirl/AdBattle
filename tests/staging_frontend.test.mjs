@@ -69,6 +69,7 @@ test("local frontend fails closed unless explicit adbattle-test config is exact"
   assert.equal(config.projectRef, "nccqnrcdygujulrnwair");
   assert.deepEqual({ ...config.features }, {
     seeds: true, adImages: true, creatorOnboarding: false,
+    duplicateScreening: true,
   });
   assert.throws(() => AdBattleConfig.resolve(
     { protocol: "http:", hostname: "127.0.0.1", origin: "http://127.0.0.1:8000" },
@@ -93,6 +94,7 @@ test("hosted frontend preserves production configuration", () => {
   assert.equal(config.environment, "production");
   assert.equal(config.projectRef, "bmsrdzqprxvldltaislp");
   assert.equal(config.features.seeds, true);
+  assert.equal(config.features.duplicateScreening, false);
   assert.throws(() => AdBattleConfig.resolve({
     protocol: "https:", hostname: "evil.example", origin: "https://evil.example",
   }, null), /origin is not allowed/);
@@ -197,6 +199,7 @@ test("staging enables paid Seeds and image posting while unavailable integration
   );
   assert.equal(staging.features.seeds, true);
   assert.equal(staging.features.adImages, true);
+  assert.equal(staging.features.duplicateScreening, true);
 });
 
 test("Support slider maps exact Fibonacci cents and reserves its final stop for Custom $50+", () => {

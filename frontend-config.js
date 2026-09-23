@@ -9,7 +9,8 @@
         features: Object.freeze({
             seeds: true,
             adImages: true,
-            creatorOnboarding: true
+            creatorOnboarding: true,
+            duplicateScreening: false
         })
     });
     const STAGING_REF = "nccqnrcdygujulrnwair";
@@ -50,7 +51,12 @@
             projectRef: STAGING_REF,
             supabaseUrl: STAGING_URL,
             publishableKey: supplied.publishableKey,
-            features: Object.freeze({ seeds: true, adImages: true, creatorOnboarding: false })
+            features: Object.freeze({
+                seeds: true,
+                adImages: true,
+                creatorOnboarding: false,
+                duplicateScreening: true
+            })
         });
     }
 
