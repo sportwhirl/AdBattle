@@ -45,8 +45,9 @@ Safety scanner decisions are terminal. Only `pending` may transition to
 while a different terminal result is rejected. `scan-ad` reloads
 `safety_status` and skips all validation and OpenAI work once a terminal result
 exists, even if duplicate screening still keeps the ad pending. Operational
-failures leave safety `pending` so a later webhook delivery can retry. There is
-not yet a separate trusted moderator RPC for resolving a safety `held` state.
+failures leave safety `pending` so a later webhook delivery can retry. The optional [private moderation review migration](MODERATION_REVIEW.md)
+adds a separate authenticated moderator path for resolving a safety `held` state;
+scanner retries still cannot override it.
 
 ### Policy response parsing and staging retry
 
@@ -137,3 +138,11 @@ common templates, shared source material, or genuinely different ads.
 Staging image uploads are enabled by the separately merged local-upload change.
 Enabling the browser does not install scanner webhooks, perform the required
 image backfill, or establish a successful end-to-end safety review by itself.
+
+## Human review page
+
+The optional [private moderation page](MODERATION_REVIEW.md) adds an explicitly
+granted moderator queue and audited safety-hold resolution. It also wraps the
+existing duplicate resolution RPC with verified Auth identity, version checks,
+and request replay protection. Both screening checks still must pass before
+publication. See that guide for the separate migration and staging rollout.
