@@ -7,6 +7,10 @@ on:
       - '.github/workflows/wallet-health.yml'
       - 'supabase/staging/check_wallet_health.sql'
       - 'tests/wallet_health.test.mjs'
+      - 'tests/wallet_monitor.test.mjs'
+      - 'tests/wallet_monitor_test.py'
+      - 'scripts/monitor_wallet_health.py'
+      - 'scripts/systemd/adbattle-wallet-monitor.*'
       - 'supabase/staging/00_test_base.sql'
       - 'supabase/migrations/**'
       - 'package.json'
@@ -29,4 +33,4 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: node --test tests/wallet_health.test.mjs
+      - run: node --test tests/wallet_health.test.mjs tests/wallet_monitor.test.mjs

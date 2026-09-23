@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the AdBattle test wallet every five minutes
+
+[Timer]
+OnStartupSec=1min
+OnUnitInactiveSec=5min
+AccuracySec=10s
+Unit=adbattle-wallet-monitor.service
+
+[Install]
+WantedBy=timers.target
