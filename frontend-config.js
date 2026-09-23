@@ -50,7 +50,7 @@
             projectRef: STAGING_REF,
             supabaseUrl: STAGING_URL,
             publishableKey: supplied.publishableKey,
-            features: Object.freeze({ likes: false, adImages: false, creatorOnboarding: false })
+            features: Object.freeze({ likes: false, adImages: true, creatorOnboarding: false })
         });
     }
 
