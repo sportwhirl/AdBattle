@@ -17,7 +17,7 @@ test('supplied staging schema supports all wallet migrations and real wallet RPC
     const base = readFileSync(new URL('../supabase/staging/00_test_base.sql', import.meta.url), 'utf8');
     assert.ok(!base.includes('bmsrdzqprxvldltaislp'));
     await db.exec(base);
-    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql']) {
+    for (const name of ['20260920_wallet_ledger.sql', '20260921_wallet_safety.sql', '20260922_wallet_capability_recovery.sql', '20260922_duplicate_screening.sql', '20260923_wallet_balance_recovery.sql', '20260923_wallet_table_privileges.sql']) {
       const sql = readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8');
       await db.exec(sql.replace('create extension if not exists pgcrypto;', ''));
     }
@@ -28,9 +28,10 @@ test('supplied staging schema supports all wallet migrations and real wallet RPC
       values ($1,'Synthetic test ad','https://example.invalid/test.png') returning id,moderation_status`, [creator])).rows[0];
     assert.equal(ad.moderation_status, 'pending_scan');
     const triggers = await db.query("select tgname from pg_trigger where tgrelid='public.ads'::regclass and not tgisinternal");
-    assert.equal(triggers.rows.length, 0);
+    assert.deepEqual(triggers.rows.map(row => row.tgname), ['enforce_ad_screening_gate']);
     await db.query('select record_wallet_topup($1,$2,$3,1000)', ['cs_test','pi_test',supporter]);
-    await db.query("update ads set moderation_status='approved' where id=$1", [ad.id]);
+    await db.query("select record_ad_duplicate_scan($1,$2,$3,$4)", [ad.id,'11'.repeat(32),'0123456789abcdef','dhash-9x8-luma-v1']);
+    await db.query("select record_ad_safety_scan($1,'passed',null)", [ad.id]);
     await db.query('select spend_wallet_support($1,$2,1,gen_random_uuid())', [supporter,ad.id]);
     const split = (await db.query('select creator_amount_micros,platform_amount_micros from supports')).rows[0];
     assert.equal(split.creator_amount_micros,9000);

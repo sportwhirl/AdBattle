@@ -14,3 +14,11 @@ verify_jwt = false
 
 [functions.settle-wallet-support]
 verify_jwt = false
+
+[functions.scan-ad]
+verify_jwt = false
+
+[functions.scan-ad-duplicate]
+verify_jwt = false
+# Database Webhook: public.ads INSERT -> POST /functions/v1/scan-ad-duplicate
+# Header: x-adbattle-duplicate-scanner-secret: <private secret>

@@ -422,6 +422,18 @@ nav .post-button:hover {
     border-radius: 11px;
 }
 
+.creator-attribution {
+    margin: 9px 0 0;
+    color: #666;
+    font-size: .9rem;
+}
+
+.creator-attribution a {
+    color: #4f3bd4;
+    font-weight: 700;
+    text-decoration: none;
+}
+
 .support-question {
     font-weight: 700;
     margin-bottom: 11px;
@@ -1012,7 +1024,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
     <input
         id="newImage"
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png"
     >
 
     <div class="ai-video-help">
@@ -1058,6 +1070,11 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
         >
             Account
         </div>
+
+        <label for="creatorHandle">Public creator handle</label>
+        <input id="creatorHandle" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="creator_name">
+        <button class="auth-secondary-button" onclick="saveCreatorHandle()">Save creator handle</button>
+        <div id="creatorHandleMessage" class="creator-balance-status"></div>
 
         <button
             class="logout-button"
@@ -1688,6 +1705,34 @@ function updateAccountButton() {
     }
 }
 
+async function loadCreatorHandle() {
+    if (!currentUser) return;
+    const { data, error } = await db.from("creator_profiles")
+        .select("handle").eq("user_id", currentUser.id).maybeSingle();
+    if (error) {
+        document.getElementById("creatorHandleMessage").innerText =
+            "Creator name is unavailable; attribution will report it as missing.";
+        return;
+    }
+    document.getElementById("creatorHandle").value = data?.handle || "";
+}
+
+async function saveCreatorHandle() {
+    if (!currentUser) return;
+    const handle = document.getElementById("creatorHandle").value.trim();
+    const message = document.getElementById("creatorHandleMessage");
+    if (!/^[A-Za-z0-9_]{1,30}$/.test(handle)) {
+        message.innerText = "Use 1–30 letters, numbers, or underscores.";
+        return;
+    }
+    const { error } = await db.from("creator_profiles").upsert({
+        user_id: currentUser.id,
+        handle
+    }, { onConflict: "user_id" });
+    message.innerText = error ? `Couldn't save creator name: ${error.message}` : "Creator name saved.";
+    if (!error) await loadAds();
+}
+
 async function handleProfileClick() {
     /*
         Re-check the current Supabase session when Profile is clicked.
@@ -1703,6 +1748,7 @@ async function handleProfileClick() {
     if (currentUser) {
         await Promise.all([
             loadAds(),
+            loadCreatorHandle(),
             loadWalletBalance(),
             loadCreatorBalance()
         ]);
@@ -1882,6 +1928,14 @@ function createCard(ad, rank = null) {
             >
         </div>
 
+        <div class="creator-attribution">
+            ${
+                ad.creatorHandle
+                    ? `By <a href="#creator/${encodeURIComponent(ad.userId)}" onclick="showCreatorProfile('${encodeURIComponent(ad.userId)}'); return false">@${escapeHTML(ad.creatorHandle)}</a>`
+                    : "Creator name unavailable"
+            }
+        </div>
+
         <div class="caption">
 
             <h2>
@@ -1906,6 +1960,20 @@ function createCard(ad, rank = null) {
                                             : "Removed"
                             )}
                         </div>
+                        ${
+                            ad.duplicateStatus === "duplicate_same_creator" && ad.duplicateOfAdId
+                                ? `
+                                    <div class="owner-duplicate-message">
+                                        You already posted this image.
+                                        <button type="button" onclick="showExistingAd(${ad.duplicateOfAdId})">
+                                            View existing ad #${ad.duplicateOfAdId}
+                                        </button>
+                                    </div>
+                                `
+                                : ["review_identical", "review_similar"].includes(ad.duplicateStatus)
+                                    ? `<div class="owner-duplicate-message">Image match is being reviewed.</div>`
+                                    : ""
+                        }
                     `
                     : ""
             }
@@ -2017,6 +2085,33 @@ function showMostLiked() {
             );
 
     renderGallery(sorted);
+}
+
+function showCreatorProfile(encodedUserId) {
+    const userId = decodeURIComponent(encodedUserId);
+    const creatorAds = ads.filter(ad => ad.userId === userId && ad.moderationStatus === "approved");
+    const handle = creatorAds.find(ad => ad.creatorHandle)?.creatorHandle;
+    showGallery();
+    gallery.classList.remove("show-likes");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = handle ? `@${handle}` : "Creator name unavailable";
+    pageDescription.innerText = "Approved ads by this creator.";
+    history.replaceState(null, "", `#creator/${encodeURIComponent(userId)}`);
+    renderGallery(creatorAds);
+}
+
+function showExistingAd(id) {
+    const existingAd = ads.find(ad => ad.id === id && ad.owner);
+    if (!currentUser || !existingAd) {
+        alert("That ad is not available in your account.");
+        return;
+    }
+    showGallery();
+    gallery.classList.remove("show-likes");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = "Your existing ad";
+    pageDescription.innerText = `Ad #${existingAd.id}`;
+    renderGallery([existingAd]);
 }
 
 /* ========================================
@@ -2353,6 +2448,11 @@ async function postAd() {
         return;
     }
 
+    if (!["image/jpeg", "image/png"].includes(imageFile.type)) {
+        alert("Please choose a JPEG or PNG image.");
+        return;
+    }
+
     if (imageFile.size > 10 * 1024 * 1024) {
         alert(
             "Please choose an image smaller than 10 MB."
@@ -2409,15 +2509,14 @@ async function postAd() {
     const imageUrl =
         publicUrlData.publicUrl;
 
-    const {
-        error: adError
-    } = await db
+    const { error: adError } = await db
         .from("ads")
         .insert({
             user_id: currentUser.id,
             title,
             caption,
             image_url: imageUrl,
+            image_storage_path: fileName,
             promotion_allocation:
                 promotionAllocation
         });
@@ -2450,7 +2549,7 @@ async function postAd() {
     await loadAds();
 
     alert(
-        "Ad submitted. It is locked and will become public after the safety scan approves it."
+        "Ad submitted. It remains pending and private until both safety and duplicate screening are complete."
     );
 
     showProfile();
@@ -2909,26 +3008,60 @@ function escapeHTML(text) {
 ======================================== */
 
 async function loadAds() {
-    /* GET ADS */
+    /* GET PUBLIC-SAFE APPROVED ADS */
 
     const {
-        data: adData,
-        error: adError
-    } = await db
-        .from("ads")
-        .select("*")
-        .order(
-            "created_at",
-            { ascending: false }
-        );
+        data: publicAdData,
+        error: publicAdError
+    } = await db.rpc("get_public_ads");
 
-    if (adError) {
+    if (publicAdError) {
         console.error(
-            "Couldn't load ads:",
-            adError
+            "Couldn't load public ads:",
+            publicAdError
         );
         return;
     }
+
+    let ownerAdData = [];
+    if (currentUser) {
+        const {
+            data,
+            error: ownerAdError
+        } = await db.rpc("get_my_ads");
+        if (ownerAdError) {
+            console.error("Couldn't load your ads:", ownerAdError);
+            return;
+        }
+        ownerAdData = data || [];
+    }
+
+    // Owner rows replace their public copies, so approved owner ads appear once
+    // while private pending/review rows remain visible only to their creator.
+    const adRowsById = new Map(
+        (publicAdData || []).map(ad => [ad.id, ad])
+    );
+    ownerAdData.forEach(ad => adRowsById.set(ad.id, ad));
+    const adData = [...adRowsById.values()].sort(
+        (left, right) =>
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime()
+    );
+
+    const ownerIds = [...new Set((adData || []).map(ad => ad.user_id).filter(Boolean))];
+    let profileData = [];
+    if (ownerIds.length) {
+        const { data, error: profileError } = await db
+            .from("creator_profiles")
+            .select("user_id,handle")
+            .in("user_id", ownerIds);
+        if (profileError) {
+            console.error("Couldn't load creator attribution:", profileError);
+        } else {
+            profileData = data || [];
+        }
+    }
+    const creatorHandles = new Map(profileData.map(profile => [profile.user_id, profile.handle]));
 
     /* GET LIKES */
 
@@ -2972,6 +3105,7 @@ async function loadAds() {
     }
 
     ads = adData.map(ad => {
+        const isOwner = Boolean(currentUser && ad.user_id === currentUser.id);
         const adLikes =
             likeData.filter(
                 like => like.ad_id === ad.id
@@ -3002,6 +3136,8 @@ async function loadAds() {
 
         return {
             id: ad.id,
+            userId: ad.user_id,
+            creatorHandle: creatorHandles.get(ad.user_id) || "",
             title: ad.title,
             caption: ad.caption || "",
             image: ad.image_url,
@@ -3018,11 +3154,20 @@ async function loadAds() {
                 ad.moderation_reason ||
                 "",
 
+            // Duplicate moderation details are retained only in the owner's
+            // in-memory model and are never rendered on another viewer's card.
+            duplicateStatus:
+                isOwner
+                    ? ad.duplicate_status || "pending"
+                    : null,
+
+            duplicateOfAdId:
+                isOwner && Number.isSafeInteger(Number(ad.duplicate_of_ad_id))
+                    ? Number(ad.duplicate_of_ad_id)
+                    : null,
+
             userSupport,
-            owner:
-                currentUser
-                    ? ad.user_id === currentUser.id
-                    : false
+            owner: isOwner
         };
     });
 }

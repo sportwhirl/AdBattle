@@ -4,5 +4,8 @@
     "test": "node --test tests/*.test.mjs",
     "test:concurrency": "python3 scripts/test_wallet_concurrency.py"
   },
-  "devDependencies": { "@electric-sql/pglite": "0.5.8" }
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "imagescript": "1.3.0"
+  }
 }
