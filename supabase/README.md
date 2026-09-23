@@ -365,13 +365,13 @@ key (or legacy `anon` key); never use a secret/service-role key. The tracked
 its response in memory. Do not save the key in that file, shell history, a URL,
 or a committed environment file.
 
-The limited staging schema intentionally disables likes, ad posting/image
-storage, and creator onboarding. Their controls are visibly disabled and no
-requests are made to the missing `likes` table, `ad-images` bucket,
-`sync-connect-status`, or `create-connect-account`. Login, approved ad loading,
-wallet balances, pending creator balance, top-ups, and wallet Support remain
-available under the existing RLS policies. This is a UI capability switch, not
-a database-permission bypass.
+The limited staging schema keeps likes and creator onboarding disabled, while
+ad image posting is enabled for end-to-end scanner testing against the
+`ad-images` bucket. No requests are made to the missing `likes` table,
+`sync-connect-status`, or `create-connect-account`. Login, ad posting, approved
+ad loading, wallet balances, pending creator balance, top-ups, and wallet Support
+remain available under the existing RLS policies. This is a UI capability
+switch, not a database-permission bypass.
 
 Browser Support and top-up retry records are keyed by Supabase project and user.
 Both UUIDs are written to `localStorage` before their Edge Function request.
