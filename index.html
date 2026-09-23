@@ -28,7 +28,7 @@ header {
 .topbar {
     width: min(1200px, 94%);
     margin: auto;
-    padding: 22px 0;
+    padding: 12px 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -36,13 +36,65 @@ header {
 }
 
 .logo {
-    font-size: 1.8rem;
-    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: min(240px, 25vw);
+    min-width: 185px;
+    height: 104px;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: pointer;
 }
 
-.logo span {
-    color: #654cff;
+.logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.icon-button,
+.like-count,
+.money {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5em;
+}
+
+.icon-button::before,
+.like-count::before,
+.money::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 1.75em;
+    height: 1.75em;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.seed-mark::before,
+.like-count::before {
+    background-image: url("./assets/seed-icon.png");
+}
+
+.support-mark::before,
+.money::before {
+    background-image: url("./assets/support-icon.png");
+}
+
+nav .icon-button::before {
+    width: 1.6em;
+    height: 1.6em;
+}
+
+.stats .like-count,
+.stats .money {
+    justify-content: flex-start;
 }
 
 nav {
@@ -221,9 +273,9 @@ nav .post-button:hover {
 }
 
 .like-button.liked {
-    background: #202124;
-    border-color: #202124;
-    color: white;
+    background: #edf8df;
+    border-color: #79a64a;
+    color: #254014;
 }
 
 .like-button:disabled {
@@ -810,6 +862,12 @@ nav .post-button:hover {
         padding: 17px 0;
     }
 
+    .logo {
+        width: 220px;
+        min-width: 0;
+        height: 96px;
+    }
+
     nav {
         justify-content: center;
         flex-wrap: wrap;
@@ -850,24 +908,25 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
 
 <header>
     <div class="topbar">
-        <div class="logo" onclick="showSupported()">
-            Ad<span>Battle</span>
-        </div>
+        <button class="logo" type="button" onclick="showSupported()" aria-label="AdBattle home">
+            <img src="./assets/adbattle-logo.png" alt="AdBattle">
+        </button>
 
         <nav>
             <button
                 id="supportedNav"
-                class="active"
+                class="active icon-button support-mark"
                 onclick="showSupported()"
             >
-                ⚡ Most Supported
+                Most Supported
             </button>
 
             <button
                 id="likedNav"
+                class="icon-button seed-mark"
                 onclick="showMostLiked()"
             >
-                ♡ Most Liked
+                Most Seeded
             </button>
 
             <button
@@ -903,7 +962,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
     <h2>Log In</h2>
 
     <p class="auth-description">
-        Log in to post ads, like ads and manage your profile.
+        Log in to post ads, seed ads and manage your profile.
     </p>
 
     <label>Email</label>
@@ -1097,7 +1156,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
                 id="myLikesTab"
                 onclick="profileSection('liked')"
             >
-                Liked
+                Seeded
             </button>
 
             <button
@@ -1199,7 +1258,7 @@ function applyEnvironmentConfiguration() {
         const likedNav = document.getElementById("likedNav");
         const myLikesTab = document.getElementById("myLikesTab");
         likedNav.disabled = true;
-        likedNav.title = "Likes are unavailable in the staging schema.";
+        likedNav.title = "Seeding is unavailable in the staging schema.";
         myLikesTab.disabled = true;
         myLikesTab.title = likedNav.title;
     }
@@ -1853,7 +1912,7 @@ function createCard(ad, rank = null) {
 
             <div class="stats">
                 <span class="like-count">
-                    ♡ ${ad.likes.toLocaleString()} likes
+                    ${ad.likes.toLocaleString()} ${ad.likes === 1 ? "seed" : "seeds"}
                 </span>
 
                 <span class="money">
@@ -1864,29 +1923,29 @@ function createCard(ad, rank = null) {
             <div class="action-buttons">
 
                 <button
-                    class="like-button ${ad.liked ? "liked" : ""}"
+                    class="like-button icon-button seed-mark ${ad.liked ? "liked" : ""}"
                     onclick="toggleLike(${ad.id})"
                     ${(!FEATURES.likes || ad.owner) ? "disabled" : ""}
-                    title="${!FEATURES.likes ? "Likes are unavailable in staging." : ad.owner ? "You can't like your own ad." : ""}"
+                    title="${!FEATURES.likes ? "Seeding is unavailable in staging." : ad.owner ? "You can't seed your own ad." : ""}"
                 >
                     ${
                         !FEATURES.likes
-                            ? "Likes unavailable"
+                            ? "Seeding unavailable"
                             : ad.owner
-                                ? "♡ Your Ad"
-                                : (ad.liked ? "♥ Liked" : "♡ Like")
+                                ? "Your Ad"
+                                : (ad.liked ? "Seeded" : "Seed")
                     }
                 </button>
 
                 <button
-                    class="support-button"
+                    class="support-button icon-button support-mark"
                     onclick="openSupport(${ad.id}, this)"
                     ${ad.moderationStatus !== "approved" ? "disabled" : ""}
                     title="${ad.moderationStatus !== "approved" ? "Support opens after safety approval." : ""}"
                 >
                     ${
                         ad.moderationStatus === "approved"
-                            ? "⚡ Support"
+                            ? "Support"
                             : "Awaiting approval"
                     }
                 </button>
@@ -1929,7 +1988,7 @@ function showSupported() {
 }
 
 /* ========================================
-   MOST LIKED
+   MOST SEEDED
 ======================================== */
 
 function showMostLiked() {
@@ -1943,10 +2002,10 @@ function showMostLiked() {
     gallery.classList.add("show-likes");
 
     pageTitle.innerText =
-        "Most Liked";
+        "Most Seeded";
 
     pageDescription.innerText =
-        "The ads the internet likes most.";
+        "The ads people have seeded most.";
 
     setNav("likedNav");
 
@@ -1984,12 +2043,12 @@ function renderGallery(list) {
 }
 
 /* ========================================
-   LIKE
+   SEED
 ======================================== */
 
 async function toggleLike(id) {
     if (!FEATURES.likes) {
-        alert("Likes are unavailable in the staging schema.");
+        alert("Seeding is unavailable in the staging schema.");
         return;
     }
     if (!currentUser) {
@@ -1998,7 +2057,7 @@ async function toggleLike(id) {
         document
             .getElementById("authMessage")
             .innerText =
-                "Log in to like ads.";
+                "Log in to seed ads.";
 
         return;
     }
@@ -2009,7 +2068,7 @@ async function toggleLike(id) {
     if (!ad) return;
 
     if (ad.owner) {
-        alert("You can't like your own ad.");
+        alert("You can't seed your own ad.");
         return;
     }
 
@@ -2023,7 +2082,7 @@ async function toggleLike(id) {
         if (error) {
             console.error(error);
             alert(
-                "Couldn't remove like: " +
+                "Couldn't remove seed: " +
                 error.message
             );
             return;
@@ -2039,7 +2098,7 @@ async function toggleLike(id) {
         if (error) {
             console.error(error);
             alert(
-                "Couldn't save like: " +
+                "Couldn't save seed: " +
                 error.message
             );
             return;
@@ -2112,8 +2171,8 @@ async function openSupport(id, button) {
             >
         </div>
 
-        <button class="confirm-support">
-            ⚡ Support
+        <button class="confirm-support icon-button support-mark">
+            Support
         </button>
 
         <button class="cancel-support">
@@ -2155,8 +2214,8 @@ async function openSupport(id, button) {
 
             confirm.innerText =
                 amount > 0
-                    ? `⚡ Support $${amount.toFixed(2)}`
-                    : "⚡ Support";
+                    ? `Support $${amount.toFixed(2)}`
+                    : "Support";
         }
     );
 
@@ -2247,8 +2306,8 @@ async function openSupport(id, button) {
 
             confirm.innerText =
                 currentAmount > 0
-                    ? `⚡ Support $${currentAmount.toFixed(2)}`
-                    : "⚡ Support";
+                    ? `Support $${currentAmount.toFixed(2)}`
+                    : "Support";
         }
     };
 
@@ -2647,7 +2706,7 @@ function showProfile() {
         "Your Profile";
 
     pageDescription.innerText =
-        "Your ads, likes and support.";
+        "Your ads, seeds and support.";
 
     setNav("profileNav");
 
@@ -2713,7 +2772,7 @@ function profileSection(section) {
 
         if (section === "liked") {
             message =
-                "You haven't liked any ads yet.";
+                "You haven't seeded any ads yet.";
         }
 
         if (section === "supported") {
