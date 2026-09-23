@@ -7,7 +7,7 @@
         supabaseUrl: "https://bmsrdzqprxvldltaislp.supabase.co",
         publishableKey: "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd",
         features: Object.freeze({
-            likes: true,
+            seeds: true,
             adImages: true,
             creatorOnboarding: true
         })
@@ -50,7 +50,7 @@
             projectRef: STAGING_REF,
             supabaseUrl: STAGING_URL,
             publishableKey: supplied.publishableKey,
-            features: Object.freeze({ likes: false, adImages: true, creatorOnboarding: false })
+            features: Object.freeze({ seeds: true, adImages: true, creatorOnboarding: false })
         });
     }
 

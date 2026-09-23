@@ -8,27 +8,59 @@ import {
   requestOriginAllowed,
 } from "../_shared/http.ts";
 
-function publicSupportError(message: string) {
+function publicSupportError(
+  message: string,
+  action: "seed" | "support",
+) {
   if (message.includes("WALLET_NOT_FUNDED")) {
-    return ["Add at least $10.00 to your account before supporting an ad.", 400] as const;
+    return [
+      action === "seed"
+        ? "Add funds to your account before Seeding an ad."
+        : "Add funds to your account before supporting an ad.",
+      400,
+    ] as const;
   }
   if (message.includes("WALLET_FROZEN")) {
     return ["This balance is temporarily unavailable.", 403] as const;
   }
   if (message.includes("INSUFFICIENT_WALLET_BALANCE")) {
-    return ["Your AdBattle balance is too low for that Support.", 400] as const;
+    return [
+      action === "seed"
+        ? "You need at least 1¢ in your AdBattle balance to Seed this ad."
+        : "Your AdBattle balance is too low for that Support.",
+      400,
+    ] as const;
   }
   if (message.includes("AD_NOT_FOUND")) {
     return ["That ad no longer exists.", 404] as const;
   }
   if (message.includes("AD_NOT_APPROVED")) {
-    return ["This ad is not currently approved for Support.", 400] as const;
+    return [
+      action === "seed"
+        ? "This ad is not currently approved for Seeding."
+        : "This ad is not currently approved for Support.",
+      400,
+    ] as const;
   }
   if (message.includes("SUPPORT_BELOW_MINIMUM")) {
     return ["The minimum Support is $0.01.", 400] as const;
   }
+  if (message.includes("SEED_OWN_AD")) {
+    return ["You can't Seed your own ad.", 400] as const;
+  }
+  if (message.includes("INVALID_SEED_REQUEST")) {
+    return ["Invalid Seed request.", 400] as const;
+  }
+  if (message.includes("REQUEST_ID_CONFLICT")) {
+    return ["This saved wallet action does not match the requested Seed or Support. Retry the original action.", 409] as const;
+  }
 
-  return ["Couldn't record this Support.", 500] as const;
+  return [
+    action === "seed"
+      ? "Couldn't record this Seed."
+      : "Couldn't record this Support.",
+    500,
+  ] as const;
 }
 
 Deno.serve(async (req) => {
@@ -69,16 +101,25 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const adId = Number(body?.ad_id);
-    const amountCents = Number(body?.amount_cents);
+    const adId = body?.ad_id;
+    const amountCents = body?.amount_cents;
     const requestId = body?.request_id;
+    const action = body?.action ?? "support";
 
-    if (!Number.isInteger(adId) || adId <= 0) {
+    if (!["support", "seed"].includes(action)) {
+      return jsonResponse(req, { error: "Invalid Support action." }, 400);
+    }
+
+    if (!Number.isSafeInteger(adId) || adId <= 0) {
       return jsonResponse(req, { error: "Invalid ad." }, 400);
     }
 
-    if (!Number.isInteger(amountCents) || amountCents < 1) {
+    if (!Number.isSafeInteger(amountCents) || amountCents < 1) {
       return jsonResponse(req, { error: "The minimum Support is $0.01." }, 400);
+    }
+
+    if (action === "seed" && amountCents !== 1) {
+      return jsonResponse(req, { error: "A Seed is exactly $0.01." }, 400);
     }
 
     if (!isUuid(requestId)) {
@@ -89,21 +130,36 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data, error } = await admin.rpc("spend_wallet_support", {
-      p_user_id: user.id,
-      p_ad_id: adId,
-      p_amount_cents: amountCents,
-      p_request_id: requestId,
-    });
+    const rpcName = action === "seed"
+      ? "seed_ad_from_wallet"
+      : "support_ad_from_wallet";
+    const rpcArguments = action === "seed"
+      ? {
+        p_user_id: user.id,
+        p_ad_id: adId,
+        p_request_id: requestId,
+      }
+      : {
+        p_user_id: user.id,
+        p_ad_id: adId,
+        p_amount_cents: amountCents,
+        p_request_id: requestId,
+      };
+
+    const { data, error } = await admin.rpc(rpcName, rpcArguments);
 
     if (error) {
-      console.error("spend_wallet_support error:", error);
-      const [message, status] = publicSupportError(error.message || "");
+      console.error(`${rpcName} error:`, error);
+      const [message, status] = publicSupportError(
+        error.message || "",
+        action,
+      );
       return jsonResponse(req, { error: message }, status);
     }
 
     return jsonResponse(req, {
       ok: true,
+      action,
       ...data,
     });
   } catch (error) {

@@ -29,7 +29,12 @@ TABLES = {
     "ad_settlement_state": ("creator_user_id", "ad_id", "ad_id,creator_user_id"),
     "support_settlements": ("creator_user_id", "id", "id,creator_user_id"),
 }
-PRIVATE = ("wallet_payment_risks", "wallet_payment_risk_events", "wallet_transfer_guards")
+PRIVATE = (
+    "wallet_payment_risks",
+    "wallet_payment_risk_events",
+    "wallet_transfer_guards",
+    "ad_seeds",
+)
 MAX_BYTES = 1024 * 1024
 PAGE_SIZE = 100
 MAX_ROWS = 5000

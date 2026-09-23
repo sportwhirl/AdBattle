@@ -57,7 +57,7 @@ header {
 }
 
 .icon-button,
-.like-count,
+.seed-count,
 .money {
     display: inline-flex;
     align-items: center;
@@ -66,7 +66,7 @@ header {
 }
 
 .icon-button::before,
-.like-count::before,
+.seed-count::before,
 .money::before {
     content: "";
     flex: 0 0 auto;
@@ -78,7 +78,7 @@ header {
 }
 
 .seed-mark::before,
-.like-count::before {
+.seed-count::before {
     background-image: url("./assets/seed-icon.png");
 }
 
@@ -92,7 +92,7 @@ nav .icon-button::before {
     height: 1.6em;
 }
 
-.stats .like-count,
+.stats .seed-count,
 .stats .money {
     justify-content: flex-start;
 }
@@ -226,7 +226,7 @@ nav .post-button:hover {
     font-size: .9rem;
 }
 
-.like-count {
+.seed-count {
     color: #666;
     font-weight: normal;
 }
@@ -239,7 +239,7 @@ nav .post-button:hover {
     font-weight: bold;
 }
 
-.gallery.show-likes .like-count {
+.gallery.show-seeds .seed-count {
     font-weight: bold;
     color: #202124;
 }
@@ -253,7 +253,7 @@ nav .post-button:hover {
     margin-top: 15px;
 }
 
-.like-button,
+.seed-button,
 .support-button {
     padding: 12px;
     border-radius: 9px;
@@ -262,27 +262,34 @@ nav .post-button:hover {
     cursor: pointer;
 }
 
-.like-button {
+.seed-button {
     border: 1px solid #ccc;
     background: white;
     color: #222;
 }
 
-.like-button:hover {
+.seed-button:hover {
     background: #f5f5f5;
 }
 
-.like-button.liked {
+.seed-button.seeded {
     background: #edf8df;
     border-color: #79a64a;
     color: #254014;
 }
 
-.like-button:disabled {
+.seed-button:disabled {
     opacity: .5;
     cursor: not-allowed;
     background: #f3f3f3;
     color: #777;
+}
+
+.seed-button.seeded:disabled {
+    opacity: 1;
+    background: #edf8df;
+    border-color: #79a64a;
+    color: #254014;
 }
 
 .support-button {
@@ -293,6 +300,18 @@ nav .post-button:hover {
 
 .support-button:hover {
     background: #543bea;
+}
+
+.support-button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.action-explainer {
+    margin: 9px 2px 0;
+    color: #6b6b6b;
+    font-size: .82rem;
+    line-height: 1.4;
 }
 
 /* OWNER CONTROLS */
@@ -436,7 +455,59 @@ nav .post-button:hover {
 
 .support-question {
     font-weight: 700;
-    margin-bottom: 11px;
+    margin-bottom: 5px;
+}
+
+.support-help {
+    margin: 0 0 13px;
+    color: #666;
+    font-size: .88rem;
+    line-height: 1.45;
+}
+
+.support-selected {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 0 8px;
+    font-size: .92rem;
+}
+
+.support-selected output {
+    color: #3f2ab7;
+    font-size: 1.08rem;
+    font-weight: 800;
+}
+
+.support-range {
+    width: 100%;
+    accent-color: #654cff;
+    cursor: pointer;
+}
+
+.support-range:disabled {
+    cursor: not-allowed;
+}
+
+.support-landmarks {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 4px 0 13px;
+    color: #777;
+    font-size: .75rem;
+}
+
+.support-landmarks span {
+    text-align: center;
+}
+
+.custom-support-label {
+    display: block;
+    margin: 4px 0 6px;
+    font-size: .88rem;
+    font-weight: 700;
 }
 
 .amount-entry {
@@ -447,6 +518,10 @@ nav .post-button:hover {
     border-radius: 9px;
     padding: 0 13px;
     margin-bottom: 10px;
+}
+
+.amount-entry[hidden] {
+    display: none;
 }
 
 .amount-entry:focus-within {
@@ -468,6 +543,19 @@ nav .post-button:hover {
     background: transparent;
 }
 
+.support-picker-message {
+    min-height: 1.25em;
+    margin: 1px 0 9px;
+    color: #666;
+    font-size: .83rem;
+    line-height: 1.4;
+}
+
+.support-picker-message.error {
+    color: #a12626;
+    font-weight: 700;
+}
+
 .confirm-support {
     width: 100%;
     padding: 12px;
@@ -477,6 +565,11 @@ nav .post-button:hover {
     color: white;
     font-weight: bold;
     cursor: pointer;
+}
+
+.confirm-support:disabled {
+    opacity: .55;
+    cursor: not-allowed;
 }
 
 .cancel-support {
@@ -934,9 +1027,9 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
             </button>
 
             <button
-                id="likedNav"
+                id="seededNav"
                 class="icon-button seed-mark"
-                onclick="showMostLiked()"
+                onclick="showMostSeeded()"
             >
                 Most Seeded
             </button>
@@ -1170,8 +1263,8 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
             </button>
 
             <button
-                id="myLikesTab"
-                onclick="profileSection('liked')"
+                id="mySeededTab"
+                onclick="profileSection('seeded')"
             >
                 Seeded
             </button>
@@ -1271,13 +1364,13 @@ function applyEnvironmentConfiguration() {
     if (APP_CONFIG.environment === "staging") {
         document.getElementById("environmentLabel").classList.add("visible");
     }
-    if (!FEATURES.likes) {
-        const likedNav = document.getElementById("likedNav");
-        const myLikesTab = document.getElementById("myLikesTab");
-        likedNav.disabled = true;
-        likedNav.title = "Seeding is unavailable in the staging schema.";
-        myLikesTab.disabled = true;
-        myLikesTab.title = likedNav.title;
+    if (!FEATURES.seeds) {
+        const seededNav = document.getElementById("seededNav");
+        const mySeededTab = document.getElementById("mySeededTab");
+        seededNav.disabled = true;
+        seededNav.title = "Seeding is unavailable.";
+        mySeededTab.disabled = true;
+        mySeededTab.title = seededNav.title;
     }
     if (!FEATURES.adImages) {
         const postNav = document.getElementById("postNav");
@@ -1309,8 +1402,42 @@ function formatCents(cents) {
     ).toFixed(2)}`;
 }
 
+const SUPPORT_FIBONACCI_CENTS = Object.freeze([
+    1, 2, 3, 5, 8, 13, 21, 34, 55,
+    89, 144, 233, 377, 610, 987,
+    1597, 2584, 4181
+]);
+const SUPPORT_CUSTOM_INDEX =
+    SUPPORT_FIBONACCI_CENTS.length;
+const CUSTOM_SUPPORT_MINIMUM_CENTS = 5000;
+
+function supportPresetCents(index) {
+    const normalized = Number(index);
+    return Number.isInteger(normalized) &&
+        normalized >= 0 &&
+        normalized < SUPPORT_FIBONACCI_CENTS.length
+            ? SUPPORT_FIBONACCI_CENTS[normalized]
+            : null;
+}
+
+function supportPresetIndex(amountCents) {
+    const index =
+        SUPPORT_FIBONACCI_CENTS.indexOf(
+            Number(amountCents)
+        );
+    return index >= 0
+        ? index
+        : SUPPORT_CUSTOM_INDEX;
+}
+
 function pendingSupportKey() {
     return `adbattle:pending-support:${PROJECT_REF}:${currentUser.id}`;
+}
+
+function pendingSupportAction(pending) {
+    return pending?.action === "seed"
+        ? "seed"
+        : "support";
 }
 
 function readPendingSupport() {
@@ -1329,21 +1456,68 @@ function readPendingSupport() {
     return raw ? JSON.parse(raw) : null;
 }
 
-async function submitWalletSupport(adId, amountCents) {
+function reconcileRecordedSeedPending(
+    userSeededAdIds
+) {
+    if (!currentUser) return;
+
+    try {
+        const pending = readPendingSupport();
+        if (
+            pending &&
+            pendingSupportAction(pending) === "seed" &&
+            userSeededAdIds.has(Number(pending.ad_id))
+        ) {
+            // The authoritative marker proves the one-time action completed,
+            // even if the browser lost the original response.
+            localStorage.removeItem(pendingSupportKey());
+        }
+    } catch (error) {
+        console.error(
+            "Couldn't reconcile the saved Seed request:",
+            error
+        );
+    }
+}
+
+async function submitWalletSupport(
+    adId,
+    amountCents,
+    action = "support"
+) {
     const key = pendingSupportKey();
     let pending = readPendingSupport();
-    if (pending && (pending.ad_id !== adId || pending.amount_cents !== amountCents)) {
-        throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} Support for ad #${pending.ad_id} first. Retry that same ad and amount; it will not be charged twice.`);
+    const existingAction = pendingSupportAction(pending);
+    if (
+        pending &&
+        (
+            pending.ad_id !== adId ||
+            pending.amount_cents !== amountCents ||
+            existingAction !== action
+        )
+    ) {
+        const pendingLabel =
+            existingAction === "seed"
+                ? "Seed"
+                : "Support";
+        throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} ${pendingLabel} for ad #${pending.ad_id} first. Retry that same action; it will not be charged twice.`);
     }
     if (!pending) {
-        pending = { ad_id: adId, amount_cents: amountCents, request_id: crypto.randomUUID() };
+        pending = {
+            ad_id: adId,
+            amount_cents: amountCents,
+            request_id: crypto.randomUUID(),
+            action
+        };
         // Persist BEFORE sending. If storage is unavailable, fail without spending.
         localStorage.setItem(key, JSON.stringify(pending));
     }
     const { data, error } = await db.functions.invoke("support-from-wallet", { body: pending });
     if (error || !data?.ok) {
         throw new Error(await functionErrorMessage(error, data,
-            "Support could not be confirmed. Retry the same ad and amount."));
+            action === "seed"
+                ? "Seed could not be confirmed. Retry the same ad; it will not be charged twice."
+                : "Support could not be confirmed. Retry the same ad and amount."));
     }
     localStorage.removeItem(key);
     return data;
@@ -1979,8 +2153,8 @@ function createCard(ad, rank = null) {
             }
 
             <div class="stats">
-                <span class="like-count">
-                    ${ad.likes.toLocaleString()} ${ad.likes === 1 ? "seed" : "seeds"}
+                <span class="seed-count">
+                    ${ad.seedCount.toLocaleString()} ${ad.seedCount === 1 ? "seed" : "seeds"}
                 </span>
 
                 <span class="money">
@@ -1991,25 +2165,60 @@ function createCard(ad, rank = null) {
             <div class="action-buttons">
 
                 <button
-                    class="like-button icon-button seed-mark ${ad.liked ? "liked" : ""}"
-                    onclick="toggleLike(${ad.id})"
-                    ${(!FEATURES.likes || ad.owner) ? "disabled" : ""}
-                    title="${!FEATURES.likes ? "Seeding is unavailable in staging." : ad.owner ? "You can't seed your own ad." : ""}"
+                    type="button"
+                    class="seed-button icon-button seed-mark ${ad.seeded ? "seeded" : ""}"
+                    onclick="seedAd(${ad.id}, this)"
+                    ${(
+                        !FEATURES.seeds ||
+                        ad.owner ||
+                        ad.seeded ||
+                        ad.moderationStatus !== "approved"
+                    ) ? "disabled" : ""}
+                    title="${
+                        !FEATURES.seeds
+                            ? "Seeding is unavailable."
+                            : ad.owner
+                                ? "You can't Seed your own ad."
+                                : ad.seeded
+                                    ? "This one-time Seed spent 1¢ from your balance and cannot be undone."
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Seed opens after safety approval."
+                                        : "Spend 1¢ from your AdBattle balance once. This cannot be undone."
+                    }"
+                    aria-label="${
+                        !FEATURES.seeds
+                            ? "Seeding is unavailable"
+                            : ad.owner
+                                ? "Your own ad cannot be Seeded"
+                                : ad.seeded
+                                    ? "Seeded once with one cent; this cannot be undone"
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Seeding opens after safety approval"
+                                        : "Seed this ad once with one cent; this cannot be undone"
+                    }"
+                    aria-describedby="actionExplainer-${ad.id}"
                 >
                     ${
-                        !FEATURES.likes
+                        !FEATURES.seeds
                             ? "Seeding unavailable"
                             : ad.owner
                                 ? "Your Ad"
-                                : (ad.liked ? "Seeded" : "Seed")
+                                : ad.seeded
+                                    ? "Seeded · 1¢"
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Awaiting approval"
+                                        : "Seed · 1¢"
                     }
                 </button>
 
                 <button
+                    type="button"
                     class="support-button icon-button support-mark"
                     onclick="openSupport(${ad.id}, this)"
                     ${ad.moderationStatus !== "approved" ? "disabled" : ""}
                     title="${ad.moderationStatus !== "approved" ? "Support opens after safety approval." : ""}"
+                    aria-label="Choose a Support amount"
+                    aria-describedby="actionExplainer-${ad.id}"
                 >
                     ${
                         ad.moderationStatus === "approved"
@@ -2018,6 +2227,10 @@ function createCard(ad, rank = null) {
                     }
                 </button>
 
+            </div>
+
+            <div class="action-explainer" id="actionExplainer-${ad.id}">
+                Seed spends 1¢ from your balance once per ad and can’t be undone. Support lets you choose more.
             </div>
 
 
@@ -2034,7 +2247,7 @@ function createCard(ad, rank = null) {
 function showSupported() {
     showGallery();
 
-    gallery.classList.remove("show-likes");
+    gallery.classList.remove("show-seeds");
     gallery.classList.add("show-support");
 
     pageTitle.innerText =
@@ -2059,15 +2272,15 @@ function showSupported() {
    MOST SEEDED
 ======================================== */
 
-function showMostLiked() {
-    if (!FEATURES.likes) {
+function showMostSeeded() {
+    if (!FEATURES.seeds) {
         showSupported();
         return;
     }
     showGallery();
 
     gallery.classList.remove("show-support");
-    gallery.classList.add("show-likes");
+    gallery.classList.add("show-seeds");
 
     pageTitle.innerText =
         "Most Seeded";
@@ -2075,13 +2288,13 @@ function showMostLiked() {
     pageDescription.innerText =
         "The ads people have seeded most.";
 
-    setNav("likedNav");
+    setNav("seededNav");
 
     const sorted =
         ads
             .filter(ad => ad.moderationStatus === "approved")
             .sort(
-                (a, b) => b.likes - a.likes
+                (a, b) => b.seedCount - a.seedCount
             );
 
     renderGallery(sorted);
@@ -2092,7 +2305,7 @@ function showCreatorProfile(encodedUserId) {
     const creatorAds = ads.filter(ad => ad.userId === userId && ad.moderationStatus === "approved");
     const handle = creatorAds.find(ad => ad.creatorHandle)?.creatorHandle;
     showGallery();
-    gallery.classList.remove("show-likes");
+    gallery.classList.remove("show-seeds");
     gallery.classList.add("show-support");
     pageTitle.innerText = handle ? `@${handle}` : "Creator name unavailable";
     pageDescription.innerText = "Approved ads by this creator.";
@@ -2107,7 +2320,7 @@ function showExistingAd(id) {
         return;
     }
     showGallery();
-    gallery.classList.remove("show-likes");
+    gallery.classList.remove("show-seeds");
     gallery.classList.add("show-support");
     pageTitle.innerText = "Your existing ad";
     pageDescription.innerText = `Ad #${existingAd.id}`;
@@ -2141,9 +2354,9 @@ function renderGallery(list) {
    SEED
 ======================================== */
 
-async function toggleLike(id) {
-    if (!FEATURES.likes) {
-        alert("Seeding is unavailable in the staging schema.");
+async function seedAd(id, button) {
+    if (!FEATURES.seeds) {
+        alert("Seeding is unavailable.");
         return;
     }
     if (!currentUser) {
@@ -2152,56 +2365,95 @@ async function toggleLike(id) {
         document
             .getElementById("authMessage")
             .innerText =
-                "Log in to seed ads.";
+                "Log in to Seed this ad with 1¢ from your AdBattle balance.";
 
         return;
     }
+
+    await loadWalletBalance();
 
     const ad =
         ads.find(ad => ad.id === id);
 
     if (!ad) return;
 
-    if (ad.owner) {
-        alert("You can't seed your own ad.");
+    if (ad.moderationStatus !== "approved") {
+        alert("This ad is not approved for Seeding yet.");
         return;
     }
 
-    if (ad.liked) {
-        const { error } = await db
-            .from("likes")
-            .delete()
-            .eq("ad_id", id)
-            .eq("user_id", currentUser.id);
-
-        if (error) {
-            console.error(error);
-            alert(
-                "Couldn't remove seed: " +
-                error.message
-            );
-            return;
-        }
-    } else {
-        const { error } = await db
-            .from("likes")
-            .insert({
-                ad_id: id,
-                user_id: currentUser.id
-            });
-
-        if (error) {
-            console.error(error);
-            alert(
-                "Couldn't save seed: " +
-                error.message
-            );
-            return;
-        }
+    if (ad.owner) {
+        alert("You can't Seed your own ad.");
+        return;
     }
 
-    await loadAds();
-    refreshCurrentView();
+    if (ad.seeded) {
+        alert("You already permanently Seeded this ad with 1¢.");
+        return;
+    }
+
+    let pending;
+    try {
+        pending = readPendingSupport();
+    } catch (_error) {
+        alert("Browser storage is unavailable. Seeding is paused to protect against duplicate charges.");
+        return;
+    }
+
+    if (!pending && walletBalanceCents < 1) {
+        alert("You need at least 1¢ in your AdBattle balance to Seed this ad.");
+        return;
+    }
+
+    button.disabled = true;
+    button.innerText = "Seeding...";
+
+    try {
+        const data =
+            await submitWalletSupport(
+                id,
+                1,
+                "seed"
+            );
+
+        walletBalanceCents =
+            Number(data?.balance_cents) || 0;
+        walletBalance.innerText =
+            formatCents(walletBalanceCents);
+
+        await Promise.allSettled([
+            loadAds(),
+            loadCreatorBalance()
+        ]);
+        refreshCurrentView();
+
+        showReturnMessage(
+            data?.already_seeded
+                ? "This ad was already permanently Seeded. No additional cent was charged."
+                : "1¢ of Support recorded: 90% goes to the creator and 10% to AdBattle. Your one-time Seed can’t be undone.",
+            true
+        );
+    } catch (error) {
+        console.error(error);
+        alert(
+            error instanceof Error
+                ? error.message
+                : "Couldn't Seed this ad."
+        );
+
+        button.disabled = false;
+        let retryPending = null;
+        try {
+            retryPending = readPendingSupport();
+        } catch (_error) {
+            // The original error already explains the failed action.
+        }
+        button.innerText =
+            retryPending?.ad_id === id &&
+            pendingSupportAction(retryPending) === "seed"
+                ? "Retry Seed · 1¢"
+                : "Seed · 1¢";
+    }
 }
 
 /* ========================================
@@ -2236,6 +2488,27 @@ async function openSupport(id, button) {
         return;
     }
 
+    let pendingAtOpen;
+    try {
+        pendingAtOpen = readPendingSupport();
+    } catch (_error) {
+        alert("Browser storage is unavailable. Support is paused to protect against duplicate charges.");
+        return;
+    }
+
+    if (pendingAtOpen) {
+        const action =
+            pendingSupportAction(pendingAtOpen);
+        if (action !== "support") {
+            alert(`Resolve your pending ${formatCents(pendingAtOpen.amount_cents)} Seed for ad #${pendingAtOpen.ad_id} first. Retry Seed; it will not be charged twice.`);
+            return;
+        }
+        if (pendingAtOpen.ad_id !== id) {
+            alert(`Resolve your pending ${formatCents(pendingAtOpen.amount_cents)} Support for ad #${pendingAtOpen.ad_id} first. Retry that same ad and amount; it will not be charged twice.`);
+            return;
+        }
+    }
+
     document
         .querySelectorAll(".support-box")
         .forEach(box => box.remove());
@@ -2244,33 +2517,96 @@ async function openSupport(id, button) {
         document.createElement("div");
 
     box.className = "support-box";
+    box.setAttribute("role", "group");
+    box.setAttribute(
+        "aria-labelledby",
+        `supportQuestion-${id}`
+    );
 
     box.innerHTML = `
-        <div class="support-question">
-            How much would you like to support?
+        <div class="support-question" id="supportQuestion-${id}">
+            Choose your Support
         </div>
+
+        <p class="support-help">
+            Slide through Fibonacci amounts from 1¢ to $41.81. The final stop opens Custom $50+.
+        </p>
 
         <div class="support-balance">
             Available balance: ${formatCents(walletBalanceCents)}
         </div>
 
-        <div class="amount-entry">
-            <span>$</span>
+        <div class="support-picker">
+            <div class="support-selected">
+                <label for="supportSlider-${id}">Support amount</label>
+                <output
+                    id="supportSelection-${id}"
+                    for="supportSlider-${id}"
+                >$0.01</output>
+            </div>
 
             <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                max="${(walletBalanceCents / 100).toFixed(2)}"
-                placeholder="0.01"
+                id="supportSlider-${id}"
+                class="support-range"
+                type="range"
+                min="0"
+                max="${SUPPORT_CUSTOM_INDEX}"
+                step="1"
+                value="0"
+                aria-describedby="supportPickerHelp-${id}"
+                aria-valuetext="$0.01"
+                aria-controls="supportCustomEntry-${id}"
+                aria-expanded="false"
             >
+
+            <div class="support-landmarks" aria-hidden="true">
+                <span>1¢</span>
+                <span>Custom $50+</span>
+            </div>
         </div>
 
-        <button class="confirm-support icon-button support-mark">
-            Support
+        <div
+            id="supportCustomEntry-${id}"
+            class="custom-support-entry"
+            hidden
+        >
+            <label
+                class="custom-support-label"
+                for="supportCustom-${id}"
+            >
+                Enter a custom amount ($50.00 or more)
+            </label>
+
+            <div class="amount-entry">
+                <span aria-hidden="true">$</span>
+
+                <input
+                    id="supportCustom-${id}"
+                    class="custom-support-input"
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="50.00"
+                    aria-describedby="supportPickerHelp-${id}"
+                >
+            </div>
+        </div>
+
+        <div
+            id="supportPickerHelp-${id}"
+            class="support-picker-message"
+            role="status"
+            aria-live="polite"
+        ></div>
+
+        <button
+            type="button"
+            class="confirm-support icon-button support-mark"
+        >
+            Support $0.01
         </button>
 
-        <button class="cancel-support">
+        <button type="button" class="cancel-support">
             Cancel
         </button>
     `;
@@ -2279,8 +2615,23 @@ async function openSupport(id, button) {
         .closest(".caption")
         .appendChild(box);
 
-    const input =
-        box.querySelector("input");
+    const picker =
+        box.querySelector(".support-picker");
+
+    const slider =
+        box.querySelector(".support-range");
+
+    const selection =
+        box.querySelector("output");
+
+    const customEntry =
+        box.querySelector(".custom-support-entry");
+
+    const customInput =
+        box.querySelector(".custom-support-input");
+
+    const pickerMessage =
+        box.querySelector(".support-picker-message");
 
     const confirm =
         box.querySelector(".confirm-support");
@@ -2288,33 +2639,125 @@ async function openSupport(id, button) {
     const cancel =
         box.querySelector(".cancel-support");
 
-    try {
-        const pending = readPendingSupport();
-        if (pending?.ad_id === id) {
-            input.value = (pending.amount_cents / 100).toFixed(2);
-            confirm.innerText = "Retry pending Support";
-        }
-    } catch (error) {
-        box.remove();
-        alert("Browser storage is unavailable. Support is paused to protect against duplicate charges.");
-        return;
-    }
-    input.focus();
+    let activePending = pendingAtOpen;
 
-    input.addEventListener(
+    function showPickerMessage(text, isError = false) {
+        pickerMessage.textContent = text;
+        pickerMessage.classList.toggle("error", isError);
+    }
+
+    function enterPendingMode(pending) {
+        activePending = pending;
+        picker.hidden = true;
+        customEntry.hidden = true;
+        confirm.disabled = false;
+        showPickerMessage(
+            `A previous ${formatCents(pending.amount_cents)} Support may already have been recorded. Retry this exact amount; the same request will not be charged twice.`
+        );
+        confirm.innerText =
+            `Retry ${formatCents(pending.amount_cents)} Support`;
+        confirm.focus();
+    }
+
+    function updatePicker() {
+        const presetCents =
+            supportPresetCents(slider.value);
+        const custom = presetCents === null;
+
+        customEntry.hidden = !custom;
+        slider.setAttribute(
+            "aria-expanded",
+            String(custom)
+        );
+
+        if (custom) {
+            slider.setAttribute(
+                "aria-valuetext",
+                "Custom amount, $50 or more"
+            );
+            const customCents =
+                inputDollarsToCents(
+                    customInput.value
+                );
+            const customIsValid =
+                customCents !== null &&
+                customCents >= CUSTOM_SUPPORT_MINIMUM_CENTS;
+            customInput.setAttribute(
+                "aria-invalid",
+                String(
+                    customCents !== null &&
+                    !customIsValid
+                )
+            );
+            selection.textContent =
+                customCents !== null
+                    ? formatCents(customCents)
+                    : "Custom $50+";
+            confirm.innerText =
+                customIsValid
+                    ? `Support ${formatCents(customCents)}`
+                    : "Enter custom amount";
+            confirm.disabled = !customIsValid;
+            if (
+                customCents !== null &&
+                customCents < CUSTOM_SUPPORT_MINIMUM_CENTS
+            ) {
+                showPickerMessage(
+                    "Custom Support must be at least $50.00.",
+                    true
+                );
+            } else {
+                showPickerMessage(
+                    "Type any amount of $50.00 or more."
+                );
+            }
+            return;
+        }
+
+        const formatted =
+            formatCents(presetCents);
+        customInput.setAttribute(
+            "aria-invalid",
+            "false"
+        );
+        selection.textContent = formatted;
+        slider.setAttribute(
+            "aria-valuetext",
+            formatted
+        );
+        confirm.innerText =
+            `Support ${formatted}`;
+        confirm.disabled = false;
+        showPickerMessage("");
+    }
+
+    if (activePending) {
+        enterPendingMode(activePending);
+        confirm.focus();
+    } else {
+        updatePicker();
+        slider.focus();
+    }
+
+    slider.addEventListener(
         "input",
         () => {
-            const amount =
-                parseFloat(input.value);
-
-            confirm.innerText =
-                amount > 0
-                    ? `Support $${amount.toFixed(2)}`
-                    : "Support";
+            updatePicker();
+            if (
+                Number(slider.value) ===
+                SUPPORT_CUSTOM_INDEX
+            ) {
+                customInput.focus();
+            }
         }
     );
 
-    input.addEventListener(
+    customInput.addEventListener(
+        "input",
+        updatePicker
+    );
+
+    customInput.addEventListener(
         "keydown",
         event => {
             if (event.key === "Enter") {
@@ -2327,14 +2770,40 @@ async function openSupport(id, button) {
         if (confirm.disabled) return;
         let pending;
         try { pending = readPendingSupport(); }
-        catch (error) {
+        catch (_error) {
             alert("Cannot read pending Support. No payment was sent.");
             return;
         }
+
+        if (activePending) {
+            if (
+                !pending ||
+                pending.request_id !== activePending.request_id ||
+                pending.ad_id !== id ||
+                pending.amount_cents !== activePending.amount_cents ||
+                pendingSupportAction(pending) !== "support"
+            ) {
+                alert("The pending Support changed. Close this box and reopen Support before sending anything.");
+                return;
+            }
+        } else if (pending) {
+            alert("A pending wallet action appeared. Close this box and reopen it before sending anything.");
+            return;
+        }
+
+        const customSelected =
+            Number(slider.value) ===
+            SUPPORT_CUSTOM_INDEX;
         const amountCents =
-            inputDollarsToCents(
-                input.value
-            );
+            activePending
+                ? activePending.amount_cents
+                : customSelected
+                    ? inputDollarsToCents(
+                        customInput.value
+                    )
+                    : supportPresetCents(
+                        slider.value
+                    );
 
         if (
             amountCents === null ||
@@ -2344,16 +2813,34 @@ async function openSupport(id, button) {
                 "The minimum Support is $0.01."
             );
 
-            input.focus();
+            (customSelected
+                ? customInput
+                : slider).focus();
+            return;
+        }
+
+        if (
+            customSelected &&
+            !activePending &&
+            amountCents < CUSTOM_SUPPORT_MINIMUM_CENTS
+        ) {
+            showPickerMessage(
+                "Custom Support must be at least $50.00.",
+                true
+            );
+            customInput.focus();
             return;
         }
 
         if (amountCents > walletBalanceCents && !pending) {
-            alert(
-                "Your AdBattle balance is too low. Add at least $10.00 from your Profile."
+            showPickerMessage(
+                "Your AdBattle balance is too low. Add funds from your Profile.",
+                true
             );
 
-            input.focus();
+            (customSelected
+                ? customInput
+                : slider).focus();
             return;
         }
 
@@ -2362,7 +2849,12 @@ async function openSupport(id, button) {
             "Recording Support...";
 
         try {
-            const data = await submitWalletSupport(id, amountCents);
+            const data =
+                await submitWalletSupport(
+                    id,
+                    amountCents,
+                    "support"
+                );
 
             walletBalanceCents =
                 Number(data?.balance_cents) || 0;
@@ -2395,19 +2887,36 @@ async function openSupport(id, button) {
             );
 
             confirm.disabled = false;
+            let retryPending = null;
+            try {
+                retryPending =
+                    readPendingSupport();
+            } catch (_storageError) {
+                // The original error already explains the failed action.
+            }
 
-            const currentAmount =
-                parseFloat(input.value);
-
-            confirm.innerText =
-                currentAmount > 0
-                    ? `Support $${currentAmount.toFixed(2)}`
-                    : "Support";
+            if (
+                retryPending?.ad_id === id &&
+                pendingSupportAction(retryPending) === "support"
+            ) {
+                enterPendingMode(retryPending);
+            } else {
+                updatePicker();
+            }
         }
     };
 
-    cancel.onclick =
-        () => box.remove();
+    cancel.onclick = () => {
+        box.remove();
+        button.focus();
+    };
+
+    box.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            box.remove();
+            button.focus();
+        }
+    });
 }
 
 /* ========================================
@@ -2817,7 +3326,7 @@ function showProfile() {
 }
 
 function profileSection(section) {
-    if (section === "liked" && !FEATURES.likes) {
+    if (section === "seeded" && !FEATURES.seeds) {
         section = "myads";
     }
     document
@@ -2838,13 +3347,13 @@ function profileSection(section) {
             ads.filter(ad => ad.owner);
     }
 
-    if (section === "liked") {
+    if (section === "seeded") {
         document
-            .getElementById("myLikesTab")
+            .getElementById("mySeededTab")
             .classList.add("active");
 
         list =
-            ads.filter(ad => ad.liked);
+            ads.filter(ad => ad.seeded);
     }
 
     if (section === "supported") {
@@ -2869,7 +3378,7 @@ function profileSection(section) {
                 "You haven't posted an ad yet.";
         }
 
-        if (section === "liked") {
+        if (section === "seeded") {
             message =
                 "You haven't seeded any ads yet.";
         }
@@ -2912,6 +3421,10 @@ function showReturnMessage(message, success = false) {
 
     notice.className =
         `return-message${success ? " success" : ""}`;
+
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    notice.setAttribute("aria-atomic", "true");
 
     notice.textContent = message;
 
@@ -2972,11 +3485,11 @@ function refreshCurrentView() {
 
     if (
         document
-            .getElementById("likedNav")
+            .getElementById("seededNav")
             .classList
             .contains("active")
     ) {
-        showMostLiked();
+        showMostSeeded();
         return;
     }
 
@@ -3063,19 +3576,41 @@ async function loadAds() {
     }
     const creatorHandles = new Map(profileData.map(profile => [profile.user_id, profile.handle]));
 
-    /* GET LIKES */
+    /* GET PAID SEEDS */
 
-    let likeData = [];
-    if (FEATURES.likes) {
-        const { data, error: likeError } = await db
-            .from("likes")
-            .select("ad_id, user_id");
-        if (likeError) {
-            console.error("Couldn't load likes:", likeError);
+    let seedCountData = [];
+    let userSeedData = [];
+    if (FEATURES.seeds) {
+        const { data, error: seedCountError } =
+            await db.rpc("get_seed_counts");
+        if (seedCountError) {
+            console.error("Couldn't load Seed counts:", seedCountError);
             return;
         }
-        likeData = data || [];
+        seedCountData = data || [];
+
+        if (currentUser) {
+            const { data: mine, error: userSeedError } =
+                await db.rpc("get_my_seeded_ad_ids");
+            if (userSeedError) {
+                console.error("Couldn't load your Seeds:", userSeedError);
+                return;
+            }
+            userSeedData = mine || [];
+        }
     }
+    const seedCounts = new Map(
+        seedCountData.map(row => [
+            Number(row.ad_id),
+            Number(row.seed_count) || 0
+        ])
+    );
+    const userSeededAdIds = new Set(
+        userSeedData.map(row => Number(row.ad_id))
+    );
+    reconcileRecordedSeedPending(
+        userSeededAdIds
+    );
 
     /* GET THIS USER'S REAL SUPPORT HISTORY */
 
@@ -3106,18 +3641,7 @@ async function loadAds() {
 
     ads = adData.map(ad => {
         const isOwner = Boolean(currentUser && ad.user_id === currentUser.id);
-        const adLikes =
-            likeData.filter(
-                like => like.ad_id === ad.id
-            );
-
-        const userLiked =
-            currentUser
-                ? adLikes.some(
-                    like =>
-                        like.user_id === currentUser.id
-                )
-                : false;
+        const numericAdId = Number(ad.id);
 
         const userSupport =
             currentUser
@@ -3141,8 +3665,10 @@ async function loadAds() {
             title: ad.title,
             caption: ad.caption || "",
             image: ad.image_url,
-            likes: adLikes.length,
-            liked: userLiked,
+            seedCount:
+                seedCounts.get(numericAdId) || 0,
+            seeded:
+                userSeededAdIds.has(numericAdId),
             support:
                 Number(ad.support_total) || 0,
 

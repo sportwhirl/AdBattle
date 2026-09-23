@@ -27,6 +27,7 @@ MIGRATIONS = (
     "20260922_wallet_capability_recovery.sql",
     "20260923_wallet_balance_recovery.sql",
     "20260923_wallet_table_privileges.sql",
+    "20260923093000_paid_seeds.sql",
 )
 
 
@@ -211,25 +212,32 @@ class WalletConcurrency(unittest.TestCase):
                 f"{literal(request['user'])},{request['ad']},{request['cents']},"
                 f"{literal(request['key'])});")
 
+    @staticmethod
+    def seed(request):
+        return ("set role service_role; select public.seed_ad_from_wallet("
+                f"{literal(request['user'])},{request['ad']},"
+                f"{literal(request['key'])});")
+
     @contextmanager
-    def blocked_requests(self, blocker_sql, requests):
+    def blocked_requests(self, blocker_sql, requests, operation=None):
+        operation = operation or self.spend
         with ExitStack() as stack:
             blocker = stack.enter_context(Session(self.cluster))
             blocker.query("begin; " + blocker_sql)
             sessions = [stack.enter_context(Session(self.cluster)) for _ in requests]
             for session, request in zip(sessions, requests):
-                session.start(self.spend(request))
+                session.start(operation(request))
             self.cluster.wait_for_locks(sessions)
             blocker.query("commit;")
             yield sessions
 
-    def race(self, requests, lock_ad=False):
+    def race(self, requests, lock_ad=False, operation=None):
         if lock_ad:
             lock = f"select id from public.ads where id={self.ads[0]} for update;"
         else:
             lock = ("select user_id from public.wallets where user_id="
                     f"{literal(self.users[0])} for update;")
-        with self.blocked_requests(lock, requests) as sessions:
+        with self.blocked_requests(lock, requests, operation) as sessions:
             results = []
             for session in sessions:
                 try:
@@ -307,6 +315,25 @@ class WalletConcurrency(unittest.TestCase):
         self.assertEqual(results[0]["support_id"], results[1]["support_id"])
         self.assertEqual([r["balance_cents"] for r in results], [999, 999])
         self.assert_accounting([request])
+
+    def test_distinct_concurrent_seed_requests_debit_once(self):
+        requests = [self.request(), self.request()]
+        results = self.race(requests, operation=self.seed)
+        self.assertTrue(all(isinstance(r, dict) for r in results), results)
+        self.assertEqual(
+            sorted(r["already_seeded"] for r in results),
+            [False, True],
+        )
+        marker = json.loads(self.cluster.query(f"""
+          select to_jsonb(s) from public.ad_seeds s
+          where s.user_id={literal(self.users[0])}
+            and s.ad_id={self.ads[0]};
+        """))
+        winner = next(r for r in requests if r["key"] == marker["wallet_request_id"])
+        self.assert_accounting([winner])
+        self.assertEqual(self.cluster.query(
+            f"select source from public.supports where id={marker['support_id']};"
+        ), "wallet_seed")
 
     def test_two_requests_cannot_overspend_across_ads(self):
         requests = [self.request(cents=700), self.request(ad=1, cents=700)]

@@ -14,6 +14,14 @@ vm.runInContext(html.slice(
   html.indexOf("function inputDollarsToCents("),
   html.indexOf("async function functionErrorMessage("),
 ), amountParser);
+const supportPicker = vm.createContext({});
+vm.runInContext(`${html.slice(
+  html.indexOf("const SUPPORT_FIBONACCI_CENTS"),
+  html.indexOf("function pendingSupportKey()"),
+)}
+globalThis.values = [...SUPPORT_FIBONACCI_CENTS];
+globalThis.customIndex = SUPPORT_CUSTOM_INDEX;
+globalThis.customMinimum = CUSTOM_SUPPORT_MINIMUM_CENTS;`, supportPicker);
 
 test("wallet amount parsing accepts cents with or without a leading zero", () => {
   for (const [value, cents] of [
@@ -60,7 +68,7 @@ test("local frontend fails closed unless explicit adbattle-test config is exact"
   assert.equal(config.environment, "staging");
   assert.equal(config.projectRef, "nccqnrcdygujulrnwair");
   assert.deepEqual({ ...config.features }, {
-    likes: false, adImages: true, creatorOnboarding: false,
+    seeds: true, adImages: true, creatorOnboarding: false,
   });
   assert.throws(() => AdBattleConfig.resolve(
     { protocol: "http:", hostname: "127.0.0.1", origin: "http://127.0.0.1:8000" },
@@ -84,7 +92,7 @@ test("hosted frontend preserves production configuration", () => {
   }, { environment: "staging" });
   assert.equal(config.environment, "production");
   assert.equal(config.projectRef, "bmsrdzqprxvldltaislp");
-  assert.equal(config.features.likes, true);
+  assert.equal(config.features.seeds, true);
   assert.throws(() => AdBattleConfig.resolve({
     protocol: "https:", hostname: "evil.example", origin: "https://evil.example",
   }, null), /origin is not allowed/);
@@ -169,8 +177,10 @@ test("Checkout redirects come only from validated server configuration", () => {
   assert.match(checkoutTs, /startsWith\("sk_test_"\)/);
 });
 
-test("staging enables image posting while unavailable integrations remain gated", () => {
-  assert.match(html, /if \(FEATURES\.likes\)[\s\S]*?\.from\("likes"\)/);
+test("staging enables paid Seeds and image posting while unavailable integrations stay gated", () => {
+  assert.match(html, /if \(FEATURES\.seeds\)[\s\S]*?db\.rpc\("get_seed_counts"\)/);
+  assert.match(html, /db\.rpc\("get_my_seeded_ad_ids"\)/);
+  assert.doesNotMatch(html, /\.from\("likes"\)/);
   assert.match(html, /if \(!FEATURES\.adImages\)[\s\S]*?Ad posting is unavailable/);
   assert.match(html, /if \(!FEATURES\.creatorOnboarding\)[\s\S]*?Creator onboarding is unavailable/);
   assert.match(html, /ADBATTLE TEST · LOCAL STAGING/);
@@ -185,7 +195,34 @@ test("staging enables image posting while unavailable integrations remain gated"
       publishableKey: "sb_publishable_test_fixture",
     },
   );
+  assert.equal(staging.features.seeds, true);
   assert.equal(staging.features.adImages, true);
+});
+
+test("Support slider maps exact Fibonacci cents and reserves its final stop for Custom $50+", () => {
+  assert.deepEqual([...supportPicker.values], [
+    1, 2, 3, 5, 8, 13, 21, 34, 55,
+    89, 144, 233, 377, 610, 987,
+    1597, 2584, 4181,
+  ]);
+  assert.equal(supportPicker.customIndex, 18);
+  assert.equal(supportPicker.customMinimum, 5000);
+  assert.equal(supportPicker.supportPresetCents(0), 1);
+  assert.equal(supportPicker.supportPresetCents(17), 4181);
+  assert.equal(supportPicker.supportPresetCents(18), null);
+  assert.equal(supportPicker.supportPresetIndex(4181), 17);
+  assert.equal(supportPicker.supportPresetIndex(5000), 18);
+  assert.equal(amountParser.inputDollarsToCents("49.99") < supportPicker.customMinimum, true);
+  assert.equal(amountParser.inputDollarsToCents("50.00"), supportPicker.customMinimum);
+});
+
+test("paid Seed and custom Support rules are disclosed in the rendered controls", () => {
+  assert.match(html, /Seed · 1¢/);
+  assert.match(html, /once per ad and can’t be undone/);
+  assert.match(html, /final stop opens Custom \$50\+/);
+  assert.match(html, /Custom Support must be at least \$50\.00/);
+  assert.match(html, /aria-valuetext="\$0\.01"/);
+  assert.match(html, /setAttribute\("role", "group"\)/);
 });
 
 const topupHelper = html.slice(

@@ -9,7 +9,7 @@ expected_tables(name, client_read) as (values
   ('wallets', true), ('wallet_topups', true), ('wallet_transactions', true),
   ('ad_settlement_state', true), ('support_settlements', true),
   ('wallet_payment_risks', false), ('wallet_payment_risk_events', false),
-  ('wallet_transfer_guards', false), ('supports', true)
+  ('wallet_transfer_guards', false), ('ad_seeds', false), ('supports', true)
 ),
 tables as (
   select e.*, c.oid, c.relrowsecurity
@@ -34,20 +34,24 @@ table_checks as (
     end as actual
   from tables t cross join client_roles r cross join privileges p
 ),
-expected_functions(signature, service_allowed) as (values
-  ('public.record_wallet_topup(text,text,uuid,bigint)', true),
-  ('public.spend_wallet_support(uuid,bigint,bigint,uuid)', true),
-  ('public.claim_due_wallet_settlements(integer)', true),
-  ('public.retry_wallet_settlement(uuid,text)', true),
-  ('public.complete_wallet_settlement(uuid,text)', true),
-  ('public.record_wallet_payment_risk(text,uuid,bigint,boolean,text,text)', true),
-  ('public.prepare_wallet_transfer(uuid)', true),
-  ('public.authorize_wallet_capability_recovery(uuid,text,text,text)', true),
-  ('public.authorize_wallet_balance_recovery(uuid,text,text,text,bigint,text)', true),
-  ('public.record_wallet_topup_unchecked(text,text,uuid,bigint)', false),
-  ('public.claim_due_wallet_settlements_unchecked(integer)', false),
-  ('public.prepare_wallet_transfer_before_recovery(uuid)', false),
-  ('public.prepare_wallet_transfer_before_balance_recovery(uuid)', false)
+expected_functions(signature, anon_allowed, authenticated_allowed, service_allowed) as (values
+  ('public.record_wallet_topup(text,text,uuid,bigint)', false, false, true),
+  ('public.spend_wallet_support(uuid,bigint,bigint,uuid)', false, false, true),
+  ('public.seed_ad_from_wallet(uuid,bigint,uuid)', false, false, true),
+  ('public.support_ad_from_wallet(uuid,bigint,bigint,uuid)', false, false, true),
+  ('public.get_seed_counts()', true, true, false),
+  ('public.get_my_seeded_ad_ids()', false, true, false),
+  ('public.claim_due_wallet_settlements(integer)', false, false, true),
+  ('public.retry_wallet_settlement(uuid,text)', false, false, true),
+  ('public.complete_wallet_settlement(uuid,text)', false, false, true),
+  ('public.record_wallet_payment_risk(text,uuid,bigint,boolean,text,text)', false, false, true),
+  ('public.prepare_wallet_transfer(uuid)', false, false, true),
+  ('public.authorize_wallet_capability_recovery(uuid,text,text,text)', false, false, true),
+  ('public.authorize_wallet_balance_recovery(uuid,text,text,text,bigint,text)', false, false, true),
+  ('public.record_wallet_topup_unchecked(text,text,uuid,bigint)', false, false, false),
+  ('public.claim_due_wallet_settlements_unchecked(integer)', false, false, false),
+  ('public.prepare_wallet_transfer_before_recovery(uuid)', false, false, false),
+  ('public.prepare_wallet_transfer_before_balance_recovery(uuid)', false, false, false)
 ),
 functions as (
   select e.*, to_regprocedure(e.signature) as oid from expected_functions e
@@ -58,7 +62,11 @@ function_roles as (
 ),
 function_checks as (
   select 'function_privilege'::text as category, r.name || ':' || f.signature as object_name,
-    (r.name = 'service_role' and f.service_allowed) as expected,
+    case r.name
+      when 'anon' then f.anon_allowed
+      when 'authenticated' then f.authenticated_allowed
+      when 'service_role' then f.service_allowed
+    end as expected,
     case when f.oid is null or r.oid is null then null
       else has_function_privilege(r.oid, f.oid, 'EXECUTE') end as actual
   from functions f cross join function_roles r
