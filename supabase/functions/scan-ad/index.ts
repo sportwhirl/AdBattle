@@ -41,7 +41,7 @@ const POLICY_MODEL =
   "gpt-5.6-luna";
 
 const SCAN_VERSION =
-  "adbattle-scanner-v2-2026-09";
+  "adbattle-scanner-v2-2026-09-responses";
 
 const MAX_IMAGE_BYTES =
   12 * 1024 * 1024;
@@ -105,6 +105,85 @@ type PolicyDecision = {
 
   requires_ad_network_review: boolean;
 };
+
+const POLICY_CATEGORIES = [
+  "none", "illegal_goods", "weapons", "drugs", "sexual_services",
+  "hate_extremism", "fraud_phishing", "malware", "minor_safety",
+  "deceptive_claims", "medical_health", "financial", "gambling",
+  "alcohol_nicotine", "cannabis", "political", "adult_services",
+  "copyright_trademark", "suspicious_link", "other",
+];
+
+function parseAdPolicyResponse(body: any): PolicyDecision {
+  // Raw REST responses use output[].content[].text. output_text is an SDK
+  // convenience property, and reasoning items can precede the message.
+  if (body?.status !== "completed" || body.error || body.incomplete_details) {
+    const reason = body?.incomplete_details?.reason;
+    if (reason === "max_output_tokens" || reason === "content_filter") {
+      throw new Error(`OpenAI policy review incomplete (${reason}).`);
+    }
+    throw new Error("OpenAI policy review did not complete.");
+  }
+  if (!Array.isArray(body.output)) {
+    throw new Error("OpenAI policy review returned invalid output.");
+  }
+
+  const parts: string[] = [];
+  for (const item of body.output) {
+    if (item?.type !== "message") continue;
+    if (item.role !== "assistant" || item.status !== "completed" ||
+        !Array.isArray(item.content)) {
+      throw new Error("OpenAI policy review returned an invalid message.");
+    }
+    for (const content of item.content) {
+      if (content?.type === "refusal") {
+        throw new Error("OpenAI policy review refused the request.");
+      }
+      if (content?.type !== "output_text" || typeof content.text !== "string") {
+        throw new Error("OpenAI policy review returned invalid message content.");
+      }
+      parts.push(content.text);
+    }
+  }
+
+  const outputText = parts.join("").trim();
+  if (!outputText) {
+    throw new Error("OpenAI policy review returned no output text.");
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(outputText);
+  } catch {
+    // Never put raw model output (possibly containing ad text) in error logs.
+    throw new Error("OpenAI policy review returned invalid JSON.");
+  }
+
+  const fields = [
+    "decision", "hard_violation", "confidence", "risk_score",
+    "categories", "reasons", "requires_ad_network_review",
+  ];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
+      Object.keys(parsed).length !== fields.length ||
+      fields.some((field) => !Object.hasOwn(parsed, field)) ||
+      !["approve", "manual_review", "reject"].includes(parsed.decision) ||
+      typeof parsed.hard_violation !== "boolean" ||
+      typeof parsed.requires_ad_network_review !== "boolean" ||
+      typeof parsed.confidence !== "number" || !Number.isFinite(parsed.confidence) ||
+      parsed.confidence < 0 || parsed.confidence > 1 ||
+      !Number.isInteger(parsed.risk_score) || parsed.risk_score < 0 || parsed.risk_score > 100 ||
+      !Array.isArray(parsed.categories) || parsed.categories.length > 8 ||
+      parsed.categories.some((value: unknown) => !POLICY_CATEGORIES.includes(value as string)) ||
+      !Array.isArray(parsed.reasons) || parsed.reasons.length > 6 ||
+      parsed.reasons.some((value: unknown) => typeof value !== "string" || [...value].length > 240)) {
+    throw new Error("OpenAI policy review returned an invalid decision.");
+  }
+  if (parsed.decision === "approve" &&
+      (parsed.hard_violation || parsed.requires_ad_network_review)) {
+    throw new Error("OpenAI policy review returned a conflicting approval.");
+  }
+  return parsed;
+}
 
 function json(
   body: unknown,
@@ -1012,28 +1091,7 @@ async function runAdPolicyReview(
                       items: {
                         type:
                           "string",
-                        enum: [
-                          "none",
-                          "illegal_goods",
-                          "weapons",
-                          "drugs",
-                          "sexual_services",
-                          "hate_extremism",
-                          "fraud_phishing",
-                          "malware",
-                          "minor_safety",
-                          "deceptive_claims",
-                          "medical_health",
-                          "financial",
-                          "gambling",
-                          "alcohol_nicotine",
-                          "cannabis",
-                          "political",
-                          "adult_services",
-                          "copyright_trademark",
-                          "suspicious_link",
-                          "other",
-                        ],
+                        enum: POLICY_CATEGORIES,
                       },
                       maxItems:
                         8,
@@ -1089,45 +1147,11 @@ async function runAdPolicyReview(
 
   if (!response.ok) {
     throw new Error(
-      `OpenAI policy review failed (${response.status}): ${
-        JSON.stringify(body)
-          .slice(0, 800)
-      }`,
+      `OpenAI policy review failed (${response.status}).`,
     );
   }
 
-  const outputText =
-    cleanString(
-      body
-        ?.output_text,
-    );
-
-  if (!outputText) {
-    throw new Error(
-      "OpenAI policy review returned no output_text.",
-    );
-  }
-
-  let parsed:
-    PolicyDecision;
-
-  try {
-    parsed =
-      JSON.parse(
-        outputText,
-      );
-  } catch {
-    throw new Error(
-      `Could not parse policy review JSON: ${
-        outputText.slice(
-          0,
-          500,
-        )
-      }`,
-    );
-  }
-
-  return parsed;
+  return parseAdPolicyResponse(body);
 }
 
 Deno.serve(
