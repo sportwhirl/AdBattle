@@ -259,6 +259,85 @@ Function request validation, arbitrary app RPC/view paths, or every possible
 role/identity combination require separate tests. Do not claim the hosted
 checks ran merely because the offline regression suite passes.
 
+### Read-only wallet health report
+
+Run [`staging/check_wallet_health.sql`](staging/check_wallet_health.sql) in
+**adbattle-test → SQL Editor**, using the **postgres** operator role. Run the
+whole file as a new query. This is an on-demand report: no migration,
+deployment, credentials in the query, background monitor, or new cron job is
+needed. It does not send notifications. It never calls wallet RPCs, Stripe,
+Edge Functions, or HTTP functions, and never changes balances, holds, retry
+keys, timestamps, or permissions.
+
+The result has `checked_at`, `health_status`, wallet/scheduler summaries and
+individual checks. Expand `checks` for each finding; amounts ending in
+`_cents` are cents, and `_micros` are millionths of a dollar. The report emits
+counts and fixed explanations, not user identifiers, payment keys, job command
+text, Vault secrets, or raw worker/cron error messages.
+
+| Health status | Meaning | Operator response |
+| --- | --- | --- |
+| `HEALTHY` | No finding in the inspected database/cron checks at that snapshot. | Save the snapshot if needed. This is not a payment test or release approval. |
+| `ATTENTION` | At least one `WARN` or `FAIL`: drift, debt, hold, retry, stuck work, or a scheduler problem. | Inspect the named check and follow the existing reconciliation procedure. Do not reset balances, clear holds, or repeat transfers to make the report green. |
+| `INCOMPLETE` | A required table/column, unfiltered operator access, or run history is unavailable. | Fix the inspection context or investigate the missing history. Skipped wallet/scheduler summaries are `null`, never fabricated zeroes. Existing findings still matter. |
+
+The current schema produces 29 checks when both data sources are readable.
+Wallet checks reconcile every wallet (including zero-row ledgers and orphan
+ledger owners), lifetime top-up/Support totals, negative debt, frozen wallets,
+unresolved refund/dispute risks, transfer guards, active settlement pointers,
+completion fields, retries, and unclaimed eligible batches. A legitimate
+negative balance or an ordinary scheduled retry is still a `WARN` for an
+operator to inspect, not proof of accounting corruption. Historical succeeded
+settlements and resolved risks do not remain warnings merely because they had
+earlier failures. A fresh processing settlement is normal.
+
+Timing thresholds match or allow for the current worker:
+
+- Processing is stale after **15 minutes** without an update.
+- Retries are overdue **5 minutes** after `next_attempt_at`; missing retry
+  timestamps are also flagged. Manual-review holds and the original **20-hour**
+  retry deadline are checked independently, including indefinite holds.
+- An unclaimed threshold or 24-hour-inactivity batch gets a **5-minute** grace
+  period. Stored creator readiness and global payment-risk holds explain why
+  otherwise due work can be blocked; the report does not authorize it.
+- Cron must have exactly one active `adbattle-wallet-settlement` job scheduled
+  every minute, a dispatch within **3 minutes**, and a successful completed run
+  within **3 minutes**. A fresh running job with a recent successful completion
+  is normal; a more recent failure is not hidden by an older success. Missing
+  history is `INCOMPLETE`, not success. Changed schedules need a deliberate
+  monitoring-threshold review.
+
+**Scope matters:** `cron.job_run_details` success means its SQL ran. The current
+job queues an asynchronous HTTP request, so it does not prove that the Edge
+Function authorized/processed it or that Stripe paid a creator. This report
+intentionally does not attribute arbitrary `net._http_response` rows to the
+wallet job: that table alone does not identify their request URL. Use the
+existing correlated HTTP/settlement/Stripe verification when investigating
+delivery. This report also does not inspect the cron command or Vault values,
+live Stripe capabilities/balances, fees, or bank payouts. A `HEALTHY` snapshot
+with zero wallets means there is no wallet activity to reconcile; it is not
+proof that an end-to-end payment flow passed.
+
+The report uses fixed, read-only SELECTs through PostgreSQL
+[`query_to_xml` / `XMLTABLE`](https://www.postgresql.org/docs/17/functions-xml.html).
+Catalog checks gate reads when an extension table is absent, a required column
+is missing, permissions deny SELECT, or RLS would filter rows. It installs no
+helper function or view and changes no grants. It needs PostgreSQL built with
+XML support and the existing wallet migrations; other incompatible column
+types/layouts or database errors can still stop the query. Treat any SQL error
+as an incomplete report, never as healthy, and return the error for review.
+At scale, ledger aggregation is a full read: run on demand and investigate a
+timeout rather than removing checks. Only the generated report is intended
+for sharing; keep SQL Editor credentials and unrelated diagnostic rows private.
+
+Regression coverage applies the actual wallet migrations and RPCs to isolated
+PGlite fixtures, then runs the report with healthy and deliberately broken
+data. Healthy and failing reports execute in `READ ONLY` transactions, and
+fixture snapshots verify financial/scheduler rows remain unchanged. Extension
+tables are inert fixtures, not a hosted pg_cron or HTTP delivery test. Run
+`node --test tests/wallet_health.test.mjs` or `npm test`; the **Wallet health
+report** PR workflow runs the focused fixture suite without hosted credentials.
+
 ### Local frontend against adbattle-test
 
 The tracked production configuration is unchanged. Localhost is fail-closed:
