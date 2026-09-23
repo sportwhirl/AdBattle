@@ -1,7 +1,7 @@
 # Private pending ad images
 
-This change is **code and migration only**. No hosted Supabase migration,
-bucket, webhook, schedule or Edge Function deployment was performed.
+This document describes the private-media contract and the **test project**
+rollout. Production has not received this change.
 
 ## Publication contract
 
@@ -42,43 +42,57 @@ fail. Publication requires this hash to match both scanners and the fresh
 private bytes. This route still requires the separate adult staging claim and
 server post enable flag. See `AI_IMAGE_DRAFTS.md`.
 
-## Staging rollout preconditions and order
+## Test-project rollout snapshot (2026-09-23)
 
-1. Keep public posting disabled during rollout. Inventory `storage.objects`
-   in `ad-images` against approved ad rows, including orphaned uploads. Audit
-   `pg_policies` for `storage.objects`, especially broad anon/authenticated
-   policies; the migration adds restrictive policies for both roles. Check
-   existing `ads` rows with public URLs and nonapproved status. Use the
-   **Storage API**, not direct writes to `storage.objects`, to remove or
-   quarantine unreviewed/orphaned public files. Clear unsafe old URLs and
-   record the disposition of their rows. The migration refuses to apply until
-   unapproved public rows and orphaned public objects are gone.
-2. Confirm `ad-images` exists and is public, and no signed/public URLs for
-   pending media remain cached on CDN. Apply the dated migration to the
-   **staging project only**, followed by the canonical AI post migration if
-   AI drafts are enabled. It creates private bucket, policies, queue and
-   service-only RPCs. Verify actual bucket and RLS behavior with an anon and
-   authenticated account. The migration checks the bucket settings and
-   blocks if they differ.
-3. Deploy `scan-ad`, `scan-ad-duplicate`, `publish-ad-image` and
-   `pending-ad-previews` together with the updated frontend. Configure a
-   separate 32+ character `ADBATTLE_IMAGE_PUBLISHER_SECRET` for the worker.
-   Keep existing authenticated safety/duplicate webhooks in place. Add a
-   Database Webhook on `public.ad_image_publication_queue` INSERT to call
-   `publish-ad-image` with the publisher secret. The worker reads only the
-   `ad_id` from the webhook; it reloads the row from the database.
-   For adult-only AI staging tests, also deploy `generate-ai-image` and
-   `submit-ai-ad` with JWT verification and the separate
-   `ADBATTLE_AI_IMAGE_POST_ENABLED=true` server flag after validating the
-   server JPEG processor in hosted staging.
-4. Configure an authenticated scheduled POST to `publish-ad-image` with
-   `{"action":"sweep"}` and that secret at least once per minute. Each call
-   processes up to ten queued rows. Alert if queue age exceeds several
-   minutes, worker returns 503 repeatedly, or `publishing` is stuck. Before
-   opening posting, test safety-first and duplicate-first outcomes, a review
-   hold, a changed private object, retry after upload, owner/stranger
-   previews, public bucket write denial, and a legacy approved ad. Run
-   a test Seed/Support on an approved ad to confirm wallet behavior.
+Project `nccqnrcdygujulrnwair` (`adbattle-test`) has the four image
+migrations in order: `20260923162944_ai_image_draft_quota.sql`,
+`20260923170000_private_pending_images.sql`,
+`20260923170351_openai_image_draft_model.sql`, and
+`20260923180000_ai_canonical_post.sql`. Hosted migration history records them
+as `20260923223756`, `20260923223804`, `20260923223816`, and
+`20260923223823`, respectively. The private `ad-pending-images` bucket exists.
+
+Before the migrations, the two unapproved staging images for ads #5 and #6
+were copied to the private bucket at their original paths and verified against
+their source SHA-256 values. The two public originals were then removed using
+the Storage API; their `image_url` fields are now empty strings. Ad #5 remains
+`pending_scan` with `duplicate_same_creator`; ad #6 remains `rejected`.
+Approved public images were preserved.
+
+Hosted test-project functions are active: `scan-ad` v13 and
+`scan-ad-duplicate` v12 (`verify_jwt=false`), `publish-ad-image` v1
+(`verify_jwt=false`), `pending-ad-previews` v8 (`verify_jwt=true`), and
+`generate-ai-image` and `submit-ai-ad` v1 (`verify_jwt=true`). The existing
+safety and duplicate scan webhooks remain active. A dedicated 64-character
+publisher secret was generated into staging Vault without displaying its value;
+the matching Edge secret, queue INSERT trigger, and publication sweep cron are
+still absent. The queue is empty. AI generation and posting feature flags
+remain off. This is not an end-to-end hosted publication test or an all-ages
+release.
+
+## Remaining staging steps
+
+1. Keep public posting disabled. Verify private-bucket access, public-bucket
+   write denial, and owner/stranger previews using anon and authenticated
+   clients. Confirm the staging frontend points only to the test project.
+2. Set `ADBATTLE_IMAGE_PUBLISHER_SECRET` in the publisher Edge Function to the
+   existing staging Vault value named `adbattle_image_publisher_secret`. The
+   review-only `operations/staging_image_publication_dispatch.sql` uses that Vault secret
+   at call time for an INSERT wakeup on the durable queue and a once-per-minute
+   sweep. It is hard-coded to the **test project** and must not be applied to
+   production. Keep the existing safety/duplicate webhooks in place. The
+   worker reads only `ad_id` from a wakeup and reloads the authoritative row.
+3. Check that an empty sweep reaches `publish-ad-image` with HTTP 200;
+   `cron.job_run_details` success alone proves only SQL dispatch. Alert if
+   queue age exceeds several minutes, the worker repeatedly returns 503, or
+   `publishing` becomes stuck. Test both scan completion orders, a review
+   hold, changed private bytes, retry after upload, owner/stranger previews,
+   public-bucket write denial, and a legacy approved ad. Test Seed/Support on
+   an approved staging ad to check wallet behavior.
+4. Before an approved adult staging AI test, verify the hosted JPEG processor
+   and provider access, provision an adult test claim and the OpenAI key, and
+   enable the separate server image generation and posting flags. Keep the
+   browser flag off until the staging flow works. See `AI_IMAGE_DRAFTS.md`.
 
 Do not open all-ages creation on the strength of this media gate alone. Age
 assurance, parent consent, payments and the separate youth release gates in

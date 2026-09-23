@@ -2,8 +2,9 @@
 
 This integration is limited to the adbattle-test project
 (nccqnrcdygujulrnwair) at http://localhost:8000. The public frontend feature
-flag is false. The Edge Function also requires the exact test project URL,
-origin, and ADBATTLE_AI_IMAGE_ENABLED=true. Posting additionally requires
+flag and the server generation/posting flags are off. The Edge Function also
+requires the exact test project URL, origin, and
+ADBATTLE_AI_IMAGE_ENABLED=true. Posting additionally requires
 ADBATTLE_AI_IMAGE_POST_ENABLED=true. Do not deploy this to the public
 site before deciding a generation budget and completing the separate youth
 access gates. The server also requires an admin-owned
@@ -72,11 +73,11 @@ remains a separate media pipeline.
 
 ## Staging setup and review
 
-Apply migrations `20260923162944_ai_image_draft_quota.sql`,
+The migrations `20260923162944_ai_image_draft_quota.sql`,
 `20260923170000_private_pending_images.sql`,
 `20260923170351_openai_image_draft_model.sql`, and
-`20260923180000_ai_canonical_post.sql` in timestamp order to adbattle-test
-only after the private-media migration's cleanup preflight passes.
+`20260923180000_ai_canonical_post.sql` were applied in timestamp order to
+adbattle-test on 2026-09-23, after the private-media cleanup preflight passed.
 The first creates a private 8 MiB JPEG/PNG bucket, a request table with RLS
 and no browser grants, a service-only reservation RPC, and the provenance
 trigger/read RPCs. The model migration switches the default model for new
@@ -84,11 +85,15 @@ reservation rows to Flare without rewriting existing draft history. The
 canonical-post migration adds the byte binding and a backoff queue for
 publication retries. Older completed draft rows without canonical fields
 cannot be posted; make a new draft rather than silently trusting the browser.
-Inspect the exact project and private bucket settings before enabling the
-functions. Deploy generate-ai-image and submit-ai-ad to test with JWT
-verification on. The dashboard editor may
-need the shared http.ts file copied locally, as described for existing
-functions in the Supabase README.
+The private buckets now exist. The test project has `generate-ai-image` v1 and
+`submit-ai-ad` v1 active with JWT verification on; the image scanners,
+publisher, and owner-preview functions are also deployed (see
+`PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
+generation or posting. Inspect the exact project and private bucket settings
+before enabling those flags. The publisher still needs its matching Edge secret,
+queue wakeup, and scheduled sweep before end-to-end posting can be tested.
+The dashboard editor may need the shared http.ts file copied locally, as
+described for existing functions in the Supabase README.
 
 Set `OPENAI_API_KEY` as an Edge Function secret and set
 `ADBATTLE_AI_IMAGE_ENABLED=true` and `ADBATTLE_AI_IMAGE_POST_ENABLED=true`
@@ -109,10 +114,10 @@ and provider usage or invoice cost must be checked in restricted staging.
 The browser displays the signed private canonical URL directly; it never
 compresses or uploads the AI post bytes. Confirm that hosted Edge Functions
 can bundle and run the pinned image decoder/encoder within their CPU and
-memory limits before enabling posting. The private buckets do not exist in
-the current hosted staging project, so the end-to-end path cannot be checked
-before staging setup. If preview expires, the saved request ID can obtain a
-fresh signed URL without another image call.
+memory limits before enabling posting. The private buckets are present in
+hosted staging, but no hosted provider generation and complete publication
+flow has been verified yet. If preview expires, the saved request ID can
+obtain a fresh signed URL without another image call.
 
 After a lost response, keep the saved request ID and prompt and recover the
 draft. A three-minute abandoned reservation becomes unknown, remains counted
