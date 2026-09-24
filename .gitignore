@@ -1,4 +1,6 @@
 node_modules/
+supabase/.temp/
+supabase/functions/.env
 
 __pycache__/
 *.pyc

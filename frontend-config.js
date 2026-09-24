@@ -10,7 +10,10 @@
             seeds: true,
             adImages: true,
             creatorOnboarding: true,
-            duplicateScreening: false
+            duplicateScreening: false,
+            aiImageDrafts: false,
+            aiProvenanceReads: false,
+            privateMediaPipeline: false
         })
     });
     const STAGING_REF = "nccqnrcdygujulrnwair";
@@ -55,7 +58,10 @@
                 seeds: true,
                 adImages: true,
                 creatorOnboarding: false,
-                duplicateScreening: true
+                duplicateScreening: true,
+                aiImageDrafts: false,
+                aiProvenanceReads: true,
+                privateMediaPipeline: true
             })
         });
     }

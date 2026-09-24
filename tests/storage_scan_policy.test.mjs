@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs';
 
 const owner = '00000000-0000-4000-8000-000000000001';
 const signatures = {
-  'image/jpeg': [0xff,0xd8,0xff,0xe0],
-  'image/png': [0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a],
+  'image/jpeg': readFileSync(new URL('./fixtures/images/valid.jpg',import.meta.url)),
+  'image/png': readFileSync(new URL('./fixtures/images/valid.png',import.meta.url)),
 };
 
 function bucketFor(type='image/png', size=signatures[type].length) {

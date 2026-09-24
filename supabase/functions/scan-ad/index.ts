@@ -1,4 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.1";
+import { loadOwnedImage, requireSupportedImage } from "../_shared/storage-scan-policy.ts";
 
 /*
   ============================================================
@@ -11,8 +12,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
   2. Load the ad from Supabase using service_role.
   3. Validate immutable text fields.
   4. Inspect URLs found in title/caption.
-  5. Verify the image belongs to this user's AdBattle folder.
-  6. Download the image with a strict byte limit.
+  5. Verify the image belongs to this user's private upload folder.
+  6. Download it with a strict byte and dimension limit.
   7. Validate MIME + magic bytes.
   8. SHA-256 hash the exact image bytes.
   9. Run OpenAI omni-moderation-latest on text + image.
@@ -43,9 +44,6 @@ const POLICY_MODEL =
 const SCAN_VERSION =
   "adbattle-scanner-v2-2026-09-responses";
 
-const MAX_IMAGE_BYTES =
-  12 * 1024 * 1024;
-
 const MAX_TITLE_LENGTH =
   140;
 
@@ -55,8 +53,7 @@ const MAX_CAPTION_LENGTH =
 const MAX_URLS =
   4;
 
-const IMAGE_BUCKET_PREFIX =
-  `${SUPABASE_URL}/storage/v1/object/public/ad-images/`;
+const PENDING_IMAGE_BUCKET = "ad-pending-images";
 
 const URL_SHORTENER_HOSTS =
   new Set([
@@ -350,35 +347,6 @@ function inspectUrl(
   }
 }
 
-function imageMagicType(
-  bytes: Uint8Array,
-) {
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  ) {
-    return "image/jpeg";
-  }
-
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-
-  return null;
-}
-
 async function sha256Hex(
   bytes: Uint8Array,
 ) {
@@ -441,163 +409,6 @@ function bytesToBase64(
   }
 
   return btoa(binary);
-}
-
-async function fetchImageLimited(
-  imageUrl: string,
-) {
-  const controller =
-    new AbortController();
-
-  const timeout =
-    setTimeout(
-      () =>
-        controller.abort(),
-      15_000,
-    );
-
-  try {
-    const response =
-      await fetch(
-        imageUrl,
-        {
-          method: "GET",
-          signal:
-            controller.signal,
-          redirect: "error",
-        },
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        `Image fetch returned ${response.status}.`,
-      );
-    }
-
-    const declaredLength =
-      Number(
-        response.headers.get(
-          "content-length",
-        ) || 0,
-      );
-
-    if (
-      declaredLength >
-      MAX_IMAGE_BYTES
-    ) {
-      throw new Error(
-        "Image exceeds the 12 MB scanner limit.",
-      );
-    }
-
-    if (!response.body) {
-      throw new Error(
-        "Image response had no body.",
-      );
-    }
-
-    const reader =
-      response.body
-        .getReader();
-
-    const chunks:
-      Uint8Array[] = [];
-
-    let total = 0;
-
-    while (true) {
-      const {
-        done,
-        value,
-      } =
-        await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      if (!value) {
-        continue;
-      }
-
-      total +=
-        value.byteLength;
-
-      if (
-        total >
-        MAX_IMAGE_BYTES
-      ) {
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore
-        }
-
-        throw new Error(
-          "Image exceeds the 12 MB scanner limit.",
-        );
-      }
-
-      chunks.push(value);
-    }
-
-    const bytes =
-      new Uint8Array(total);
-
-    let offset = 0;
-
-    for (
-      const chunk of chunks
-    ) {
-      bytes.set(
-        chunk,
-        offset,
-      );
-
-      offset +=
-        chunk.byteLength;
-    }
-
-    const headerType =
-      (
-        response.headers.get(
-          "content-type",
-        ) || ""
-      )
-        .split(";")[0]
-        .trim()
-        .toLowerCase();
-
-    const magicType =
-      imageMagicType(bytes);
-
-    if (!magicType) {
-      throw new Error(
-        "Image bytes do not match a supported image format.",
-      );
-    }
-
-    if (
-      headerType &&
-      headerType !== magicType
-    ) {
-      throw new Error(
-        `Image MIME mismatch: server says ${headerType}, bytes are ${magicType}.`,
-      );
-    }
-
-    return {
-      bytes,
-      contentType:
-        magicType,
-      byteLength:
-        total,
-    };
-  } finally {
-    clearTimeout(
-      timeout,
-    );
-  }
 }
 
 function getMaxModerationScore(
@@ -671,98 +482,128 @@ async function addAuditEvent(
   }
 }
 
-async function updateAttempt(
+type SafetyClaimResult = {
+  result:
+    | "claimed"
+    | "busy"
+    | "terminal"
+    | "not_found";
+  safety_status?: string;
+  lease_expires_at?: string;
+  replayed?: boolean;
+  recovered_stale?: boolean;
+};
+
+function rpcFailure(
+  fallback: string,
+  error: unknown,
+) {
+  const message =
+    typeof (error as any)?.message === "string"
+      ? (error as any).message
+      : "";
+  return new Error(
+    message || fallback,
+  );
+}
+
+async function claimSafetyScan(
   admin: any,
   adId: number,
-) {
-  const {
-    data,
-    error,
-  } =
-    await admin
-      .from("ads")
-      .select(
-        "moderation_attempts",
-      )
-      .eq(
-        "id",
-        adId,
-      )
-      .maybeSingle();
+  claimToken: string,
+): Promise<SafetyClaimResult> {
+  let lastError:
+    unknown = null;
 
-  if (error) {
-    throw error;
-  }
-
-  const attempts =
-    Number(
-      data
-        ?.moderation_attempts ||
-      0,
-    ) + 1;
-
-  const {
-    error:
-      updateError,
-  } =
-    await admin
-      .from("ads")
-      .update({
-        moderation_attempts:
-          attempts,
-        moderation_last_attempt_at:
-          new Date().toISOString(),
-        moderation_last_error:
-          null,
-        moderation_scan_version:
-          SCAN_VERSION,
-      })
-      .eq(
-        "id",
-        adId,
+  /*
+    Retry once with the same fencing token. If the database committed but the
+    HTTP response was lost, the claim RPC returns the original claim without
+    incrementing attempts again.
+  */
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const {
+        data,
+        error,
+      } = await admin.rpc(
+        "claim_ad_safety_scan",
+        {
+          p_ad_id:
+            adId,
+          p_claim_token:
+            claimToken,
+          p_scan_version:
+            SCAN_VERSION,
+        },
       );
 
-  if (updateError) {
-    throw updateError;
+      if (
+        !error &&
+        data &&
+        [
+          "claimed",
+          "busy",
+          "terminal",
+          "not_found",
+        ].includes(data.result)
+      ) {
+        return data;
+      }
+
+      lastError =
+        error ||
+        new Error(
+          "Safety scan claim returned an invalid response.",
+        );
+    } catch (error) {
+      lastError =
+        error;
+    }
   }
+
+  throw rpcFailure(
+    "Safety scan claim failed.",
+    lastError,
+  );
 }
 
 async function setScanError(
   admin: any,
   adId: number,
+  claimToken: string,
   message: string,
 ) {
-  await admin
-    .from("ads")
-    .update({
-      moderation_last_error:
+  const {
+    error,
+  } = await admin.rpc(
+    "record_ad_safety_scan_failure",
+    {
+      p_ad_id:
+        adId,
+      p_claim_token:
+        claimToken,
+      p_error:
         message.slice(
           0,
           1000,
         ),
-      moderation_last_attempt_at:
-        new Date().toISOString(),
-      moderation_scan_version:
+      p_scan_version:
         SCAN_VERSION,
-    })
-    .eq(
-      "id",
-      adId,
-    );
-
-  await addAuditEvent(
-    admin,
-    adId,
-    "error",
-    "temporary_error",
-    message,
-    null,
+    },
   );
+
+  if (error) {
+    throw rpcFailure(
+      "Failed to release safety scan claim.",
+      error,
+    );
+  }
 }
 
 async function finalize(
   admin: any,
   adId: number,
+  claimToken: string,
   status: FinalStatus,
   reason:
     string | null,
@@ -771,52 +612,6 @@ async function finalize(
     string | null,
   details: unknown,
 ) {
-  const {
-    error,
-  } =
-    await admin
-      .from("ads")
-      .update({
-        moderation_reason:
-          reason,
-        moderation_details:
-          details,
-        moderation_risk_score:
-          Math.max(
-            0,
-            Math.min(
-              100,
-              Math.round(
-                riskScore,
-              ),
-            ),
-          ),
-        moderation_scan_version:
-          SCAN_VERSION,
-        moderation_image_sha256:
-          imageSha256,
-        moderation_last_error:
-          null,
-        moderated_at:
-          new Date().toISOString(),
-        promotion_stopped_at:
-          status === "rejected"
-            ? new Date().toISOString()
-            : null,
-      })
-      .eq("id", adId)
-      .in(
-        "moderation_status",
-        [
-          "pending_scan",
-          "manual_review",
-        ],
-      );
-
-  if (error) {
-    throw error;
-  }
-
   const safetyStatus =
     status === "approved"
       ? "passed"
@@ -824,33 +619,76 @@ async function finalize(
       ? "held"
       : "failed";
 
-  const {
-    error: safetyError,
-  } = await admin.rpc(
-    "record_ad_safety_scan",
-    {
-      p_ad_id: adId,
-      p_status: safetyStatus,
-      p_reason: reason,
-    },
-  );
+  const payload = {
+    p_ad_id:
+      adId,
+    p_claim_token:
+      claimToken,
+    p_status:
+      safetyStatus,
+    p_reason:
+      reason,
+    p_risk_score:
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            riskScore,
+          ),
+        ),
+      ),
+    p_image_sha256:
+      imageSha256,
+    p_details:
+      details,
+    p_scan_version:
+      SCAN_VERSION,
+  };
 
-  if (safetyError) {
-    throw safetyError;
+  let lastError:
+    unknown = null;
+
+  /*
+    The finalize RPC is transactional and idempotent for this token + payload.
+    Repeating it reconciles a commit whose HTTP response was lost, without a
+    second state transition or final audit event.
+  */
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const {
+        data,
+        error,
+      } = await admin.rpc(
+        "finalize_ad_safety_scan",
+        payload,
+      );
+
+      if (
+        !error &&
+        data &&
+        [
+          "finalized",
+          "replayed",
+        ].includes(data.result)
+      ) {
+        return data;
+      }
+
+      lastError =
+        error ||
+        new Error(
+          "Safety scan finalization returned an invalid response.",
+        );
+    } catch (error) {
+      lastError =
+        error;
+    }
   }
 
-  await addAuditEvent(
-    admin,
-    adId,
-    "final_decision",
-    status,
-    reason,
-    {
-      risk_score:
-        riskScore,
-      image_sha256:
-        imageSha256,
-    },
+  throw rpcFailure(
+    "Safety scan finalization failed.",
+    lastError,
   );
 }
 
@@ -1163,6 +1001,10 @@ Deno.serve(
       number | null =
       null;
 
+    let claimToken:
+      string | null =
+      null;
+
     try {
       if (
         req.method !==
@@ -1247,6 +1089,12 @@ Deno.serve(
         );
       }
 
+      claimToken =
+        crypto.randomUUID();
+
+      const activeClaimToken =
+        claimToken;
+
       await addAuditEvent(
         admin,
         adId,
@@ -1264,6 +1112,67 @@ Deno.serve(
         },
       );
 
+      const claim =
+        await claimSafetyScan(
+          admin,
+          adId,
+          activeClaimToken,
+        );
+
+      if (
+        claim.result ===
+        "not_found"
+      ) {
+        return json(
+          {
+            error:
+              "Ad not found.",
+          },
+          404,
+        );
+      }
+
+      if (
+        claim.result ===
+        "terminal"
+      ) {
+        const recordedStatus =
+          claim.safety_status === "passed"
+            ? "approved"
+            : claim.safety_status === "held"
+            ? "manual_review"
+            : "rejected";
+        return json({
+          ok:
+            true,
+          skipped:
+            true,
+          status:
+            recordedStatus,
+          safety_status:
+            claim.safety_status,
+        });
+      }
+
+      if (
+        claim.result ===
+        "busy"
+      ) {
+        return json(
+          {
+            ok:
+              true,
+            skipped:
+              true,
+            status:
+              "in_progress",
+            retry_after:
+              claim.lease_expires_at,
+          },
+          202,
+        );
+      }
+
       const {
         data: ad,
         error:
@@ -1277,7 +1186,7 @@ Deno.serve(
             user_id,
             title,
             caption,
-            image_url,
+            image_storage_path,
             promotion_allocation,
             moderation_status,
             safety_status,
@@ -1305,28 +1214,10 @@ Deno.serve(
       }
 
       if (ad.safety_status !== "pending") {
-        const recordedStatus =
-          ad.safety_status === "passed"
-            ? "approved"
-            : ad.safety_status === "held"
-            ? "manual_review"
-            : "rejected";
-        return json({
-          ok:
-            true,
-          skipped:
-            true,
-          status:
-            recordedStatus,
-          safety_status:
-            ad.safety_status,
-        });
+        throw new Error(
+          "Safety scan state changed after this worker claimed it.",
+        );
       }
-
-      await updateAttempt(
-        admin,
-        adId,
-      );
 
       /*
         --------------------------------------------------------
@@ -1402,6 +1293,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "rejected",
           textIssues.join(
             " ",
@@ -1505,6 +1397,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "rejected",
           hardUrlReasons.join(
             " ",
@@ -1551,59 +1444,7 @@ Deno.serve(
         },
       );
 
-      /*
-        --------------------------------------------------------
-        STAGE 3: image ownership, network fetch, MIME, magic bytes
-        --------------------------------------------------------
-      */
-
-      const expectedPrefix =
-        `${IMAGE_BUCKET_PREFIX}${ad.user_id}/`;
-
-      if (
-        typeof ad.image_url !==
-          "string" ||
-        !ad.image_url.startsWith(
-          expectedPrefix,
-        )
-      ) {
-        const reason =
-          "Image must come from the posting user's AdBattle image folder.";
-
-        await addAuditEvent(
-          admin,
-          adId,
-          "image_validation",
-          "rejected",
-          reason,
-          {
-            expected_prefix:
-              expectedPrefix,
-          },
-        );
-
-        await finalize(
-          admin,
-          adId,
-          "rejected",
-          reason,
-          100,
-          null,
-          {
-            image_validation:
-              reason,
-          },
-        );
-
-        return json({
-          ok:
-            true,
-          status:
-            "rejected",
-          reason,
-        });
-      }
-
+      /* STAGE 3: read the same private object that duplicate screening reads. */
       let image:
         {
           bytes:
@@ -1615,10 +1456,14 @@ Deno.serve(
         };
 
       try {
-        image =
-          await fetchImageLimited(
-            ad.image_url,
-          );
+        const bytes = await loadOwnedImage(
+          admin.storage.from(PENDING_IMAGE_BUCKET), ad.user_id, ad.image_storage_path,
+        );
+        // The storage policy validates JPEG/PNG magic bytes, metadata MIME,
+        // dimensions, and the exact byte count before either remote model sees it.
+        const contentType = bytes[0] === 0xff ? "image/jpeg" : "image/png";
+        requireSupportedImage(bytes, contentType);
+        image = { bytes, contentType, byteLength: bytes.length };
       } catch (
         imageError
       ) {
@@ -1642,6 +1487,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "rejected",
           reason,
           100,
@@ -1776,6 +1622,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "rejected",
           reason,
           Math.max(
@@ -1868,6 +1715,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "manual_review",
           [
             ...reviewUrlReasons,
@@ -1943,6 +1791,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "rejected",
           reason,
           Math.max(
@@ -2008,6 +1857,7 @@ Deno.serve(
         await finalize(
           admin,
           adId,
+          activeClaimToken,
           "manual_review",
           reason,
           Math.max(
@@ -2046,6 +1896,7 @@ Deno.serve(
       await finalize(
         admin,
         adId,
+        activeClaimToken,
         "approved",
         null,
         combinedRisk,
@@ -2096,12 +1947,14 @@ Deno.serve(
 
       if (
         admin &&
-        adId
+        adId &&
+        claimToken
       ) {
         try {
           await setScanError(
             admin,
             adId,
+            claimToken,
             message,
           );
         } catch (

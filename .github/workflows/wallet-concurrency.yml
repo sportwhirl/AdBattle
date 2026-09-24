@@ -2,7 +2,7 @@ name: Wallet PostgreSQL concurrency
 
 on:
   pull_request:
-    branches: [wallet-ledger-90-10]
+    branches: [main, wallet-ledger-90-10]
     paths:
       - '.github/workflows/wallet-concurrency.yml'
       - 'scripts/test_wallet_concurrency.py'

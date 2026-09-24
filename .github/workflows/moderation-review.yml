@@ -1,0 +1,55 @@
+name: Private moderation review
+on:
+  pull_request:
+    branches: [main, wallet-ledger-90-10, feat/ai-media-integration]
+    paths:
+      - 'frontend-config.js'
+      - 'index.html'
+      - 'moderation.*'
+      - 'docs/AI_*'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'supabase/AI_*'
+      - 'supabase/PRIVATE_PENDING_MEDIA.md'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/generate-ai-image/**'
+      - 'supabase/functions/moderator-ad-previews/**'
+      - 'supabase/functions/pending-ad-previews/**'
+      - 'supabase/functions/publish-ad-image/**'
+      - 'supabase/functions/scan-ad-duplicate/**'
+      - 'supabase/functions/submit-ai-ad/**'
+      - 'supabase/config.toml'
+      - 'supabase/migrations/*ai_image*.sql'
+      - 'supabase/migrations/*ai_draft_storage.sql'
+      - 'supabase/migrations/*image_publication*.sql'
+      - 'supabase/migrations/*private_pending_images.sql'
+      - 'supabase/migrations/*moderation_review.sql'
+      - 'supabase/migrations/20260922_duplicate_screening.sql'
+      - 'supabase/MODERATION_REVIEW.md'
+      - 'tests/ai_image_*.test.mjs'
+      - 'tests/image_*.test.mjs'
+      - 'tests/identity_action_fencing.test.mjs'
+      - 'tests/moderation_*.test.mjs'
+      - 'tests/owner_duplicate_ui.test.mjs'
+      - 'tests/pending_preview.test.mjs'
+      - 'tests/private_pending_media.test.mjs'
+      - 'tests/production_frontend_compat.test.mjs'
+      - 'tests/staging_frontend.test.mjs'
+      - 'tests/storage_scan_policy.test.mjs'
+      - '.github/workflows/moderation-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  moderation-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test

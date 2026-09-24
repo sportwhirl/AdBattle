@@ -2,12 +2,14 @@ name: Ad scanner policy responses
 
 on:
   pull_request:
-    branches: [wallet-ledger-90-10]
+    branches: [main, wallet-ledger-90-10, feat/ai-media-integration]
     paths:
       - '.github/workflows/scanner-policy.yml'
       - 'supabase/functions/scan-ad/**'
+      - 'supabase/migrations/*safety_scan_claim_lease.sql'
       - 'tests/safety_scanner.test.mjs'
       - 'tests/scanner_policy_response.test.mjs'
+      - 'tests/safety_scan_claim_lease.test.mjs'
       - 'tests/fixtures/images/**'
   workflow_dispatch:
 
@@ -25,4 +27,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/safety_scanner.test.mjs tests/scanner_policy_response.test.mjs
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test tests/safety_scanner.test.mjs tests/scanner_policy_response.test.mjs tests/safety_scan_claim_lease.test.mjs

@@ -61,13 +61,22 @@ function productionLoader(currentUser) {
     },
   };
   const context = vm.createContext({
-    FEATURES: { seeds: true, duplicateScreening: false },
+    FEATURES: {
+      seeds: true,
+      duplicateScreening: false,
+      aiProvenanceReads: false,
+      privateMediaPipeline: false,
+    },
     currentUser,
+    aiDraftUiEpoch: 0,
+    adsLoadId: 0,
     ads: [],
     db,
     console: { error() {} },
     reconcileRecordedSeedPending() {},
   });
+  context.aiDraftUiIsCurrent = (userId, epoch) =>
+    context.currentUser?.id === userId && context.aiDraftUiEpoch === epoch;
   vm.runInContext(`${loadAdsSource}\n;globalThis.run = async () => { await loadAds(); return ads; };`, context);
   return { context, calls };
 }
@@ -93,10 +102,12 @@ test("production loads existing ads without duplicate-screening schema objects",
   assert.equal(ads[0].duplicateOfAdId, null);
 });
 
-test("production posting omits duplicate-only columns and copy", () => {
-  assert.match(html, /if \(FEATURES\.duplicateScreening\) \{\s*adInsert\.image_storage_path = fileName;\s*\}/);
+test("production posting keeps its public path while private media stays gated", () => {
+  assert.match(html, /const privateMediaPipeline =\s*FEATURES\.privateMediaPipeline/);
+  assert.match(html, /if \(privateMediaPipeline\) \{\s*adInsert\.image_storage_path = fileName;/);
+  assert.match(html, /else \{[\s\S]*?\.from\("ad-images"\)[\s\S]*?\.getPublicUrl\(fileName\)/);
   assert.match(html, /\.from\("ads"\)\s*\.insert\(adInsert\)/);
-  assert.match(html, /FEATURES\.duplicateScreening\s*\? "Ad submitted\.[\s\S]*duplicate screening[\s\S]*:\s*"Ad submitted\. It is locked and will become public after the safety scan approves it\."/);
+  assert.match(html, /privateMediaPipeline\s*\? "Ad submitted\.[\s\S]*duplicate screening[\s\S]*:\s*"Ad submitted\. It is locked and will become public after the safety scan approves it\."/);
   assert.match(html, /if \(!FEATURES\.duplicateScreening\) \{\s*document\.getElementById\("creatorIdentity"\)\.hidden = true;/);
   assert.match(html, /if \(!currentUser \|\| !FEATURES\.duplicateScreening\) return;/);
 });

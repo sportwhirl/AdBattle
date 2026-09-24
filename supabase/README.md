@@ -413,7 +413,9 @@ report** PR workflow runs the focused fixture suite without hosted credentials.
 
 ### Local frontend against adbattle-test
 
-The tracked production configuration is unchanged. Localhost is fail-closed:
+The tracked production behavior remains unchanged: production keeps
+`privateMediaPipeline=false`, `aiProvenanceReads=false`, and
+`aiImageDrafts=false`. Localhost is fail-closed:
 opening `index.html` directly, using `python3 -m http.server`, using
 `127.0.0.1`, or omitting/mistyping any staging value stops initialization
 before a Supabase client is created. Use the staging server, which validates
@@ -440,12 +442,19 @@ or a committed environment file.
 
 The limited staging schema has no legacy `likes` table; paid Seeds use the
 private `ad_seeds` table and narrow read/write RPCs instead. Ad image posting is
-enabled for end-to-end scanner testing against the `ad-images` bucket, while
-creator onboarding remains disabled. No requests are made to the missing
+enabled for end-to-end scanner testing through private
+`ad-pending-images` because local staging sets `privateMediaPipeline=true`.
+Staging also sets `aiProvenanceReads=true`, so gallery reads preserve AI-origin
+disclosures even while the separate `aiImageDrafts` creation control remains
+off. Creator onboarding remains disabled. No requests are made to the missing
 `likes` table, `sync-connect-status`, or `create-connect-account`. Login, ad
 posting, approved ad loading, wallet balances, pending creator balance, top-ups,
 paid Seeds, and wallet Support remain available under the existing RLS policies.
-This is a UI capability switch, not a database-permission bypass.
+These frontend capabilities are not database-permission bypasses and must not
+be enabled against a project whose matching migrations, buckets, functions,
+webhooks, and policies are absent. See
+[`PRIVATE_PENDING_MEDIA.md`](PRIVATE_PENDING_MEDIA.md) for the staging-only
+backend-first rollout and production cutover boundary.
 
 Browser Support and top-up retry records are keyed by Supabase project and user.
 Both UUIDs are written to `localStorage` before their Edge Function request.
@@ -475,7 +484,12 @@ entries remain unchanged. Reloading after the retry record has been cleared
 shows a neutral return message and the current balance/hold; receipt evidence
 is only cached in memory for the current page and user.
 
-#### Staging Edge Function configuration and redeployment
+#### Wallet staging Edge Function configuration and redeployment
+
+This subsection covers only the previously completed wallet/frontend change.
+It is not the deployment list for the pending AI/private-media hardening; follow
+`PRIVATE_PENDING_MEDIA.md` and `AI_IMAGE_DRAFTS.md` for that separate,
+migration-first rollout.
 
 Set these Edge Function secrets/configuration values on **adbattle-test only**:
 
@@ -780,8 +794,8 @@ check RPC outcomes, exact debit/Support counts and identities, running ledger
 balances, wallet totals, ad totals, and the 90/10 microdollar accruals.
 
 The `Wallet PostgreSQL concurrency` GitHub Actions job runs this suite for
-relevant pull requests targeting `wallet-ledger-90-10`. These tests cover local
-PostgreSQL transaction behavior; hosted Auth/RLS integration, HTTP retries,
+relevant pull requests targeting `main` or `wallet-ledger-90-10`. These tests
+cover local PostgreSQL transaction behavior; hosted Auth/RLS integration, HTTP retries,
 settlement/Stripe races, and production-schema compatibility are separate checks.
 
 ## Production prerequisites

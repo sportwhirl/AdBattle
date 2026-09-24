@@ -18,6 +18,9 @@ function client({ status = "disputed", search = "?wallet=success", walletStatus 
   const timers = [];
   const context = vm.createContext({
     currentUser: { id: "user-1" }, PROJECT_REF: "project-1", URLSearchParams, URL,
+    aiDraftUiEpoch: 0,
+    walletLoadId: 0,
+    creatorBalanceLoadId: 0,
     window: { location: { search } }, console: { error() {}, log() {} },
     walletBalance: { innerText: "" }, walletMessage: { innerText: "" }, walletBalanceCents: 0,
     creatorBalanceStatus: { innerText: "" }, formatCents: (cents) => `$${(cents / 100).toFixed(2)}`,
@@ -51,7 +54,11 @@ function client({ status = "disputed", search = "?wallet=success", walletStatus 
       },
     },
   });
-  vm.runInContext(walletCode + "\n" + startCode, context);
+  vm.runInContext(
+    "function aiDraftUiIsCurrent(userId, epoch) { return currentUser?.id === userId && aiDraftUiEpoch === epoch; }\n"
+      + walletCode + "\n" + startCode,
+    context,
+  );
   return { context, storage, state, notices, timers };
 }
 
