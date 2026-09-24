@@ -48,13 +48,15 @@ async function publishOne(admin: ReturnType<typeof createClient>, adId: number) 
     if (await sha256Hex(privateBytes) !== expectedSha) throw new Error("Private image changed after screening");
     const contentType = privateBytes[0] === 0xff ? "image/jpeg" : "image/png";
     const publicBucket = admin.storage.from(PUBLIC_BUCKET);
-    const { error: uploadError } = await publicBucket.upload(publicPath, privateBytes, {
-      upsert: false, contentType, cacheControl: "31536000",
-    });
-    if (uploadError && !/already exists|duplicate|409/i.test(uploadError.message || "")) {
-      throw new Error("Public upload failed");
+    // An upload error or lost response may still mean the immutable copy was
+    // stored. The fresh public download and exact hash are authoritative.
+    try {
+      await publicBucket.upload(publicPath, privateBytes, {
+        upsert: false, contentType, cacheControl: "31536000",
+      });
+    } catch {
+      // A missing or mismatched public copy fails verification below.
     }
-    // A retry may see a prior immutable upload. Verify its exact bytes.
     const publicBytes = await loadOwnedImage(publicBucket, before.user_id, publicPath);
     if (await sha256Hex(publicBytes) !== expectedSha) throw new Error("Public image hash mismatch");
     const { data: publicUrl } = publicBucket.getPublicUrl(publicPath);

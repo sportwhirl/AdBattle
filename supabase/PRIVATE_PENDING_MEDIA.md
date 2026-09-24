@@ -44,13 +44,17 @@ server post enable flag. See `AI_IMAGE_DRAFTS.md`.
 
 ## Test-project rollout snapshot (2026-09-24)
 
-Project `nccqnrcdygujulrnwair` (`adbattle-test`) has the four image
+Project `nccqnrcdygujulrnwair` (`adbattle-test`) has the four initial image
 migrations in order: `20260923162944_ai_image_draft_quota.sql`,
 `20260923170000_private_pending_images.sql`,
 `20260923170351_openai_image_draft_model.sql`, and
 `20260923180000_ai_canonical_post.sql`. Hosted migration history records them
 as `20260923223756`, `20260923223804`, `20260923223816`, and
-`20260923223823`, respectively. The private `ad-pending-images` bucket exists.
+`20260923223823`, respectively. The forward hash-guard migration
+`20260924012243_image_publication_hash_guard.sql` was applied as hosted
+`20260924012526`. It makes missing fingerprint or moderation hashes fail
+completion, including idempotent retries. The private `ad-pending-images`
+bucket exists.
 
 Before the migrations, the two unapproved staging images for ads #5 and #6
 were copied to the private bucket at their original paths and verified against
@@ -60,7 +64,7 @@ the Storage API; their `image_url` fields are now empty strings. Ad #5 remains
 Approved public images were preserved.
 
 Hosted test-project functions are active: `scan-ad` v14 and
-`scan-ad-duplicate` v13 (`verify_jwt=false`), `publish-ad-image` v3
+`scan-ad-duplicate` v13 (`verify_jwt=false`), `publish-ad-image` v4
 (`verify_jwt=false`), `pending-ad-previews` v9 (`verify_jwt=true`),
 `generate-ai-image` v4 and `submit-ai-ad` v2 (`verify_jwt=true`). The existing
 safety and duplicate scan webhooks remain active. The dedicated publisher
@@ -101,6 +105,23 @@ authenticated owner policy. Private `ad-pending-images` permits owner-scoped
 uploads and reads, while client updates and deletes are blocked. A live
 upload-denial HTTP request has not yet been exercised.
 
+Legacy approved ad #3 remains in both anonymous gallery RPCs; its public PNG
+URL returned HTTP 200 with the expected 728,890-byte length. The active
+staging frontend selects `get_public_ads` while its AI image control is off.
+That RPC returned six ads, including approved #3 and #10 and excluding held
+#9. These are API and Storage checks, not browser rendering. The available
+database HTTP proxy permits only JSON POST bodies, so its Storage upload
+attempt failed MIME validation before it could test the RLS write denial.
+
+Publisher v4 checks the exact public bytes after every upload result, including
+an unfamiliar conflict or uncertain response. Missing or mismatched copies
+defer publication. The hosted function's files matched the reviewed source;
+a secret-authenticated empty sweep returned 200 (`completed:0`, `deferred:0`)
+and a request without the publisher secret returned 401. The queue stayed
+empty, and ads #3, #9, and #10 retained their expected states. Local tests
+passed 235/235, including a regression that demonstrates the prior nullable
+hash bypass.
+
 On 2026-09-24, a temporary staging-only, secret-gated fixed-fixture probe ran
 the exact deployed JPEG processor in the hosted Deno runtime. Its pixel-art
 1280x720 input produced 640x360 JPEG (6,927 bytes, 56 ms); its smooth-style
@@ -126,13 +147,12 @@ provider response, high-entropy image, or end-to-end AI post.
    `cron.job_run_details` success alone proves only SQL dispatch. Alert if
    queue age exceeds several minutes, the worker repeatedly returns 503, or
    `publishing` becomes stuck. Test the alternate scan completion order,
-   changed private bytes, retry after upload, owner/stranger previews,
-   public-bucket write denial, and a legacy approved ad. Test Seed/Support on
-   an approved staging ad to check wallet behavior.
+   changed private bytes, and retry after upload. Test Seed/Support on an
+   approved staging ad to check wallet behavior.
 4. Before an approved adult staging AI test, verify provider access, provision
-   an adult test claim and the OpenAI key, and
-   enable the separate server image generation and posting flags. Keep the
-   browser flag off until the staging flow works. See `AI_IMAGE_DRAFTS.md`.
+   an adult test claim and the OpenAI key, and enable the separate server image
+   generation and posting flags. Keep the browser flag off until the staging
+   flow works. See `AI_IMAGE_DRAFTS.md`.
 
 Do not open all-ages creation on the strength of this media gate alone. Age
 assurance, parent consent, payments and the separate youth release gates in

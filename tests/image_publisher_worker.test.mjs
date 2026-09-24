@@ -29,6 +29,8 @@ function bucket(sourceBytes, state, name) {
       state.calls.push([name,'upload',path]);
       assert.equal(options.upsert,false);
       assert.equal(options.contentType,'image/png');
+      if (state.uploadError) return {data:null,error:state.uploadError};
+      if (state.uploadThrows) throw new Error('Response lost after upload');
       if (state.publicBytes) return {data:null,error:{message:'Resource already exists',statusCode:'409'}};
       state.publicBytes=new Uint8Array(bytes);
       return {data:{path},error:null};
@@ -38,10 +40,11 @@ function bucket(sourceBytes, state, name) {
 }
 
 async function worker({ privateBytes=png, publicBytes=null, scanHash, beforeState='pending', sweep=false,
-                        aiSource=null, aiPostSha=null, configuredSecret=secret }={}) {
+                        aiSource=null, aiPostSha=null, configuredSecret=secret,
+                        uploadError=null, uploadThrows=false }={}) {
   const goodHash=await sha256Hex(png);
   const expectedSha=scanHash || goodHash;
-  const state={calls:[],publicBytes,complete:0,eligibleFilter:null};
+  const state={calls:[],publicBytes,uploadError,uploadThrows,complete:0,eligibleFilter:null};
   const privateBucket=bucket(()=>privateBytes,state,'private');
   const publicBucket=bucket(()=>state.publicBytes,state,'public');
   const admin={
@@ -116,6 +119,24 @@ test('retry handles existing verified public copy but refuses a different copy',
   const bad=await worker({publicBytes:changed});
   assert.equal(bad.status,503);
   assert.equal(bad.state.complete,0);
+});
+
+test('unfamiliar upload conflict or lost response accepts only a verified existing copy', async () => {
+  const conflict={message:'Target occupied',statusCode:'409'};
+  const matched=await worker({publicBytes:png.slice(),uploadError:conflict});
+  assert.equal(matched.status,200);
+  assert.equal(matched.state.complete,1);
+  const lost=await worker({publicBytes:png.slice(),uploadThrows:true});
+  assert.equal(lost.status,200);
+  assert.equal(lost.state.complete,1);
+  const changed=png.slice(); changed[changed.length-1]^=1;
+  const mismatched=await worker({publicBytes:changed,uploadError:conflict});
+  assert.equal(mismatched.status,503);
+  assert.equal(mismatched.state.complete,0);
+  const missing=await worker({uploadError:conflict});
+  assert.equal(missing.status,503);
+  assert.equal(missing.state.complete,0);
+  assert.ok(missing.state.calls.some(call=>call[1]==='defer_ad_image_publication'));
 });
 
 test('scheduled sweep retries a queued interrupted publication', async () => {
