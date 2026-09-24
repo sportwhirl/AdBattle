@@ -51,7 +51,7 @@
             projectRef: STAGING_REF,
             supabaseUrl: STAGING_URL,
             publishableKey: supplied.publishableKey,
-            features: Object.freeze({ seeds: true, adImages: true, creatorOnboarding: false, aiImageDrafts: true })
+            features: Object.freeze({ seeds: true, adImages: true, creatorOnboarding: false, aiImageDrafts: false })
         });
     }
 
