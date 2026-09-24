@@ -1,5 +1,5 @@
 {
-  "description": "Non-image fingerprints of the original and cropped staging parrot. Generated from the same immutable source bytes; no account or credential data.",
+  "description": "Non-image fingerprints of the original staging parrot, first crop, and crop test. Locally decoded fingerprints were verified against the same immutable stored bytes; no account or credential data.",
   "original": {
     "sha256": "08b0ef7b62efbab77fad5eb9c134919ff8db37d5d5a5ce1a61e9b17f52de020d",
     "fingerprint": {
@@ -511,5 +511,261 @@
       ]
     },
     "dhash": "b4fbef54db147554"
+  },
+  "off_grid_crop": {
+    "sha256": "5645ec9e7110f7b0c1a43894239d27553ab49055b7a817cf991fd25cbd545c70",
+    "dhash": "f7fd6eb15c5d1676",
+    "fingerprint": {
+      "width": 2195,
+      "height": 1906,
+      "regions": [
+        {
+          "hash": "ebf6dc34383c3534ffee9f1f1b0b197d",
+          "color": "7dac9d9d886ad94f3f7fa97a5d5e3faa34208fb86f515d47661e0b",
+          "contrast": 40
+        },
+        {
+          "hash": "ebf6dc3438383535ffee9f1f0f130319",
+          "color": "7fada09f8a6cda50407ba67b616343b739258eb572555d446c1f0c",
+          "contrast": 39
+        },
+        {
+          "hash": "fffefc3c383c3535ffde1f1f1b1a031d",
+          "color": "78a895988262da493b7fa97a5b5e3fab34208fb770525e46671d0b",
+          "contrast": 39
+        },
+        {
+          "hash": "f6dc343838353534ee9f1f0f130319f5",
+          "color": "74a58b917c5cd4443683ab7856593b9e2f1b8fb86e515e49651e0b",
+          "contrast": 40
+        },
+        {
+          "hash": "ebf6dcfc3c383835fff7df1f1f1b1b03",
+          "color": "81aea4a18c6edb534277a47d6e6a48c33d2b8bb27554593f7b2310",
+          "contrast": 37
+        },
+        {
+          "hash": "f7dcf43c38383535e7df1f0f1b1a031d",
+          "color": "74a58d947e5ed646387fa97a595d3fac35208eb672545e45691d0c",
+          "contrast": 38
+        },
+        {
+          "hash": "dcf43c383c353534df1f0f1b1a031d75",
+          "color": "73a38183744fcc413187ae7751553b8e29158fb96e505e4a641e0b",
+          "contrast": 41
+        },
+        {
+          "hash": "f7fbde3a3c3c3636ffef8f0f0d09195c",
+          "color": "7fad9f899376df533e7fa97a5d6f529833188fb86f4e6857612b0b",
+          "contrast": 41
+        },
+        {
+          "hash": "ebf6dc34383d3536ffef9f1f1b1b197d",
+          "color": "7bab9a9c886adb503e80a97a5a5c3fa5321d8fb86f4c594862200a",
+          "contrast": 41
+        },
+        {
+          "hash": "eff7bc7578786d6dffdf1e1f1b1333b9",
+          "color": "79a996af7c5dd84d3d7ea77b59482cb1362183b37950482d691d0c",
+          "contrast": 40
+        },
+        {
+          "hash": "f7fbde1a3c3c3e36fff7ce1f0f09011d",
+          "color": "80aea28b9679e056417ba67b5f7455a7371e8eb573546a56652a0b",
+          "contrast": 40
+        },
+        {
+          "hash": "fbeeda383c3c3636ffef9f0f0d09111c",
+          "color": "79a997858f6fdd4d3a7fa87a5c6f529833198fb7714f6957622a0b",
+          "contrast": 40
+        },
+        {
+          "hash": "fbde1a3c3c3e3632f7ce1f0f09011dfc",
+          "color": "75a68d7e8869d6473482ab785a6c4e892e138fb86f4c6959602c0b",
+          "contrast": 41
+        },
+        {
+          "hash": "ebf6dcb438383534ffef9f1f0f1b0319",
+          "color": "7dac9d9e8b6cdb52407ca77b5e6143b538248fb673525a4467200c",
+          "contrast": 39
+        },
+        {
+          "hash": "ffdefc34383d3534ffde9f0f1b1b013d",
+          "color": "77a792978363dc4b3b80a97a585b3fa6331d8fb7714e5a47631f0a",
+          "contrast": 40
+        },
+        {
+          "hash": "f6dcb43838353436ef9f1f0f1b031975",
+          "color": "74a4898f7c5cd6453584ac7954573b972d1890b96f4b5a4a60200a",
+          "contrast": 40
+        },
+        {
+          "hash": "eff7bd3479787d6dffef9d3f1f13023b",
+          "color": "79aa98b27e60d84e3f7ba57b604e31bf3c2885b27a51462a711f0d",
+          "contrast": 39
+        },
+        {
+          "hash": "f7ddb47178786d6dffdf3e1f1b132339",
+          "color": "75a68eaa7657d9483a7da77b57472cb3372284b37a50482c6b1d0c",
+          "contrast": 39
+        },
+        {
+          "hash": "f7bd3479787d6d65ef9d3f1f13023bf9",
+          "color": "72a386a06e4fd3433580a97a504227a7321c83b379504a2e671c0c",
+          "contrast": 40
+        },
+        {
+          "hash": "f7fbee5a3a3c3c36fff3cf9f0f1f0901",
+          "color": "82afa68b987be2594377a47d687858b63c238ab275566a526f290d",
+          "contrast": 37
+        },
+        {
+          "hash": "fbee5a383c3c363ef7ce9f0f0d090119",
+          "color": "75a68e818a6ad848357ea8795b70529732188eb672536a5763290b",
+          "contrast": 39
+        },
+        {
+          "hash": "ee5a3c3c3c363e32ce9f0f0909011c7c",
+          "color": "73a38176805ec7422a86ae7756694e7b290f8fb96e4b685b5e2c0b",
+          "contrast": 42
+        },
+        {
+          "hash": "ebf6defc34383d35ffefde9f0f1f1b01",
+          "color": "7eada1a08d6fdc544278a47d6b6847c23c288cb27651573f75230f",
+          "contrast": 37
+        },
+        {
+          "hash": "f6deb43c383d3534efdf1f0f1b1b013d",
+          "color": "73a58b927e5ed7453680a97a565b3fa6331d8fb672505b45641f0b",
+          "contrast": 39
+        },
+        {
+          "hash": "dcb43c383d3534769f1f0f1b1b013df5",
+          "color": "74a38081724fcd402e88af774f533b87281390b96e4b5a4c5f200a",
+          "contrast": 41
+        },
+        {
+          "hash": "eff7ddb47578786dffe79f3f1f3f1303",
+          "color": "7bab9bb48263d8504077a47c715637c83f2c84af7a4c4128822411",
+          "contrast": 37
+        },
+        {
+          "hash": "f7ddb47178786d7def9d3e1f1b130233",
+          "color": "72a387a47051d543367ea77b54472cb4372285b27a50472b6d1d0c",
+          "contrast": 38
+        },
+        {
+          "hash": "dcb47978786d7d649d3f1f13130339f9",
+          "color": "73a27e8e6341cd403082ac7a483d25982b1782b379504b2f651c0b",
+          "contrast": 41
+        },
+        {
+          "hash": "fdfbdf1d1e1e1b1bffe78f0f0d040c7e",
+          "color": "7fada0779f85da5e427ea87a6181637b35168eb76f4d796859360f",
+          "contrast": 42
+        },
+        {
+          "hash": "ebf79e343c3d3676ffcf1f1f1b1919fc",
+          "color": "79a99799896ade533f81aa7a56593f9c31198db8734854455c240a",
+          "contrast": 41
+        },
+        {
+          "hash": "d7ad786870fae9edff9f3f3f373273eb",
+          "color": "76a58ec36d4ed64e3f709671623d20b7372365977459421e701d0d",
+          "contrast": 39
+        },
+        {
+          "hash": "f5fbef5d1e1e1a3bfff7cf0f070c000c",
+          "color": "81afa477a188dd60447aa67b64856687391c8db572527b675c320c",
+          "contrast": 40
+        },
+        {
+          "hash": "fdebdd1e1e1e1b3bffef8f070d0c000e",
+          "color": "7aaa98749b7dd5553c7ea87a6281637a35168eb7704e7a6859350d",
+          "contrast": 41
+        },
+        {
+          "hash": "fbef5d1e1e1a3b1bf7cf0f070c000c3a",
+          "color": "76a68e709576cb4e3682ab78607e606d31128fb86e4c7969593710",
+          "contrast": 41
+        },
+        {
+          "hash": "ebf7deb43c3c3476ffef1f1f1f190119",
+          "color": "7aaa9a9c8b6ddf54407da77b5a6043ab351e8db6764e554262230b",
+          "contrast": 40
+        },
+        {
+          "hash": "ffd6be343c3d7476ffdf1f1f1b19013d",
+          "color": "75a68f948363dd4a3981aa7a55593f9c31198db7744a56445d2309",
+          "contrast": 40
+        },
+        {
+          "hash": "f7deb43c3c347676ef1f1f1f19011974",
+          "color": "73a4878c7c5dd5443285ac7951543b8d2d148db8734755475a2409",
+          "contrast": 41
+        },
+        {
+          "hash": "d7ef3c6879f8ebe9ffdf3f3f3f270273",
+          "color": "76a791c76f51d64e3e6f97726d4425c13b286b9975543c197a200f",
+          "contrast": 38
+        },
+        {
+          "hash": "efad686870fae9edffbf3f3f3737427b",
+          "color": "73a387bd6548d8483b709671613e20b8372267987556401b721e0d",
+          "contrast": 38
+        },
+        {
+          "hash": "ef3c6879f8ebe9eddf3f3f3f270273eb",
+          "color": "719f7fb25e41d3433570967057381aad321d65977559441f6d1c0c",
+          "contrast": 38
+        },
+        {
+          "hash": "f5fbebdd1f1e1e1affffef8f070f0c00",
+          "color": "83b0a876a38be2644876a47d6b8869973f208ab175577d645f2e0d",
+          "contrast": 38
+        },
+        {
+          "hash": "fbef5d1e1e1e1b3bf7cf0f070f0c000c",
+          "color": "75a690729777cf50387ea87a6282647735168eb672507b685a330c",
+          "contrast": 40
+        },
+        {
+          "hash": "ef5d1e1e1e1b3b1bcf0f070c0c000c7a",
+          "color": "73a381708e6eb4472886ad775b7d5f622d108fb96e4b796a583811",
+          "contrast": 43
+        },
+        {
+          "hash": "ebf7d6ba343c3d34ffef9f1f1f1f1901",
+          "color": "7cab9d9d8e6fe1584379a57d686848b938228bb3764d523e6f260e",
+          "contrast": 37
+        },
+        {
+          "hash": "f7d6ba343c3d3476ef9f1f0f1b190119",
+          "color": "72a388907e5fd8443381aa7a52593e9c31198db6764c56445f230a",
+          "contrast": 39
+        },
+        {
+          "hash": "deba343c3d3476769f1f0f1b19011df4",
+          "color": "74a37f7e724fc93d2888af774b503b7e28118db873465548592409",
+          "contrast": 42
+        },
+        {
+          "hash": "d7efbd686871fae9ffdf3f3e3f3f3702",
+          "color": "76a893cb7454d65040709875804b2bc93e2d6f99724e36188d2613",
+          "contrast": 36
+        },
+        {
+          "hash": "efbc687970fae9eddf3f3e3f3737027b",
+          "color": "71a081b75f43d543367096715e3d1fb938236a9976563e1a751e0e",
+          "contrast": 37
+        },
+        {
+          "hash": "bc687970fae9edec3f3e1f3737027beb",
+          "color": "709a779e5534ce41307097704c3218a02d186497755a45206b1c0c",
+          "contrast": 39
+        }
+      ],
+      "version": "crop-grid-49-rgb-dhash128-v1"
+    }
   }
 }
