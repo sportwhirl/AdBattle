@@ -40,3 +40,6 @@ verify_jwt = true
 
 [functions.submit-ai-ad]
 verify_jwt = true
+
+[functions.moderator-ad-previews]
+verify_jwt = true
