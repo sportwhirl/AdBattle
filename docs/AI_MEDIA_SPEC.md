@@ -30,6 +30,7 @@ lower model bill. Measure actual provider usage before public pricing.
 | Task | Staging choice | Reason |
 | --- | --- | --- |
 | Image draft | OpenAI GPT Image 2.5 Flare, low quality | The Images API can use an approved Zero Data Retention project; downscale provider output to the site budget. Minor end users require parent/guardian consent. |
+| Short model-video experiment | Self-hosted URSA-0.6B-FSQ320, 256×160×17 | Offline private 4-second loop candidate only. The benchmark favored one worker per GPU; quality and the complete video publication gate are not ready. See [URSA tiny staging](URSA_TINY_STAGING.md). |
 | Exactly 10-second model video | Luma Agents Ray 3.2, 360p candidate | Staging job scaffold only. Published pay-as-you-go price is $0.18 for 10s standard 360p, subject to change. Under-13 access needs an explicit provider agreement or another backend. |
 | All-ages motion alternative | AI-assisted animation from generated stills | Offline processor implemented for one or two approved JPEG/PNG stills: fixed pan/zoom, cut/dissolve, 10-second 360p derivatives. No account/API/gallery integration yet. It is not freeform model-generated motion. |
 | All-ages true video research | Self-hosted LTX-2.5 candidate | Its community license permits SaaS within conditions and has no stated end-user age floor. GPU cost, latency, output quality, downstream terms, and child-safety operation need validation before choosing it. |
@@ -96,6 +97,10 @@ speech/music needs a separate rights and moderation path before release.
 These public limits are an initial quality budget, not a promise that every
 prompt can produce a useful ad. A creator can reject the draft and use an
 original upload instead. No automatic costly rerolls.
+
+The URSA tiny experiment above is outside this 10-second/360p public video
+contract. Its 256×144, 8-fps preview is for local evaluation, and it does not
+create a full site video or an approved ad.
 
 ## Creation and publication rules
 

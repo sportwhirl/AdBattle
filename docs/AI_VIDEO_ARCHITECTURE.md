@@ -12,6 +12,12 @@ connected to ad posting, moderation, or the gallery. This document does not
 enable generation or authorize a public launch. Model availability, prices,
 provider responses, and limits must be rechecked at implementation time.
 
+A separate [URSA tiny staging experiment](URSA_TINY_STAGING.md) now produces
+private 4-second 16:9 loops from a pinned self-hosted 17-frame model output.
+It uses a local single-GPU lock and does not enter this Luma job table, the
+existing 10-second media processor, or any ad publication path. The earlier
+10-second/360p design below remains a distinct proposed route.
+
 ## Release gate and scope
 
 The product target is creative access for all ages. The
