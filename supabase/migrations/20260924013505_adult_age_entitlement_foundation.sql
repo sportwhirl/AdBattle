@@ -44,8 +44,9 @@ create table age_private.capability_grants (
   scope text not null check (scope in (
     'ai_image_generate', 'ai_image_submit',
     'ai_video_create', 'ai_video_dispatch', 'ai_video_publish',
-    'ordinary_upload', 'ordinary_post',
-    'financial_support', 'financial_seed', 'wallet_topup', 'payout'
+    'ordinary_upload', 'ordinary_post', 'creator_profile',
+    'financial_support', 'financial_seed', 'wallet_topup',
+    'connect_onboarding', 'payout'
   )),
   provider_route text not null
     check (provider_route in ('openai_images', 'still_animation', 'luma_video', 'none')),
@@ -64,8 +65,9 @@ create table age_private.capability_grants (
       and provider_route = 'openai_images') or
     (scope in ('ai_video_create', 'ai_video_dispatch', 'ai_video_publish')
       and provider_route in ('still_animation', 'luma_video')) or
-    (scope in ('ordinary_upload', 'ordinary_post',
-      'financial_support', 'financial_seed', 'wallet_topup', 'payout')
+    (scope in ('ordinary_upload', 'ordinary_post', 'creator_profile',
+      'financial_support', 'financial_seed', 'wallet_topup',
+      'connect_onboarding', 'payout')
       and provider_route = 'none')
   )
 );

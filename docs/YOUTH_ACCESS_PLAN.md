@@ -3,7 +3,9 @@
 **Status (2026-09-24):** product target and release gates. The test project
 now has private pending-image storage, a hash-bound publication worker, and
 an ordinary posting hold/success smoke. Production remains unchanged; the
-AI image generation and posting flags are off. This does not establish a child
+AI image generation and posting flags are off. Their staged route code now
+requires separate server-owned adult grants, but the age migration is not
+applied and no grants exist. This does not establish a child
 account, parental-consent flow, Zero Data Retention (ZDR), or a public video
 publishing path. Signup, ordinary image posting, Support, Seed, and wallet
 endpoints still have **no age entitlement**. Public AI creation remains off

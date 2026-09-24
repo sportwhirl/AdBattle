@@ -3,9 +3,11 @@
 **Design status — 2026-09-24.** This is a proposed implementation contract for
 an all-ages AdBattle. An adult-only, server-owned entitlement migration and
 PGlite tests now exist in this branch; the migration has **not** been applied
-to staging or production, and no endpoint uses it yet. It is not a claim that
-the current site is suitable for children or that AI creation, posting, or
-payments are cleared for them. No consent provider, OpenAI Zero Data Retention
+to staging or production. The disabled staging image routes call the proposed
+RPC before generation or submission; the video create/dispatch checks remain
+code-only. With no hosted RPC or grants, these checks cannot authorize a user.
+The current site is not yet suitable for children; AI creation, posting, and
+payments are not cleared for them. No consent provider, OpenAI Zero Data Retention
 (ZDR) approval, or production age gate is included here. Apply this alongside
 [the youth access plan](YOUTH_ACCESS_PLAN.md), with launch-jurisdiction legal
 review before a public switch.
@@ -30,7 +32,13 @@ The grant key is action plus provider route. It intentionally has no wildcard:
 | --- | --- |
 | `ai_image_generate`, `ai_image_submit` | `openai_images` |
 | `ai_video_create`, `ai_video_dispatch`, `ai_video_publish` | `still_animation` or `luma_video`, each requiring its own grant |
-| `ordinary_upload`, `ordinary_post`, `financial_support`, `financial_seed`, `wallet_topup`, `payout` | `none` |
+| `ordinary_upload`, `ordinary_post`, `creator_profile`, `financial_support`, `financial_seed`, `wallet_topup`, `connect_onboarding`, `payout` | `none` |
+
+`creator_profile` authorizes a public handle write independently of posting.
+`connect_onboarding` authorizes starting or continuing Stripe Connect setup;
+it does not authorize a creator transfer. `payout` is a separate grant checked
+at transfer time. Both deployed Connect creation routes must use the onboarding
+grant before any adult or youth release of this gate.
 
 A backend route must validate the user's current Auth identity and session,
 derive the subject UUID from that identity, then call the RPC with its own
@@ -38,9 +46,12 @@ server-held service credential and a **fixed** scope/route for that operation.
 Do not accept those three arguments from request JSON, and do not treat the
 RPC as a substitute for provider flags, quotas, safety scans, payment checks,
 or age assessment. Recheck immediately before a paid provider call and before
-public delivery, including delayed workers. The current functions, browser
-posting, storage, and financial routes are **not wired to this gate**; the
-migration alone does not protect them.
+public delivery, including delayed workers. Image generate/submit checks are
+deployed in disabled staging functions, and video create/dispatch checks are
+in code. Signup, ordinary posting, Storage, profile, financial, Connect,
+and image publication routes are **not wired to this gate**; the migration
+alone does not protect them. Its staging apply is deferred because the earlier
+crop-review migration has not been rolled out yet.
 
 The next implementation slice is a vetted adult-age assessment and trusted
 issuance path, followed by server enforcement at every action boundary and
@@ -196,10 +207,10 @@ assurances and retain only the minimum proof reference.
 | `index.html` `postAd()` and `public.ads` | Staging uploads to private `ad-pending-images` and publishes only approved, byte-verified media; production still uses the older public-upload path. The browser inserts `ads` directly, and owner INSERT policy does not check age. | Keep pending media private in every environment and close direct age/guardian bypasses with entitlement-aware RLS or a trusted posting transition plus exact parent approval where required. |
 | `saveCreatorHandle()` / `creator_profiles` | Any authenticated owner can write a publicly readable handle. | Age-safe handle defaults and policy; guardian/public identity scope and moderation. |
 | `scan-ad`, `scan-ad-duplicate`, `refresh_ad_moderation_status`, public gallery RPCs | Scanner sends title/caption/image to OpenAI and passes safety/duplicate; passing rows become public. | ZDR-eligible child-data scan path, youngest-audience review, current entitlement and parent exact-digest check at publication; public RPC includes only cleared state. |
-| `generate-ai-image`, `reserve_ai_image_draft`, `set_ad_ai_origin`, `submit-ai-ad` | Staging adult tester check and draft ownership but no youth consent. Submission verifies the server-created canonical post bytes against the draft SHA-256, and the ad/publication checks preserve that hash. | Check live age/provider entitlement before reservation, paid dispatch, draft delivery, and submission; add exact-content guardian approval and age-safe review for youth. |
-| `ai-video-draft` / worker | Staging adult gate; async job can outlive request. | Recheck consent/version before provider dispatch and final delivery; no under-13 Luma path. |
+| `generate-ai-image`, `reserve_ai_image_draft`, `set_ad_ai_origin`, `submit-ai-ad` | Disabled staging functions check separate fixed adult generation and submission scopes before draft reservation/delivery or ad writes; the RPC is not yet applied. Submission verifies canonical bytes against the draft SHA-256, and publication preserves that hash. | Install a trusted proof issuer and ordered age migration, then add youth-specific consent and exact-content approval, current policy/version checks, and age-safe review through final publication. |
+| `ai-video-draft` / worker | Code-only create and paid dispatch checks use separate fixed Luma adult grants. No video jobs table or age RPC is hosted; async jobs could outlive the request in a future rollout. | Recheck consent/version before private delivery and final publication; no under-13 Luma path. |
 | Wallet checkout, `support-from-wallet`, paid Seed, direct Support webhook, settlement | Auth/payment/ledger controls exist but no age restriction; delayed webhooks and payout worker continue independently. | Adult-only financial entitlement at entry and ledger transition; review pending payments, refunds, holds and payout when age state changes. |
-| Stripe Connect creation/status | Frontend invokes deployed functions absent from this checkout. | Inspect deployed source, gate Connect and payout for age and guardian representative before minor support is considered. |
+| Stripe Connect creation/status | Production has active `create-connect-account` and legacy `quick-responder` functions without age checks; frontend also invokes `sync-connect-status`, which is not deployed. | Gate both Connect creation paths with `connect_onboarding`, and recheck `payout` before transfer. Review guardian representative requirements before minor support is considered. |
 
 ## Staged implementation and release evidence
 

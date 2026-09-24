@@ -82,6 +82,20 @@ Deno.serve(async (request) => {
   if (!submission) return jsonResponse(request, { error: "INVALID_SUBMISSION" }, 400);
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  // A generation grant does not authorize publication. Check the distinct
+  // submit scope before any draft lookup, replay, private read, or ad write.
+  let entitled: boolean;
+  try {
+    const { data, error } = await admin.rpc("has_adult_entitlement", {
+      p_user_id: user.id, p_scope: "ai_image_submit", p_provider_route: "openai_images",
+    });
+    if (error) return jsonResponse(request, { error: "ENTITLEMENT_UNAVAILABLE" }, 503);
+    entitled = data === true;
+  } catch {
+    return jsonResponse(request, { error: "ENTITLEMENT_UNAVAILABLE" }, 503);
+  }
+  if (!entitled) return jsonResponse(request, { error: "ELIGIBILITY_REQUIRED" }, 403);
+
   const { data: draft, error: draftError } = await admin.from("ai_image_draft_requests")
     .select("request_id,user_id,status,post_path,post_sha256,post_bytes,post_width,post_height")
     .eq("request_id", submission.requestId).eq("user_id", user.id).maybeSingle();

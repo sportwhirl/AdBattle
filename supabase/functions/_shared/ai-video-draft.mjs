@@ -24,6 +24,20 @@ export function adultTestApproved(user) {
   return user?.app_metadata?.ai_video_adult_test_approved === true;
 }
 
+// Called only by server-side functions with their service-role client and a user
+// identity obtained from Auth or the private job row. Keep the Luma route fixed;
+// a grant for another provider or action must never authorize this paid call.
+export async function adultVideoEntitled(db, userId, scope) {
+  if (typeof userId !== 'string' ||
+      !['ai_video_create', 'ai_video_dispatch'].includes(scope)) return false;
+  try {
+    const { data, error } = await db.rpc('has_adult_entitlement', {
+      p_user_id: userId, p_scope: scope, p_provider_route: 'luma_video',
+    });
+    return !error && data === true;
+  } catch { return false; }
+}
+
 export function normalizeDraft(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('INVALID_DRAFT');
   const prompt = typeof body.prompt === 'string'

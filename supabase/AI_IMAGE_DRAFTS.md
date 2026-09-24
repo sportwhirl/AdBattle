@@ -15,6 +15,12 @@ claim does not enable public youth access. A future all-ages release needs
 server-verified age and guardian eligibility; OpenAI's under-18 guidance
 requires approved Zero Data Retention before processing personal data of
 children under 13, alongside the applicable parental consent path.
+The deployed route code also checks a service-only adult entitlement for the
+verified Auth user: `ai_image_generate` before reservation and signed draft
+delivery, and the distinct `ai_image_submit` scope before any draft read or ad
+write. Both use the fixed `openai_images` provider route and fail closed when
+the RPC is missing, false, or unavailable. The age migration is not yet applied
+to staging, and no assessment or grant has been issued.
 
 ## Flow and limits
 
@@ -88,12 +94,18 @@ reservation rows to Flare without rewriting existing draft history. The
 canonical-post migration adds the byte binding and a backoff queue for
 publication retries. Older completed draft rows without canonical fields
 cannot be posted; make a new draft rather than silently trusting the browser.
-The private buckets now exist. The test project has `generate-ai-image` v9 and
-`submit-ai-ad` v2 active with JWT verification on; the image scanners,
+The private buckets now exist. The test project has `generate-ai-image` v10 and
+`submit-ai-ad` v3 active with JWT verification on; the image scanners,
 publisher, and owner-preview functions are also deployed (see
 `PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
 generation or posting. The hosted function now requests 816×816 or 1088×608
-sources, while the image feature flags remain off. Inspect the
+sources, while the image feature flags remain off. Both updated functions
+returned their disabled 503 response with the anonymous project JWT and 401
+without an Authorization header; their deployed files were read back and
+matched the intended source. The un-applied crop-review migration precedes
+the age migration in this branch. Keep the age migration pending until its
+ordered rollout; the missing RPC fails closed if flags are changed early.
+Inspect the
 exact project and private bucket settings before enabling those flags. The
 publisher's matching secret, queue wakeup,
 and scheduled sweep are installed. An ordinary staging image ad completed
@@ -101,13 +113,15 @@ the hosted scan and publication flow; no AI-generated ad has done so.
 The dashboard editor may need the shared http.ts file copied locally, as
 described for existing functions in the Supabase README.
 
-Set `OPENAI_API_KEY` as an Edge Function secret and set
-`ADBATTLE_AI_IMAGE_ENABLED=true` and `ADBATTLE_AI_IMAGE_POST_ENABLED=true`
-only in adbattle-test. The same server key is
+After the ordered age migration, verified adult assessment and trusted
+short-lived grants are available, confirm `OPENAI_API_KEY` as an Edge Function
+secret. Only then consider setting `ADBATTLE_AI_IMAGE_ENABLED=true` and
+`ADBATTLE_AI_IMAGE_POST_ENABLED=true` in adbattle-test for a bounded tester
+exercise. The same server key is
 used for prompt policy screening and image generation. Provision the adult
 test approval claim through a privileged Auth administrator after confirming
-the tester's eligibility; missing or false claims fail before quota
-reservation. Never save secrets in index.html, frontend-config.js, committed
+the tester's eligibility; the claim and separate server-owned action grants
+are both required. Never save secrets in index.html, frontend-config.js, committed
 config, URLs, or logs. The existing local staging launcher uses the test
 publishable key. Test with an approved adult signed-in account: generate one
 harmless image, inspect the private bucket and quota row, review and select

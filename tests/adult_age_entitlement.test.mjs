@@ -122,7 +122,8 @@ test('missing, unknown, minor, wrong scope and expired records fail closed', asy
     await grant(db, unknown);
     assert.equal(await decide(db, adult), true);
     for (const scope of ['ai_image_submit', 'ai_video_create',
-      'ordinary_post', 'payout', 'all', '', null])
+      'ordinary_post', 'creator_profile', 'connect_onboarding',
+      'payout', 'all', '', null])
       assert.equal(await decide(db, adult, scope), false, String(scope));
     for (const route of ['luma_video', 'still_animation', 'none', '', null])
       assert.equal(await decide(db, adult, 'ai_image_generate', route),
@@ -164,6 +165,32 @@ test('provider route and action grants are separate; invalid pairs cannot be iss
     await db.query('update age_private.capability_grants set revoked_at=now() where id=$1',
       [luma]);
     assert.equal(await decide(db, adult, 'ai_video_create', 'luma_video'), false);
+  } finally { await db.close(); }
+});
+
+test('public handle and Connect onboarding have distinct none-route grants, separate from payout', async () => {
+  const db = await setup();
+  try {
+    await assess(db, adult);
+    await grant(db, adult, 'creator_profile', 'none');
+    assert.equal(await decide(db, adult, 'creator_profile', 'none'), true);
+    assert.equal(await decide(db, adult, 'ordinary_post', 'none'), false);
+    assert.equal(await decide(db, adult, 'connect_onboarding', 'none'), false);
+    assert.equal(await decide(db, adult, 'payout', 'none'), false);
+
+    await grant(db, adult, 'connect_onboarding', 'none');
+    assert.equal(await decide(db, adult, 'connect_onboarding', 'none'), true);
+    assert.equal(await decide(db, adult, 'payout', 'none'), false);
+    await assert.rejects(
+      grant(db, adult, 'creator_profile', 'openai_images'),
+      /age_scope_provider_route/,
+    );
+    await assert.rejects(
+      grant(db, adult, 'connect_onboarding', 'luma_video'),
+      /age_scope_provider_route/,
+    );
+    await grant(db, adult, 'payout', 'none');
+    assert.equal(await decide(db, adult, 'payout', 'none'), true);
   } finally { await db.close(); }
 });
 

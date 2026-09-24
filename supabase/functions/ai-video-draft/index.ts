@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
-import { adultTestApproved, assertStaging, boundedJson, draftHash, normalizeDraft,
+import { adultTestApproved, adultVideoEntitled, assertStaging, boundedJson, draftHash, normalizeDraft,
   STAGING_ORIGIN, STAGING_URL } from '../_shared/ai-video-draft.mjs';
 import { isUuid, parseBearerToken } from '../_shared/http.ts';
 
@@ -58,6 +58,9 @@ Deno.serve(async (req) => {
   let draft;
   try { draft = normalizeDraft(body); }
   catch { return reply(req, { error: 'Prompt or output format is invalid.' }, 400); }
+  if (!await adultVideoEntitled(admin, user.id, 'ai_video_create')) {
+    return reply(req, { error: 'Adult video draft access is unavailable.' }, 403);
+  }
   const hash = await draftHash(draft);
   const select = 'id,request_id,request_hash,status,aspect_ratio,style,error_code,created_at,updated_at';
   const existing = async () => admin.from('ai_video_draft_jobs').select(select)

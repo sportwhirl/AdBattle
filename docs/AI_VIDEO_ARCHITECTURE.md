@@ -3,7 +3,11 @@
 **Status:** proposed end-to-end video design, 2026-09-24. The image path has
 been deployed and exercised in the test project for an ordinary held ad and
 an approved ad; production is unchanged. A separate code-only video job
-scaffold and offline processor implement limited portions, but no video job is
+scaffold and offline processor implement limited portions. The code-only Luma
+create route now requires the fixed `ai_video_create`/`luma_video` adult grant,
+and its worker rechecks `ai_video_dispatch`/`luma_video` after claiming a job
+and before the paid POST. Missing or denied grants fail closed. Neither the age
+migration nor the video job table is applied in staging, and no video job is
 connected to ad posting, moderation, or the gallery. This document does not
 enable generation or authorize a public launch. Model availability, prices,
 provider responses, and limits must be rechecked at implementation time.

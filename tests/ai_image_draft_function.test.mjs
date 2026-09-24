@@ -26,7 +26,9 @@ const origin = 'http://localhost:8000';
 function fixture({ reservation = 'reserved', provider = good, project = 'https://nccqnrcdygujulrnwair.supabase.co',
                    enabled = 'true', user = { id: owner, app_metadata: { ai_image_adult_test_approved: true } },
                    providerStatus = 200, apiKey = 'private-openai-test-key',
-                   policy = allowPolicy, failPostUpload = false } = {}) {
+                   policy = allowPolicy, failPostUpload = false,
+                   entitlement = true, entitlementMissing = false,
+                   entitlementError = null, entitlementThrows = false } = {}) {
   const calls = { provider: [], policy: [], rpc: [], uploads: [], signs: [], updates: [], removes: [] };
   let handler;
   let jobStatus = reservation;
@@ -46,6 +48,11 @@ function fixture({ reservation = 'reserved', provider = good, project = 'https:/
   const admin = {
     async rpc(name, args) {
       calls.rpc.push({ name, args });
+      if (name === 'has_adult_entitlement') {
+        if (entitlementThrows) throw new Error('entitlement service failed');
+        return { data: entitlementMissing ? undefined : entitlement, error: entitlementError };
+      }
+      assert.equal(name, 'reserve_ai_image_draft');
       return { data: [{ reservation_status: jobStatus, draft_path: jobStatus === 'completed' ? outputPath : null }], error: null };
     },
     storage: { from(name) { assert.equal(name, 'ai-image-drafts'); return bucket; } },
@@ -111,11 +118,15 @@ test('eligible staging creator requests one low-quality image and stores private
   const result = await app.run();
   assert.equal(result.status, 200);
   assert.equal(result.body.status, 'completed');
-  assert.equal(app.calls.rpc.length, 1);
-  assert.equal(app.calls.rpc[0].name, 'reserve_ai_image_draft');
-  assert.equal(app.calls.rpc[0].args.p_user_limit, 3);
-  assert.equal(app.calls.rpc[0].args.p_global_limit, 30);
-  assert.equal(app.calls.rpc[0].args.p_aspect_ratio, '16:9');
+  assert.equal(app.calls.rpc.length, 2);
+  assert.equal(app.calls.rpc[0].name, 'has_adult_entitlement');
+  assert.deepEqual({ ...app.calls.rpc[0].args }, {
+    p_user_id: owner, p_scope: 'ai_image_generate', p_provider_route: 'openai_images',
+  });
+  assert.equal(app.calls.rpc[1].name, 'reserve_ai_image_draft');
+  assert.equal(app.calls.rpc[1].args.p_user_limit, 3);
+  assert.equal(app.calls.rpc[1].args.p_global_limit, 30);
+  assert.equal(app.calls.rpc[1].args.p_aspect_ratio, '16:9');
   assert.equal(app.calls.provider.length, 1);
   assert.equal(app.calls.policy.length, 1);
   assert.equal(app.calls.policy[0].body.store, false);
@@ -182,6 +193,33 @@ test('replays, caps, ineligible accounts and wrong environment never call image 
   assert.equal((await app.run({ body: { prompt: 'x'.repeat(401) } })).status, 400);
   assert.equal((await app.run({ headers: { origin: 'https://adbattle.io' } })).status, 403);
   assert.equal(app.calls.provider.length, 0);
+});
+
+test('absent, false, and failed adult entitlements block quota, draft delivery, and provider calls', async () => {
+  for (const entitlement of [false, null, 'true', [{ allowed: true }]]) {
+    for (const reservation of ['reserved', 'completed']) {
+      const app = fixture({ entitlement, reservation });
+      const result = await app.run({ body: { user_id: '00000000-0000-4000-8000-000000000002' } });
+      assert.equal(result.status, 403);
+      assert.equal(result.body.error, 'ELIGIBILITY_REQUIRED');
+      assert.equal(app.calls.rpc.length, 1);
+      assert.equal(app.calls.rpc[0].args.p_user_id, owner);
+      assert.equal(app.calls.provider.length, 0);
+      assert.equal(app.calls.policy.length, 0);
+      assert.equal(app.calls.signs.length, 0);
+    }
+  }
+  const absent = fixture({ entitlementMissing: true });
+  assert.equal((await absent.run()).status, 403);
+  assert.equal(absent.calls.rpc.length, 1);
+  for (const options of [{ entitlementError: { message: 'missing RPC' } }, { entitlementThrows: true }]) {
+    const app = fixture(options);
+    const result = await app.run();
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, 'ENTITLEMENT_UNAVAILABLE');
+    assert.equal(app.calls.rpc.length, 1);
+    assert.equal(app.calls.provider.length, 0);
+  }
 });
 
 test('malformed, wrong-size or duplicate provider images fail closed and consume reservation', async () => {

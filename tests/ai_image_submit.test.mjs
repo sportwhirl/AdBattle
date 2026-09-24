@@ -21,8 +21,10 @@ const canonicalHash=await sha256Hex(canonical);
 
 function setup({ user={id:owner,app_metadata:{ai_image_adult_test_approved:true}},
   draftOwner=owner, stored=canonical, postHash=canonicalHash, preexisting=null,
-  failUpload=false, failInsert=false, enabled='true' }={}) {
-  const calls={uploads:[],removed:[],rows:[],queries:[],bucket:[]};
+  failUpload=false, failInsert=false, enabled='true', entitlement=true,
+  entitlementMissing=false,
+  entitlementError=null, entitlementThrows=false }={}) {
+  const calls={uploads:[],removed:[],rows:[],queries:[],bucket:[],rpc:[]};
   const draft={request_id:requestId,user_id:draftOwner,status:'completed',
     post_path:`${draftOwner}/${requestId}.post.jpg`,post_sha256:postHash,
     post_bytes:canonical.length,post_width:640,post_height:360};
@@ -38,6 +40,12 @@ function setup({ user={id:owner,app_metadata:{ai_image_adult_test_approved:true}
     async download(path){calls.bucket.push(['download',path]);return {data:new Blob([stored]),error:null};},
   };
   const admin={
+    async rpc(name,args){
+      calls.rpc.push({name,args});
+      assert.equal(name,'has_adult_entitlement');
+      if(entitlementThrows)throw new Error('entitlement service failed');
+      return {data:entitlementMissing?undefined:entitlement,error:entitlementError};
+    },
     storage:{from(name){return name==='ai-image-drafts'?sourceBucket:pending;}},
     from(table){
       if(table==='ai_image_draft_requests')return {
@@ -82,6 +90,11 @@ test('trusted submit copies only canonical private bytes into one pending AI ad'
   const result=await app.send({body:{title:'  A tiny world  '}});
   assert.equal(result.status,200);
   assert.equal(result.body.ad_id,7);
+  assert.deepEqual(app.calls.rpc.map(({name,args})=>({name,args:{...args}})),[{
+    name:'has_adult_entitlement',args:{
+      p_user_id:owner,p_scope:'ai_image_submit',p_provider_route:'openai_images',
+    },
+  }]);
   assert.equal(app.calls.uploads.length,1);
   assert.deepEqual(Buffer.from(app.calls.uploads[0].bytes),Buffer.from(canonical));
   assert.match(app.calls.uploads[0].path,new RegExp(`^${owner}/[0-9a-f-]{36}\\.jpg$`));
@@ -108,6 +121,33 @@ test('wrong origin, disabled project, anonymous or unapproved account never read
   for(const [app,request,status] of cases){
     assert.equal((await app.send(request)).status,status);
     assert.equal(app.calls.queries.length,0);
+  }
+});
+
+test('absent, false, and failed submit entitlements block draft reads and ad writes',async()=>{
+  for(const entitlement of [false,null,'true',[{allowed:true}]]){
+    for(const preexisting of [null,{id:19,user_id:owner}]){
+      const app=setup({entitlement,preexisting});
+      const result=await app.send();
+      assert.equal(result.status,403);
+      assert.equal(result.body.error,'ELIGIBILITY_REQUIRED');
+      assert.equal(app.calls.rpc[0].args.p_user_id,owner);
+      assert.deepEqual(app.calls.queries,[]);
+      assert.deepEqual(app.calls.bucket,[]);
+      assert.deepEqual(app.calls.uploads,[]);
+      assert.deepEqual(app.calls.rows,[]);
+    }
+  }
+  const absent=setup({entitlementMissing:true});
+  assert.equal((await absent.send()).status,403);
+  assert.deepEqual(absent.calls.queries,[]);
+  for(const options of [{entitlementError:{message:'missing RPC'}},{entitlementThrows:true}]){
+    const app=setup(options);
+    const result=await app.send();
+    assert.equal(result.status,503);
+    assert.equal(result.body.error,'ENTITLEMENT_UNAVAILABLE');
+    assert.deepEqual(app.calls.queries,[]);
+    assert.deepEqual(app.calls.uploads,[]);
   }
 });
 

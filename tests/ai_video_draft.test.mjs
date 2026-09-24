@@ -1,13 +1,137 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
+import vm from 'node:vm';
 import { PGlite } from '@electric-sql/pglite';
-import { adultTestApproved, assertStaging, boundedJson, draftHash, generationResult, normalizeDraft,
+import { adultTestApproved, adultVideoEntitled, assertStaging, boundedJson, draftHash,
+  generationIdValid, generationResult, normalizeDraft, STAGING_URL,
   paidDispatchOnce, providerCall, providerRequest, validatedDownloadUrl } from '../supabase/functions/_shared/ai-video-draft.mjs';
 
 const prompt = 'A playful pencil dances around a bright notebook';
 const valid = { action: 'create', request_id: '00000000-0000-4000-8000-000000000001',
   prompt, aspect_ratio: '16:9' };
+const workerSource = readFileSync(new URL('../supabase/functions/ai-video-draft-worker/index.ts', import.meta.url), 'utf8');
+const workerScript = new vm.Script(stripTypeScriptTypes(workerSource.replace(/^import[\s\S]*?;\n/gm, '')));
+
+function videoWorkerFixture({ entitlement = true, rpcError = null, rpcThrows = false,
+  entitlementMissing = false } = {}) {
+  const owner = '00000000-0000-4000-8000-000000000001';
+  const secret = 'video-worker-test-secret-at-least-32-characters';
+  const job = { id: '00000000-0000-4000-8000-000000000101', user_id: owner,
+    request_id: valid.request_id, request_hash: 'a'.repeat(64),
+    reviewed_request_hash: 'a'.repeat(64), prompt, aspect_ratio: '16:9',
+    style: 'freeform_simple', status: 'queued', reviewed_at: '2026-09-24T00:00:00.000Z' };
+  const calls = { rpc: [], updates: [], provider: [] };
+  const db = {
+    async rpc(name, args) {
+      calls.rpc.push({ name, args });
+      if (rpcThrows) throw new Error('RPC unavailable');
+      return { data: entitlementMissing ? undefined : entitlement, error: rpcError };
+    },
+    auth: { admin: { async getUserById(id) {
+      assert.equal(id, owner);
+      return { data: { user: { id: owner,
+        app_metadata: { ai_video_adult_test_approved: true } } }, error: null };
+    } } },
+    from(table) {
+      assert.equal(table, 'ai_video_draft_jobs');
+      let patch = null;
+      const filters = [];
+      const chain = {
+        select() { return chain; },
+        eq(column, value) { filters.push([column, value]); return chain; },
+        not() { return chain; },
+        order() { return chain; },
+        async limit() { return { data: [job], error: null }; },
+        update(value) { patch = value; calls.updates.push(value); return chain; },
+        async maybeSingle() {
+          const expected = filters.find(([column]) => column === 'status')?.[1];
+          if (expected !== job.status) return { data: null, error: null };
+          Object.assign(job, patch);
+          return { data: { id: job.id }, error: null };
+        },
+      };
+      return chain;
+    },
+  };
+  const env = { SUPABASE_URL: STAGING_URL, ADBATTLE_AI_STAGING_ENABLED: 'video-drafts-v1',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-only-test-key', ADBATTLE_VIDEO_WORKER_SECRET: secret,
+    LUMA_AGENTS_API_KEY: 'fake-luma-test-key' };
+  let handler;
+  workerScript.runInNewContext({
+    Deno: { env: { get: key => env[key] }, serve: fn => { handler = fn; } },
+    createClient: () => db, adultTestApproved, adultVideoEntitled, assertStaging, boundedJson,
+    generationIdValid, generationResult, paidDispatchOnce, providerCall, STAGING_URL,
+    isUuid: value => /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value),
+    fetch: async (url, options) => {
+      calls.provider.push({ url, options });
+      return Response.json({ id: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+        model: 'ray-3.2', type: 'video', state: 'queued', output: [] });
+    },
+    Request, Response, AbortSignal, Date, console: { error() {} },
+  });
+  return { calls, job, async dispatch() {
+    const response = await handler(new Request(`${STAGING_URL}/functions/v1/ai-video-draft-worker`, {
+      method: 'POST', headers: { 'x-adbattle-video-worker-secret': secret,
+        'content-type': 'application/json' }, body: JSON.stringify({ action: 'dispatch' }),
+    }));
+    return { status: response.status, body: await response.json() };
+  } };
+}
+
+test('actual video worker denies missing, false, or failed adult dispatch grants before Luma POST', async () => {
+  for (const options of [
+    { entitlement: false }, { entitlementMissing: true },
+    { rpcError: { code: 'PGRST202', message: 'RPC missing' } }, { rpcThrows: true },
+  ]) {
+    const app = videoWorkerFixture(options);
+    const result = await app.dispatch();
+    assert.equal(result.status, 403);
+    assert.equal(result.body.error, 'Adult video dispatch access is unavailable.');
+    assert.deepEqual(app.calls.rpc.map(({ name, args }) => ({ name, args: { ...args } })), [{
+      name: 'has_adult_entitlement', args: { p_user_id: app.job.user_id,
+        p_scope: 'ai_video_dispatch', p_provider_route: 'luma_video' },
+    }]);
+    assert.deepEqual(app.calls.updates.map(update => update.status), ['dispatching', 'needs_review']);
+    assert.equal(app.job.status, 'needs_review');
+    assert.equal(app.job.error_code, 'ADULT_ENTITLEMENT_UNAVAILABLE');
+    assert.equal(app.calls.provider.length, 0);
+  }
+  const approved = videoWorkerFixture();
+  assert.equal((await approved.dispatch()).status, 202);
+  assert.equal(approved.calls.provider.length, 1);
+  assert.equal(approved.calls.provider[0].url, 'https://agents.lumalabs.ai/v1/generations');
+});
+
+test('video entitlements require server-owned adult grants for the exact Luma action', async () => {
+  const userId = '00000000-0000-4000-8000-000000000001';
+  const calls = [];
+  const db = { rpc: async (...args) => {
+    calls.push(args);
+    return { data: true, error: null };
+  } };
+  assert.equal(await adultVideoEntitled(db, userId, 'ai_video_create'), true);
+  assert.equal(await adultVideoEntitled(db, userId, 'ai_video_dispatch'), true);
+  assert.deepEqual(calls, [
+    ['has_adult_entitlement', { p_user_id: userId, p_scope: 'ai_video_create',
+      p_provider_route: 'luma_video' }],
+    ['has_adult_entitlement', { p_user_id: userId, p_scope: 'ai_video_dispatch',
+      p_provider_route: 'luma_video' }],
+  ]);
+  assert.equal(await adultVideoEntitled(db, userId, 'ai_video_publish'), false);
+  assert.equal(await adultVideoEntitled(db, null, 'ai_video_create'), false);
+  assert.equal(calls.length, 2);
+  for (const outcome of [
+    { data: false, error: null }, { data: null, error: { code: 'PGRST202' } },
+    { data: 'true', error: null }, { data: { allowed: true }, error: null },
+  ]) {
+    assert.equal(await adultVideoEntitled({ rpc: async () => outcome }, userId,
+      'ai_video_dispatch'), false);
+  }
+  assert.equal(await adultVideoEntitled({ rpc: async () => { throw new Error('offline'); } },
+    userId, 'ai_video_dispatch'), false);
+});
 
 test('staging guard and fixed generation parameters refuse arbitrary client knobs', async () => {
   assert.throws(() => assertStaging({ SUPABASE_URL: 'https://adbattle.io',

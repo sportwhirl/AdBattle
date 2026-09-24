@@ -299,6 +299,21 @@ Deno.serve(async (request) => {
   if (!draft) return jsonResponse(request, { error: "INVALID_DRAFT_REQUEST" }, 400);
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  // The verified Auth user, rather than request metadata, is the subject of
+  // this server-owned grant. Check before reserving quota or calling OpenAI;
+  // completed-request replays also pass through this gate before signing a URL.
+  let entitled: boolean;
+  try {
+    const { data, error } = await admin.rpc("has_adult_entitlement", {
+      p_user_id: user.id, p_scope: "ai_image_generate", p_provider_route: "openai_images",
+    });
+    if (error) return jsonResponse(request, { error: "ENTITLEMENT_UNAVAILABLE" }, 503);
+    entitled = data === true;
+  } catch {
+    return jsonResponse(request, { error: "ENTITLEMENT_UNAVAILABLE" }, 503);
+  }
+  if (!entitled) return jsonResponse(request, { error: "ELIGIBILITY_REQUIRED" }, 403);
+
   const { data: reservation, error: reserveError } = await admin.rpc("reserve_ai_image_draft", {
     p_user_id: user.id, p_request_id: draft.requestId,
     p_prompt_sha256: await promptHash(draft.prompt, draft.style, draft.aspectRatio),

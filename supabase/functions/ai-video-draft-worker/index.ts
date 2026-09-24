@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.58.0';
-import { adultTestApproved, assertStaging, boundedJson, generationIdValid, generationResult,
+import { adultTestApproved, adultVideoEntitled, assertStaging, boundedJson, generationIdValid, generationResult,
   paidDispatchOnce, providerCall, STAGING_URL } from '../_shared/ai-video-draft.mjs';
 import { isUuid } from '../_shared/http.ts';
 
@@ -72,7 +72,9 @@ Deno.serve(async (req) => {
     if (!job) return response({ status: 'idle' });
     if (job.reviewed_request_hash !== job.request_hash) return response({ error: 'Review binding failed.' }, 409);
     const { data: account, error: accountError } = await db.auth.admin.getUserById(job.user_id);
-    if (accountError || !account?.user) return response({ error: 'Adult staging eligibility could not be checked.' }, 503);
+    if (accountError || !account?.user || account.user.id !== job.user_id) {
+      return response({ error: 'Adult staging eligibility could not be checked.' }, 503);
+    }
     if (!adultTestApproved(account.user)) {
       await db.from(JOBS).update({ status: 'needs_review', error_code: 'ADULT_TEST_ACCESS_REVOKED',
         updated_at: now }).eq('id', job.id).eq('status', 'queued');
@@ -83,6 +85,17 @@ Deno.serve(async (req) => {
       .select('id').maybeSingle();
     if (claim.error) return response({ error: 'Claim failed.' }, 503);
     if (!claim.data) return response({ status: 'claimed_elsewhere' });
+    // Check current server-owned entitlement after claiming and immediately
+    // before the one paid POST. A failed/missing RPC or revoked grant is closed.
+    if (!await adultVideoEntitled(db, account.user.id, 'ai_video_dispatch')) {
+      const denied = await db.from(JOBS).update({ status: 'needs_review',
+        error_code: 'ADULT_ENTITLEMENT_UNAVAILABLE', updated_at: new Date().toISOString() })
+        .eq('id', job.id).eq('status', 'dispatching').select('id').maybeSingle();
+      if (denied.error || !denied.data) {
+        return response({ error: 'Entitlement state needs reconciliation.' }, 503);
+      }
+      return response({ error: 'Adult video dispatch access is unavailable.' }, 403);
+    }
     // Once claimed, NEVER POST this job again. A crash, timeout, malformed
     // reply or lost DB write may mean Luma already accepted the paid call.
     try {

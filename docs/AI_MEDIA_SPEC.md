@@ -6,7 +6,10 @@ and 1088×608 wide source requests; its codec passed a hosted fixed-fixture
 smoke. No real provider image has been generated or posted. Video publishing
 is a separate change. The target is creative access for **all ages**, with
 parent-controlled access for children. The [youth access plan](YOUTH_ACCESS_PLAN.md)
-is a public release gate. Neither AI feature is enabled on the production site.
+is a public release gate. The disabled staging image functions check distinct
+adult generation/submission grants, while the Luma video scaffold checks
+adult create/dispatch grants in code. The age RPC and verified grant issuer
+are not hosted yet. Neither AI feature is enabled on the production site.
 
 ## Product intent
 
