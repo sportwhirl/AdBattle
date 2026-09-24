@@ -70,7 +70,7 @@ test('valid INSERT webhook extracts only the ad id', () => {
   assert.deepEqual(result, { adId: 42, legacyBackfill: false });
 
   const source = readFileSync(new URL('../supabase/functions/scan-ad-duplicate/index.ts', import.meta.url), 'utf8');
-  assert.match(source, /from\("ads"\)[\s\S]*\.select\("id,user_id,image_storage_path,duplicate_status,image_index_required"\)\.eq\("id", adId\)\.single\(\)/);
+  assert.match(source, /from\("ads"\)[\s\S]*\.select\("id,user_id,image_storage_path,duplicate_status,image_index_required,image_publication_state"\)\.eq\("id", adId\)\.single\(\)/);
 });
 
 test('non-INSERT or wrong-table webhook payloads are rejected', () => {

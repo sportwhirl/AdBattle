@@ -1,0 +1,773 @@
+{
+  "description": "Non-image stored fingerprints of two windmill staging variants and a text/export canvas for negative checks against the parrot; related windmill variants are not negatives against each other. No account or credential data.",
+  "images": [
+    {
+      "sha256": "beb387cd926f43df1f81e7aeb8472d07c241d94e9b8d429b8c42e112a9a0d388",
+      "dhash": "00001204160c040e",
+      "fingerprint": {
+        "width": 1254,
+        "height": 1254,
+        "regions": [
+          {
+            "hash": "c4cc683268c8e2f0771c093663187e00",
+            "color": "fcfcfcf9f9f9fdfdfdfbfbfbebebebfdfdfdfbfbfbefeeeefefefe",
+            "contrast": 9
+          },
+          {
+            "hash": "64cc683070e8e0e2761c883ff7086d7f",
+            "color": "fcfcfcfafafafcfcfcfcfcfcecececfdfdfdfafafaeaeaeafdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "44cc703268c8e2f0769c09b663182e43",
+            "color": "fcfcfcf7f7f7fcfcfcfbfbfbecececfcfcfcfafafaecececfdfdfd",
+            "contrast": 8
+          },
+          {
+            "hash": "cc683070e8e0e2f01c883ff7086d7f00",
+            "color": "fcfcfcf4f4f4fcfcfcfbfbfbecececfcfcfcfafafaefefeffdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "aaccc8703268cce077dc18993663086c",
+            "color": "fbfbfbfbfbfbfcfcfcfefefee9e9e9fefefef9f9f9eeeeeefdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "cc68303268cc62f09c08993663087e7f",
+            "color": "fbfbfbf5f5f5fcfcfcfafafae9e9e9fcfcfcfafafaeaeaeafdfdfd",
+            "contrast": 11
+          },
+          {
+            "hash": "68303268cc62f0d8089d3663087e7700",
+            "color": "fefefeeeeeeefefefefafaf9ecececfcfcfcfafafaf0f0f0fdfdfd",
+            "contrast": 10
+          },
+          {
+            "hash": "4246703170ece0e8331e0c3f71087f00",
+            "color": "fdfdfdf9f9f9fafafafcfcfcebeaeaf9f9f9fdfdfdeeeeeefbfbfb",
+            "contrast": 9
+          },
+          {
+            "hash": "4ccc6832e8e0e2d0771c0977e308ef00",
+            "color": "fcfcfcf8f8f8fcfcfcfbfbfbeae9e9fcfcfcf9f9f9efefeffdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "848ce062e0d8c0d0663c197ee210fe01",
+            "color": "fafafaf8f8f8fdfdfdf7f7f7ecececfdfdfdf6f6f6f1f1f1fefefe",
+            "contrast": 9
+          },
+          {
+            "hash": "62466c307168e0e0331e0c3f33405e7f",
+            "color": "fdfdfdfafafafafafafdfdfde9e8e8fbfafafcfcfce9e8e8f9f9f9",
+            "contrast": 10
+          },
+          {
+            "hash": "466c303170eaa5e8370c0c3371087f63",
+            "color": "fdfdfdf7f7f7fafafafcfcfce8e8e8faf9f9fcfcfcecececfafafa",
+            "contrast": 9
+          },
+          {
+            "hash": "466c307168e0e0e81e0c3f33405e7f00",
+            "color": "fdfdfdf4f4f4fafafafcfcfce9e9e9f9f9f9fcfcfceeeeeefbfbfb",
+            "contrast": 10
+          },
+          {
+            "hash": "64cce83060c86072771c08376388e97f",
+            "color": "fbfbfbfafafafbfbfbfafafae9e9e9fcfcfcf7f7f7eaeaeafcfcfc",
+            "contrast": 10
+          },
+          {
+            "hash": "c4cc7032e8c0e2d0771c1977e300ef43",
+            "color": "fbfbfbf7f7f7fbfbfbf9f9f9e9e9e9fcfcfcf8f8f8edededfdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "cce83060c86072d01c08376388e97f00",
+            "color": "fbfbfbf4f4f4fbfbfbf9f9f9eaeaeafcfcfcf8f8f8f0f0f0fdfdfd",
+            "contrast": 10
+          },
+          {
+            "hash": "c48cd860e2d0c0c0663c187f6680bdfe",
+            "color": "fafafafafafafdfdfdf7f7f7ebebebfefefef3f3f3eeededfdfdfd",
+            "contrast": 10
+          },
+          {
+            "hash": "8cd86062e0d44ad06e181966e211fec7",
+            "color": "f9f9f9f7f7f7fdfdfdf5f5f5ecececfdfdfdf4f4f4f0f0f0fefefe",
+            "contrast": 9
+          },
+          {
+            "hash": "8cd860e2d0c0c0d03c187f6680bdfe01",
+            "color": "f9f9f9f4f4f4fdfdfdf4f4f4edededfdfdfdf5f5f5f2f2f2fefefe",
+            "contrast": 10
+          },
+          {
+            "hash": "21466c383170c2e0331e0c083b71007e",
+            "color": "fcfcfcfcfcfcfafafaffffffeaeaeafcfcfcfbfbfbedededf9f9f9",
+            "contrast": 9
+          },
+          {
+            "hash": "466c303170ca20e81e0c0e3371007f7f",
+            "color": "fcfcfcf5f5f5f9f9f9fbfbfbe9e9e9f9f9f9fcfcfceae9e9f9f9f9",
+            "contrast": 10
+          },
+          {
+            "hash": "6c303160ca20e8e80c1e3371087f7700",
+            "color": "fefefeeeeeeefbfbfbfbfbfbecececf8f8f8fcfcfcefefeffafafa",
+            "contrast": 10
+          },
+          {
+            "hash": "22ccc8703260c060671c1c1936e300ed",
+            "color": "fbfbfbfcfcfcfbfbfbfefefee9e9e9fefefef7f7f7eeeeeefcfcfc",
+            "contrast": 9
+          },
+          {
+            "hash": "cce87032e8c460d21c181977e300fd7f",
+            "color": "fbfafaf5f5f5fbfbfbf9f9f9e9e8e8fbfbfbf6f6f6ebebebfdfdfd",
+            "contrast": 10
+          },
+          {
+            "hash": "e83070e8c070d2d0183f77e308fd7780",
+            "color": "fefefeedededfefefef8f8f8ecececfbfbfbf8f8f8f0f0f0fdfdfd",
+            "contrast": 10
+          },
+          {
+            "hash": "428cd87062e084c0663c181176e200fc",
+            "color": "fafafafbfbfbfdfdfdfbfbfbebebebfffffff3f3f3f1f1f1fdfdfd",
+            "contrast": 9
+          },
+          {
+            "hash": "8cd86062e09440d03c181d66e300feff",
+            "color": "f9f9f9f5f5f5fdfdfdf4f4f4ecececfdfdfdf3f3f3edededfefefe",
+            "contrast": 10
+          },
+          {
+            "hash": "d86062c09440d0d0183d66e310feef00",
+            "color": "fcfcfceeeeeefffffff2f2f2f0f0f0fdfdfdf5f5f5f1f1f1fefefe",
+            "contrast": 10
+          },
+          {
+            "hash": "2767b499f0f5b0e83b4e047b604c3f00",
+            "color": "fefefef8f8f8f8f8f8fefefeebebebf4f4f4fdfdfdedededf6f6f6",
+            "contrast": 10
+          },
+          {
+            "hash": "4c8ce873e0cae2d0779c08f7c198ef00",
+            "color": "fafafaf9f9f9fbfbfbf8f8f8eaeaeafafafaf6f6f6efeeeffcfcfc",
+            "contrast": 10
+          },
+          {
+            "hash": "1818d0e4d0b084a0ce7833ee8230de01",
+            "color": "f8f8f8f8f8f8fefefeefefeff0f0f0fefefef1f1f1f1f1f1ffffff",
+            "contrast": 10
+          },
+          {
+            "hash": "3563763830e4f5f83d1f061b7104553f",
+            "color": "fdfdfdf9f9f9f8f8f8fefefee9e8e8f3f3f3fdfdfde8e8e8f3f3f3",
+            "contrast": 11
+          },
+          {
+            "hash": "63663818f4e5b0e83b0e0e7b30047f23",
+            "color": "fdfdfdf6f6f6f7f7f7fefefee8e8e8f2f2f2fdfdfdebebebf5f5f5",
+            "contrast": 10
+          },
+          {
+            "hash": "63763830e4f5f8e81f061b7104553f00",
+            "color": "fdfdfdf4f4f4f6f6f6fefefee8e8e8f2f2f2fdfdfdedededf6f6f6",
+            "contrast": 11
+          },
+          {
+            "hash": "6c9ec87061c8cad06f3e1837e30898ff",
+            "color": "fafafafbfbfbfafafaf7f7f7e8e8e8fbfbfbf3f3f3eaeaeafbfbfb",
+            "contrast": 11
+          },
+          {
+            "hash": "c4cc7073e8ca6ad0771c19f76100ebc7",
+            "color": "fafafaf7f7f7fafafaf6f6f6e8e8e8fafafaf5f5f5edededfcfcfc",
+            "contrast": 10
+          },
+          {
+            "hash": "9ec87061c8cad0d03e1837e30898ff00",
+            "color": "fafafaf4f4f4fafafaf5f5f5e9e9e9fafafaf6f6f6f0f0f0fcfcfc",
+            "contrast": 11
+          },
+          {
+            "hash": "d83890e0c090a0a4de78306fc61138fe",
+            "color": "f8f8f8f9f9f9fefefeedededefefeffefefeecececeeeeeefefefe",
+            "contrast": 11
+          },
+          {
+            "hash": "0818e0e490b084a0ee3833ee9221fe86",
+            "color": "f7f7f7f6f6f6fefefeecebebefefeffdfdfdefefeff0f0f0ffffff",
+            "contrast": 10
+          },
+          {
+            "hash": "3890e0c090a0a4a078306fc61138fe00",
+            "color": "f6f6f6f4f4f4fefefeebebebefefeffdfdfdf1f1f1f2f2f2ffffff",
+            "contrast": 11
+          },
+          {
+            "hash": "106f66381870e5b5371f0e043b70027d",
+            "color": "fdfdfdfafafaf9f9f9ffffffebebebf5f5f5fefefee9e9e9f6f6f6",
+            "contrast": 10
+          },
+          {
+            "hash": "6f76383874e534a80f0e0e3b70027d3f",
+            "color": "fdfdfdf5f5f5f6f6f6fdfdfde6e6e6f3f3f3fdfdfde9e9e9f3f3f3",
+            "contrast": 11
+          },
+          {
+            "hash": "76183872e534e8e4061f3970047d3b00",
+            "color": "fffffff0f0f0f7f7f7fdfdfde7e7e7f3f3f3fdfdfdeeeeeef6f6f6",
+            "contrast": 11
+          },
+          {
+            "hash": "21decc7073e8c26a6f3e1c1977e104ea",
+            "color": "fafafafdfdfdfafafafbfbfbe7e7e7fcfcfcf3f3f3edededfcfcfc",
+            "contrast": 10
+          },
+          {
+            "hash": "decc7071e8c269d03e1c1b77e904ebff",
+            "color": "fafafaf5f5f5fafafaf4f4f4e8e8e8fafafaf4f4f4eaeaeafbfbfb",
+            "contrast": 11
+          },
+          {
+            "hash": "cc7071e8ca69d0d0183f77e10cfbf700",
+            "color": "fcfcfcecececfdfdfdf3f2f2ebebebfafafaf6f6f6f0f0f0fbfbfb",
+            "contrast": 11
+          },
+          {
+            "hash": "443890e0e4d084a0de783833eec201fa",
+            "color": "f9f9f9fafafafdfdfdf1f1f1efefefffffffecececf3f2f2fefefe",
+            "contrast": 10
+          },
+          {
+            "hash": "3890e0e4d080a0a4783033eed201fafe",
+            "color": "f6f6f6f5f5f5fdfdfdeaeaeaefefeffefdfdeeedeeeeeeeefefefe",
+            "contrast": 11
+          },
+          {
+            "hash": "90e0e29090a4a4a0307fee8211fade00",
+            "color": "f5f5f5f1f1f1ffffffe9e9e9f1f1f1fefefef2f1f1f1f1f1fefefe",
+            "contrast": 11
+          }
+        ],
+        "version": "crop-grid-49-rgb-dhash128-v1"
+      }
+    },
+    {
+      "sha256": "9f1acd828e5ab8182cedd1acb57a5312709c06de8ed2672f906bbe4c3ed1c743",
+      "dhash": "08905405160c042a",
+      "fingerprint": {
+        "width": 1254,
+        "height": 1254,
+        "regions": [
+          {
+            "hash": "2232164d8e0f0e1600e2f641a6ab1c7e",
+            "color": "10100f1d1c1c0f0f0f0d0d0d787878101010030303565656010100",
+            "contrast": 53
+          },
+          {
+            "hash": "0a32164f8e8b8e0c09e2b74044efab1c",
+            "color": "1111111616150f0f0f0e0e0e6c6c6c121212040404808080010101",
+            "contrast": 56
+          },
+          {
+            "hash": "2b32174e8e0b8c16896237c0846b09bc",
+            "color": "1111111f1f1f0f0f0f0f0f0f7a7a7a131313030303696969010101",
+            "contrast": 55
+          },
+          {
+            "hash": "32164f8e8b8e0c17e2b74044efab1cff",
+            "color": "1111112828280f0f0f0f0f0f8b8a8b131313030303505050010101",
+            "contrast": 56
+          },
+          {
+            "hash": "a433365c8c8e8b0d818ae710c114abcb",
+            "color": "1414141110101212120505055d5d5d0606060c0c0c9797970f0f0f",
+            "contrast": 57
+          },
+          {
+            "hash": "32364c8c8e8b0c9dcbf700c1942bdb3c",
+            "color": "1414142827271212121010107b7b7b151515020202838383010101",
+            "contrast": 58
+          },
+          {
+            "hash": "164e8c8e8f0d16177702c026abd93cff",
+            "color": "080807454545040404101010969696151515020202484848010101",
+            "contrast": 57
+          },
+          {
+            "hash": "2dbb124e9785070fc023b240d2298cff",
+            "color": "0b0b0b1d1d1d1818180807077c7c7c1c1c1c0101015c5c5c0b0b0b",
+            "contrast": 56
+          },
+          {
+            "hash": "b233968d0f0f8f1780633680e66b9c7f",
+            "color": "161616171717131313131312787878151414060606616161010101",
+            "contrast": 56
+          },
+          {
+            "hash": "5a76259d2f0a0e1e80466481a55219fe",
+            "color": "1e1e1e1a1a1a0808081f1f1f7473740c0c0c171717505050010101",
+            "contrast": 56
+          },
+          {
+            "hash": "2db91345878d87874c21f34000fb6d9c",
+            "color": "0c0c0c1818181a1a1a0808087373731f1f1f0202028383830e0e0e",
+            "contrast": 58
+          },
+          {
+            "hash": "391b078e178d868f40f3138052bb0c9e",
+            "color": "0c0c0c2424241a1a1a0909097d7d7d2120200101016d6d6d0d0d0d",
+            "contrast": 58
+          },
+          {
+            "hash": "b91345878d87870f21f34000fb6d9cff",
+            "color": "0c0c0c2c2c2c1a1a1a0909099292922222220101015050500c0c0c",
+            "contrast": 58
+          },
+          {
+            "hash": "6b33368d962b8f9f086376c104ebeb1c",
+            "color": "1717171313131414141515156e6e6e1717170505058d8d8d020101",
+            "contrast": 60
+          },
+          {
+            "hash": "ab33968c0f0f8d1600e3778026e3093c",
+            "color": "1717171f1f1f141414161616797979181818040404777777010101",
+            "contrast": 60
+          },
+          {
+            "hash": "33368d962b8f9f176376c104ebeb1cff",
+            "color": "1717172727271414141616168f8f8f181818030303595959010101",
+            "contrast": 60
+          },
+          {
+            "hash": "5b72278b0e1a0f0e9942e78001f6db39",
+            "color": "1f1e1e1818180808082121216d6d6d0c0c0c1c1c1c767676010101",
+            "contrast": 58
+          },
+          {
+            "hash": "73370e1d2e1a0d1e80e62601a576193c",
+            "color": "1f1f1f2323230808082525257575750d0d0d181818626262000000",
+            "contrast": 58
+          },
+          {
+            "hash": "72278b0e1a0f0e1e42e78001f6db39fe",
+            "color": "1f1f1f2b2b2b0808082a2a2a8686860d0d0d141313494949000000",
+            "contrast": 58
+          },
+          {
+            "hash": "2d39934f469785060041b3134012b38c",
+            "color": "0e0e0d1413131b1b1b030303636262141414070707a1a1a1191919",
+            "contrast": 61
+          },
+          {
+            "hash": "b9930e469785460e61f32140d2a34c9c",
+            "color": "0e0e0d2c2c2c1d1d1d0a0a0a8484842424240101018888880e0e0e",
+            "contrast": 61
+          },
+          {
+            "hash": "93064e9785468f0ff32148d2a94c9eff",
+            "color": "0404044a4a4a0f0f0f0a0a0aa0a0a02424240101014948490b0b0b",
+            "contrast": 62
+          },
+          {
+            "hash": "a933339f8e860b9f00c163374094e39a",
+            "color": "1b1b1b0b0b0b1616160a0a0a6766660909091110109f9f9f121211",
+            "contrast": 61
+          },
+          {
+            "hash": "33338c8f8f0b1d1743e70000ace31bbc",
+            "color": "1c1c1b2525251616161717178080801a1a1a060505919191010101",
+            "contrast": 61
+          },
+          {
+            "hash": "b70d9e2f0f9d1617f74110a66399bcff",
+            "color": "0c0c0c4b4b4b0606061717179c9c9c1a1a1a0505054f4e4f010101",
+            "contrast": 60
+          },
+          {
+            "hash": "5b73279e8d2e0b0d0182672681246718",
+            "color": "2020201212120a0a0a1818185f5f5f0202022928288d8d8d0c0c0c",
+            "contrast": 61
+          },
+          {
+            "hash": "73271c8d2e0b8d1cc3e74281a4469939",
+            "color": "2525252827270a0a0a2525257f7e7e0e0e0e212121767676010100",
+            "contrast": 61
+          },
+          {
+            "hash": "270d9d2e0a8d1e1ee74291a552993cff",
+            "color": "1a1a1a4242420101002d2d2c9393930e0e0e1616163e3e3e010100",
+            "contrast": 62
+          },
+          {
+            "hash": "9a990b670386030b84313900d1bd1eff",
+            "color": "0505042323232020200303036f6f6f434343010101444343282828",
+            "contrast": 58
+          },
+          {
+            "hash": "2a33168e0f0f0e1708636700a67b3cff",
+            "color": "1b1b1b1515151818181918188686861717170a0a0a626262010101",
+            "contrast": 58
+          },
+          {
+            "hash": "74662c181f3e1d2f11c6cd004df679ff",
+            "color": "2424242121210303034a4a4a6868680404043232323b3a3b000000",
+            "contrast": 58
+          },
+          {
+            "hash": "959919674b17868b8c313bc0c875049e",
+            "color": "0505052020201f1f1f0303036565653e3d3d0101016868683a3a3a",
+            "contrast": 60
+          },
+          {
+            "hash": "94194ba70706838b84711bc053758e9f",
+            "color": "0505052929292323230303036f6f6f434343010101565656313131",
+            "contrast": 61
+          },
+          {
+            "hash": "9919674b17868b0b313bc0c875049eff",
+            "color": "0505053131312525250303037d7d7d4b4b4b010101403f3f272727",
+            "contrast": 60
+          },
+          {
+            "hash": "0b2337cd960b0f161843678184eb1b3c",
+            "color": "1f1e1e0e0e0e1717171818187575751919190c0c0c959595020202",
+            "contrast": 60
+          },
+          {
+            "hash": "2b33965f2f0f0c1608632790a6e3283c",
+            "color": "1f1e1e1b1a1a1717171919198282821a1a1a0b0b0b7c7c7c010101",
+            "contrast": 61
+          },
+          {
+            "hash": "2337cd960b0f161743678184eb1b3cff",
+            "color": "1f1e1e2525251717171a1a1a9797971a1a1a0a0a0a5c5c5c010101",
+            "contrast": 60
+          },
+          {
+            "hash": "b4476f1d1d163f2d3086ce0209d6b778",
+            "color": "2524241d1d1d0202024343435e5e5e0404044949495a5959000000",
+            "contrast": 60
+          },
+          {
+            "hash": "d6672d3d5e3f192d10c64d215cc63279",
+            "color": "2a29292524240202024a4a4a6767670404043e3e3e494949000000",
+            "contrast": 60
+          },
+          {
+            "hash": "476f1d1d163f2d2f86ce0209d6b778ff",
+            "color": "2d2d2d2c2b2b020202545454737373040404303030373737000000",
+            "contrast": 60
+          },
+          {
+            "hash": "9a91998ba70786c7c8007119c049318d",
+            "color": "0505051f1e1e2121210000005352522f2f2f030303838283525252",
+            "contrast": 63
+          },
+          {
+            "hash": "919987270706c70b20711000d131cc0e",
+            "color": "0505053131312b2b2a0303037575754f4f4f0101016968693a3939",
+            "contrast": 63
+          },
+          {
+            "hash": "99c70f1786c70b0b798008d135cc0eff",
+            "color": "010101414040262626030303898989585758010101373737232222",
+            "contrast": 63
+          },
+          {
+            "hash": "2b3333150e0f0f8f8801e32580846308",
+            "color": "2121210707071c1c1c0d0d0d6a6a6a0b0b0b181818aaa9aa161616",
+            "contrast": 62
+          },
+          {
+            "hash": "23330d1e0f0f8f1641e32190ae63891c",
+            "color": "2222222323221c1c1c1d1d1d8a8a8a2020200e0d0d959595010101",
+            "contrast": 62
+          },
+          {
+            "hash": "330d1e2b0f8c1617660110a26bb91cff",
+            "color": "1010104d4d4d0a0a0a212121a3a3a3202020090909515151010101",
+            "contrast": 62
+          },
+          {
+            "hash": "d476672b191e173f1902c74e0149c734",
+            "color": "2323231e1e1e0303033434344e4e4e0000005a5a5a777777060606",
+            "contrast": 62
+          },
+          {
+            "hash": "46671b3d5e17392b86ce432159c63579",
+            "color": "2e2e2e3030300303035151517070700606064b4b4b585858010000",
+            "contrast": 62
+          },
+          {
+            "hash": "6e1b3d561f392b2fcc0321ccd63179ff",
+            "color": "2e2e2e3939390000005d5d5d8080810606062c2c2c2e2e2e010000",
+            "contrast": 62
+          }
+        ],
+        "version": "crop-grid-49-rgb-dhash128-v1"
+      }
+    },
+    {
+      "sha256": "e0d5665fd9da9d4e2527cdbdd478810be80923834e0abf9e7bb8e45559d43c35",
+      "dhash": "0000000000000040",
+      "fingerprint": {
+        "width": 1080,
+        "height": 1080,
+        "regions": [
+          {
+            "hash": "60485858000000400000f8f8000000c0",
+            "color": "393f3b313733262d29272e2a282f2b262d29272e2a262d29272e2a",
+            "contrast": 10
+          },
+          {
+            "hash": "3008685800000000f000e8f800000000",
+            "color": "3239342d332f262d292c332f2b322d262d29272e2a262d29262d29",
+            "contrast": 8
+          },
+          {
+            "hash": "306858580000004000c8f0f8000000c0",
+            "color": "373e39303732262d29272e2a272e2a262d29272e2a262d29272e2a",
+            "contrast": 7
+          },
+          {
+            "hash": "086858000000004000e8f800000000c0",
+            "color": "363d38313833262d29262d29262d29262d29272e2a262d29272e2a",
+            "contrast": 8
+          },
+          {
+            "hash": "6000685848000000e00048f0f8000000",
+            "color": "2f36322b322e262d292f36312d3430262d29262d29262d29262d29",
+            "contrast": 8
+          },
+          {
+            "hash": "00685848000000010048f0f800000000",
+            "color": "343b36303733262d29272e2a282f2b262d29272e2a262d29272e2a",
+            "contrast": 7
+          },
+          {
+            "hash": "685858000000014068f0f800000000c0",
+            "color": "353c37313834262d29262d29262d29262d29272e2a262d29272e2a",
+            "contrast": 7
+          },
+          {
+            "hash": "b0483868000000400000f878000000c0",
+            "color": "393f3b343a36262d29272f2a282f2a262d29272e2a262d29262d29",
+            "contrast": 11
+          },
+          {
+            "hash": "b0a87848000000c00008f878000000c0",
+            "color": "3d443f2f3631262d29282f2b272e2a262d29272e2a262d29272e2a",
+            "contrast": 11
+          },
+          {
+            "hash": "609070d0000000800000f0f000000080",
+            "color": "3e44402d332f262d29282f2b272e2a262d29272e2a262d29272e2a",
+            "contrast": 11
+          },
+          {
+            "hash": "50084c3800000000f000dcf800000000",
+            "color": "303733303632262d292e35312a312d262d29262d29262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "506c182800000040000cf878000000c0",
+            "color": "383e3a333a36262d29272e2a272e2a262d29262d29262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "084c38000000004000dcf800000000c0",
+            "color": "373d39333a35262d29262d29262d29262d29262d29262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "b008387800000000f000b8f800000000",
+            "color": "343b372c332f262d29303733282f2b262d29262d29262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "b0387848000000c00098f078000000c0",
+            "color": "3d443f2d3430262d29272e2a272e2a262d29262d29262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "08387800000000c000b8f800000000c0",
+            "color": "3c423e2e3531262d29262d29262d29262d29262d29262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "a010987000000000e000b8f000000000",
+            "color": "343b372b312d262d29303732282f2b262d29262d29262d29272d29",
+            "contrast": 9
+          },
+          {
+            "hash": "a0d83050000000810018f0f000000080",
+            "color": "3d433f2c322e262d29272e2a272e2a262d29262d29262d29272e2a",
+            "contrast": 8
+          },
+          {
+            "hash": "109870000000008000b8f00000000080",
+            "color": "3b423e2c332f262d29262d29262d29262d29262d29262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "a000281868000000e00008f878000000",
+            "color": "2e35312d3430262d293238342e3531262d29262d29262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "00283868000000000008f87800000000",
+            "color": "373d39333a35262d29272e2a272e2a262d29272e2a262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "283828000000006018f87800000000e0",
+            "color": "373e3a333a36262d29262d29262d29262d29272e2a262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "a000387848000000a00018f078000000",
+            "color": "2f36322c332f262d29363c382a312d262d29262d29262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "00387848000000000098f07800000000",
+            "color": "3c423e2e3531262d29272e2a272e2a262d29272e2a262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "3878480000000040b8f07800000000c0",
+            "color": "3c433f2e3531262d29262d29262d29262d29272e2a262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "40005030d0000000c00010f0f0000000",
+            "color": "2f36322b322e262d29353c3829302c262d29262d29262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "005070d0000000000010f0f000000000",
+            "color": "3b413d2c332f262d29282f2a272e2a262d29272e2a262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "50705000000001c030f0f000000000c0",
+            "color": "3c423e2d332f262d29262d29262d29262d29272e2a262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "586c2c2c000000600000fc7c000000e0",
+            "color": "383f3a39403c262d29272e2a282f2b262d29282f2b262d29262d29",
+            "contrast": 13
+          },
+          {
+            "hash": "30d85878000000c00008f0f8000000c0",
+            "color": "3f4541303733262d29282f2b272e2a262d29272e2a262d29262d29",
+            "contrast": 13
+          },
+          {
+            "hash": "c030f0b0000000810000f0f000000080",
+            "color": "3f4641272e2a262d29282f2b262d29262d29262d29262d29272e2a",
+            "contrast": 12
+          },
+          {
+            "hash": "18004c0c0800000078007cfc08000000",
+            "color": "313834343b37262d292c332f2f3531262d29282f2b262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "184c0c0c000000400044fc7c00000040",
+            "color": "363d393b413d262d29272e2a282f2b262d29282f2b262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "004c0c0800000060007cfc08000000e0",
+            "color": "353b373b413d262d29262d29262d29262d29282f2b262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "7000983010000000f000d8f010000000",
+            "color": "373e392d3430262d293137332a312c262d29272e2a262d29262d29",
+            "contrast": 11
+          },
+          {
+            "hash": "70d83030000000800098f0f000000080",
+            "color": "404642303732262d29282f2b272e2a262d29272e2a262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "00983010000000c000d8f010000000c0",
+            "color": "3e4440303733262d29262d29262d29262d29272e2a262d29262d29",
+            "contrast": 11
+          },
+          {
+            "hash": "600070e000000000e00070e000000000",
+            "color": "353c38272e2a262d29313834262d29262d29262d29262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "60306060000000010030e0e000000000",
+            "color": "3f4541272e2a262d29282f2b262d29262d29262d29262d29272e2a",
+            "contrast": 8
+          },
+          {
+            "hash": "0070e000000000810070e00000000080",
+            "color": "3e4540272e2a262d29262d29262d29262d29262d29262d29272e2a",
+            "contrast": 9
+          },
+          {
+            "hash": "58006c0c2c000000780044f87c000000",
+            "color": "2e3531303632262d292f3632333a36262d29262d29262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "006c1c2c000000000044f87c00000000",
+            "color": "343a36393f3b262d29272e2a282f2b262d29282f2b262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "4c0c0c000000006054fc7c00000000e0",
+            "color": "343b363a413d262d29262d29262d29262d29282f2b262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "f000d83058000000f00088f0f8000000",
+            "color": "3138342c332f262d29363c382c332f262d29262d29262d29262d29",
+            "contrast": 11
+          },
+          {
+            "hash": "00d83058000000000098f0f800000000",
+            "color": "3c423e2f3632262d29282f2b272e2a262d29282f2b262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "98303000000000c098f0f000000000c0",
+            "color": "3e4440303733262d29262d29262d29262d29282f2b262d29262d29",
+            "contrast": 10
+          },
+          {
+            "hash": "c000306070000000c00010e0f0000000",
+            "color": "313833272e2a262d29373e39262d29262d29262d29262d29262d29",
+            "contrast": 9
+          },
+          {
+            "hash": "00306070000000010030e0f000000000",
+            "color": "3d433f272e2a262d29282f2b262d29262d29272e2a262d29262d29",
+            "contrast": 8
+          },
+          {
+            "hash": "70e060000000018170e0e00000000081",
+            "color": "3e4440272e2a262d29262d29262d29262d29272e2a262d29272e2a",
+            "contrast": 8
+          }
+        ],
+        "version": "crop-grid-49-rgb-dhash128-v1"
+      }
+    }
+  ]
+}

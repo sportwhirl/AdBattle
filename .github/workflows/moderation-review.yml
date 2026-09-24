@@ -1,9 +1,12 @@
 name: Private moderation review
 on:
   pull_request:
-    branches: [wallet-ledger-90-10]
+    branches: [wallet-ledger-90-10, feat/ai-media-integration]
     paths:
       - 'moderation.*'
+      - 'supabase/functions/moderator-ad-previews/**'
+      - 'supabase/config.toml'
+      - 'supabase/migrations/*private_pending_images.sql'
       - 'supabase/migrations/*moderation_review.sql'
       - 'supabase/migrations/20260922_duplicate_screening.sql'
       - 'supabase/MODERATION_REVIEW.md'

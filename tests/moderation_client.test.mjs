@@ -16,35 +16,20 @@ function storage() {
     removeItem: (k) => map.delete(k),
   };
 }
-test("preview only loads the configured project owner path, never a supplied external URL", () => {
-  assert.equal(
-    safeImageUrl(
-      {
-        owner_id: user,
-        image_storage_path: `${user}/image.png`,
-        image_url: "https://evil.test/x",
-      },
-      config,
-    ),
-    `${config.supabaseUrl}/storage/v1/object/public/ad-images/${user}/image.png`,
-  );
-  for (const path of [
-    null,
-    "other/image.png",
-    `${user}/../x`,
-    `${user}//x`,
-    `${user}/x\\y`,
-  ])
-    assert.equal(
-      safeImageUrl({ owner_id: user, image_storage_path: path }, config),
-      null,
-    );
-  assert.ok(
-    safeImageUrl(
-      { owner_id: user, image_storage_path: `${user}/x?secret=#` },
-      config,
-    ).endsWith("x%3Fsecret%3D%23"),
-  );
+test("preview accepts only signed owner paths from the configured project", () => {
+  const image = { owner_id: user, image_storage_path: `${user}/image.png`, image_url: "https://evil.test/x" };
+  const signed = `${config.supabaseUrl}/storage/v1/object/sign/ad-pending-images/${user}/image.png?token=test-token`;
+  assert.equal(safeImageUrl(image, config, signed), signed);
+  assert.equal(safeImageUrl(image, config, signed.replace("ad-pending-images", "ad-images")), signed.replace("ad-pending-images", "ad-images"));
+  for (const candidate of [undefined, image.image_url, signed.replace("sign", "public"),
+    signed.replace("nccqnrcdygujulrnwair", "another-project"), signed.replace(user, "stranger"),
+    signed.replace("image.png", "other.png"), signed.replace("?token=test-token", ""),
+    signed + "#fragment", signed + "&redirect=https://evil.test", signed.replace("https://", "https://user:pass@")]) {
+    assert.equal(safeImageUrl(image, config, candidate), null);
+  }
+  for (const path of [null, "other/image.png", `${user}/../x`, `${user}//x`, `${user}/x%2fimage.png`]) {
+    assert.equal(safeImageUrl({ ...image, image_storage_path: path }, config, signed), null);
+  }
 });
 test("review controls expose only held checks and never removed, failed or same-owner duplicate states", () => {
   assert.deepEqual(

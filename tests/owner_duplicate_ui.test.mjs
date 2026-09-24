@@ -25,8 +25,8 @@ test('browser still does not invoke the duplicate scanner', () => {
 });
 
 test('frontend merges public-safe ads with owner-safe private ads', () => {
-  assert.match(html,/db\.rpc\("get_public_ads"\)/);
-  assert.match(html,/currentUser[\s\S]*db\.rpc\("get_my_ads"\)/);
+  assert.match(html,/db\.rpc\(FEATURES\.aiImageDrafts \? "get_public_ads_with_ai" : "get_public_ads"\)/);
+  assert.match(html,/currentUser[\s\S]*db\.rpc\(FEATURES\.aiImageDrafts \? "get_my_ads_with_ai" : "get_my_ads"\)/);
   assert.match(html,/ownerAdData\.forEach\(ad => adRowsById\.set\(ad\.id, ad\)\)/);
   assert.doesNotMatch(html,/\.from\("ads"\)\s*\.select/);
   assert.doesNotMatch(html,/\.from\("ads"\)\s*\.select\("\*"\)/);

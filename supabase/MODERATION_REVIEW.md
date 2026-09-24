@@ -5,7 +5,44 @@ its queue, findings, history, and decisions require a current moderator account.
 It reuses `frontend-config.js` and the existing ordinary Supabase Auth session.
 No service-role key, scanner secret, or Stripe credential belongs in this page.
 
-## Staging rollout
+## Current private-image staging integration
+
+The private-media integration targets `feat/ai-media-integration`. It brings in
+the existing moderator page and adds `moderator-ad-previews` so reviewers can
+inspect uploads in the private `ad-pending-images` bucket. It introduces no new
+database migration or moderator grant. In the existing **adbattle-test** project,
+the moderation and private-pending-image migrations are already applied; do not
+rerun them for this update.
+
+After merging the integration PR:
+
+1. Deploy only `moderator-ad-previews` to project `nccqnrcdygujulrnwair`, with JWT
+   verification enabled as specified in `supabase/config.toml`. Its package
+   includes `_shared/http.ts` and `_shared/storage-scan-policy.ts`.
+   It uses Supabase's supplied `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+   `SUPABASE_SERVICE_ROLE_KEY` inside the function. No privileged key is entered
+   in the browser. The existing staging CORS configuration must allow the exact
+   `http://localhost:8000` origin.
+2. In the existing local checkout, update the integration branch:
+
+   ```sh
+   cd /home/sportwhirl/AdBattle-staging
+   git switch feat/ai-media-integration
+   git pull --ff-only origin feat/ai-media-integration
+   ```
+
+3. Keep the staging server running and reload
+   **http://localhost:8000/moderation.html**. Confirm the staging label, sign in
+   with the existing authorized moderator, and open a held ad. Both its image
+   and its matched image must load before the decision controls become usable.
+4. Check the same preview request using an ordinary account: it must be denied.
+   Leave pending ads unchanged until an operator deliberately records a review.
+
+Clearing the last human review queues image publication. The ad remains private
+and `pending_scan` until the existing publisher verifies and publishes its
+approved bytes. A publisher failure is not a reason to bypass this gate.
+
+## Initial moderation setup (new environments only)
 
 1. Merge the review PR into `wallet-ledger-90-10` and pull that branch locally.
 2. In **adbattle-test** (`nccqnrcdygujulrnwair`) apply only
@@ -55,9 +92,10 @@ by these repository changes. Production rollout requires its own review.
   `review_similar`** ads in pages of 25. Scanner `pending` errors and
   `duplicate_same_creator` are not human-review overrides.
 - Select an ad. Inspect its creative, caption, scanner findings and matched
-  creative. The page previews only the configured project's `ad-images` owner
-  path, never arbitrary external image URLs. If an image cannot be inspected,
-  do not clear the review; investigate the stored object first.
+  creative. The page accepts only short-lived signed links on the configured
+  project's Storage origin, bound to each ad's stored owner path. It does not
+  fall back to public links. Failed or missing previews disable the decision
+  form; **Refresh queue** retries loading them.
 - Choose the **safety** or **duplicate** check, choose **clear** or **reject**,
   write a 10–2,000 character reason, and confirm the action.
 - Clearing safety changes only `held` to `passed`; rejecting changes only
@@ -65,8 +103,9 @@ by these repository changes. Production rollout requires its own review.
 - Duplicate decisions use the existing service-only resolution function,
   passing the moderator's authenticated UUID as reviewer identity. Existing
   match references, fingerprints and duplicate audit entries are preserved.
-- Publication still requires **both checks passed**. Clearing one cannot
-  override another hold, rejection, pending scan, or removed ad.
+- Publication requires **both checks passed** and, for private uploads,
+  verified image publication. Clearing one cannot override another hold,
+  rejection, pending scan, removed ad, or publication failure.
 - Findings and creative state are version-checked under the ad row lock. A
   competing decision or changed creative requires a fresh review. Monetary
   totals do not invalidate a review.
@@ -98,6 +137,20 @@ reviewer names, `user_metadata`, and JWT role metadata never authorize access.
 The service role cannot use the new page functions without an authenticated
 moderator identity. Existing privileged scanner/operator functions are unchanged.
 
+The preview function verifies the bearer token and calls `moderator_ad` with
+that user's JWT. Only the current held ad and the match returned by that RPC
+can be previewed; callers cannot supply paths, buckets, or a second ad ID. A
+service client signs the exact owner-bound objects for **60 seconds**, using
+private originals for modern ads and `ad-images` only for legacy public ads.
+The function rechecks moderator authorization and the review version after
+signing, discarding links if access was revoked or the review changed.
+
+Preview responses are `Cache-Control: no-store`; signed URLs are not saved in
+decision retry state or logs. Already-issued links can remain usable until
+expiry, and already-downloaded images cannot be revoked. Signing previews does
+not broaden Storage policies, make the private bucket public, or authorize a
+moderation decision. Decisions still pass the independent database guard.
+
 Audit insertion, screening update, existing duplicate audit and moderation event
 are in one transaction. The request UUID lock serializes uncertain retries;
 the ad row lock serializes competing decisions. Invalid requests and stale
@@ -106,13 +159,15 @@ views roll back without changing ad or accounting data.
 ## Verification and limits
 
 Run `npm ci --ignore-scripts --no-audit --no-fund` then `npm test`.
-The focused suites are `tests/moderation_review.test.mjs` and
-`tests/moderation_client.test.mjs`. They apply the real migration to isolated
+The focused command is `node --test tests/moderation_*.test.mjs`.
+The suites apply the real migrations to isolated
 PGlite fixtures and check authorization, live revocation/session checks,
 forged claims, closed table/RPC privileges, independent screening, rejection,
 stale review, replay identity, audit retention, pagination and saved-request
-recovery. They do not prove hosted Supabase session behavior or true concurrent
-PostgreSQL connections.
+recovery. Additional tests cover signed-link authorization and late revocation,
+owner/path binding, missing images disabling decisions, and the combined
+moderation/private-publication gate. They do not prove hosted Supabase session
+behavior or true concurrent PostgreSQL connections.
 
 After staging rollout, verify with one granted moderator and one ordinary
 account: the ordinary account cannot call any `moderator_*` read/decision RPC;

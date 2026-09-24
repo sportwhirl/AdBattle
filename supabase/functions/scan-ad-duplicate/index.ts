@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { decode } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 import { corsPreflightResponse, jsonResponse, requestOriginAllowed } from "../_shared/http.ts";
 import { differenceHash, sha256Hex, VISUAL_HASH_VERSION } from "../_shared/image-fingerprint.ts";
+import { cropFingerprint } from "../_shared/crop-fingerprint.ts";
 import { loadOwnedImage } from "../_shared/storage-scan-policy.ts";
 import {
   DuplicateScanRequestError,
@@ -27,8 +28,9 @@ Deno.serve(async (request) => {
   const backfillSecret = Deno.env.get("ADBATTLE_BACKFILL_SECRET") || "";
   let adId: number;
   let legacyBackfill: boolean;
+  let cropBackfill: boolean | undefined;
   try {
-    ({ adId, legacyBackfill } = parseDuplicateScanRequest(
+    ({ adId, legacyBackfill, cropBackfill } = parseDuplicateScanRequest(
       body,
       request.headers,
       webhookSecret,
@@ -42,7 +44,7 @@ Deno.serve(async (request) => {
   }
 
   const admin = createClient(url, serviceKey);
-  if (!legacyBackfill) {
+  if (!legacyBackfill && !cropBackfill) {
     const { data: indexState, error: indexError } = await admin.from("ad_image_index_state")
       .select("ready").eq("singleton", true).single();
     if (indexError || !indexState?.ready) {
@@ -50,34 +52,53 @@ Deno.serve(async (request) => {
     }
   }
   const { data: ad, error: adError } = await admin.from("ads")
-    .select("id,user_id,image_storage_path,duplicate_status,image_index_required").eq("id", adId).single();
+    .select("id,user_id,image_storage_path,duplicate_status,image_index_required,image_publication_state").eq("id", adId).single();
   if (adError || !ad) {
     return jsonResponse(request, { error: "AD_NOT_FOUND" }, 404);
   }
   if (legacyBackfill && !ad.image_index_required) return jsonResponse(request, { error: "NOT_A_LEGACY_AD" }, 409);
-  if (!legacyBackfill && ad.duplicate_status !== "pending") {
+  if (!legacyBackfill && !cropBackfill && ad.duplicate_status !== "pending") {
     return jsonResponse(request, { status: ad.duplicate_status }, 200);
   }
 
   try {
-    const bytes = await loadOwnedImage(admin.storage.from("ad-images"), ad.user_id, ad.image_storage_path);
+    const bucket = ad.image_publication_state === "legacy_public" ? "ad-images" : "ad-pending-images";
+    const bytes = await loadOwnedImage(admin.storage.from(bucket), ad.user_id, ad.image_storage_path);
     const decoded = await decode(bytes, true);
+    if (!("getRGBAAt" in decoded) || typeof decoded.getRGBAAt !== "function") {
+      throw new Error("The decoder did not return a supported still image");
+    }
+    const crop = cropFingerprint(decoded);
+    const sha256 = await sha256Hex(bytes);
+    if (cropBackfill) {
+      const { data, error } = await admin.rpc("record_ad_crop_fingerprint", {
+        p_ad_id: adId, p_sha256_hex: sha256, p_crop_fingerprint: crop,
+      });
+      if (error) throw new Error(error.message);
+      return jsonResponse(request, data, 200);
+    }
     // dHash deliberately normalizes dimensions; the source bytes and stored image are never modified.
     decoded.resize(9, 8);
-    const sha256 = await sha256Hex(bytes);
     const visualHash = differenceHash(decoded);
-    const rpc = legacyBackfill ? "record_ad_legacy_fingerprint" : "record_ad_duplicate_scan";
+    const rpc = legacyBackfill ? "record_ad_legacy_fingerprint" : "record_ad_duplicate_scan_v2";
     const { data, error: scanError } = await admin.rpc(rpc, {
       p_ad_id: adId,
       p_sha256_hex: sha256,
       p_visual_hash_hex: visualHash,
       p_visual_hash_version: VISUAL_HASH_VERSION,
+      ...(!legacyBackfill ? { p_crop_fingerprint: crop } : {}),
     });
     if (scanError) throw new Error(scanError.message);
+    if (legacyBackfill) {
+      const { error } = await admin.rpc("record_ad_crop_fingerprint", {
+        p_ad_id: adId, p_sha256_hex: sha256, p_crop_fingerprint: crop,
+      });
+      if (error) throw new Error(error.message);
+    }
     return jsonResponse(request, data, 200);
   } catch (error) {
     // Fail closed. The row stays pending; record only bounded operational detail.
-    await admin.rpc(legacyBackfill ? "record_ad_legacy_scan_failure" : "record_ad_duplicate_scan_failure", {
+    if (!cropBackfill) await admin.rpc(legacyBackfill ? "record_ad_legacy_scan_failure" : "record_ad_duplicate_scan_failure", {
       p_ad_id: adId,
       p_error: error instanceof Error ? error.message.slice(0, 500) : "Unknown scanner failure",
     });

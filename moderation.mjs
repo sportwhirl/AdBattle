@@ -11,18 +11,21 @@ const DEFINITIVE_ERRORS = new Set([
   "DUPLICATE_REVIEW_NOT_HELD",
   "DUPLICATE_REVIEW_MATCH_REQUIRED",
 ]);
-export function safeImageUrl(ad, config) {
+export function safeImageUrl(ad, config, preview) {
   const path = ad?.image_storage_path;
-  if (
-    typeof path !== "string" ||
-    !ad.owner_id ||
-    !path.startsWith(`${ad.owner_id}/`) ||
-    path.includes("\\")
-  )
-    return null;
+  if (typeof path !== "string" || !ad.owner_id ||
+      !path.startsWith(`${ad.owner_id}/`) || /[\\\x00-\x1f\x7f%?#]/.test(path)) return null;
   const parts = path.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) return null;
-  return `${config.supabaseUrl}/storage/v1/object/public/ad-images/${parts.map(encodeURIComponent).join("/")}`;
+  if (parts.some(part => !part || part === "." || part === "..")) return null;
+  try {
+    const url = new URL(preview);
+    const prefix = `/storage/v1/object/sign/`;
+    const encoded = parts.map(encodeURIComponent).join("/");
+    if (url.origin !== new URL(config.supabaseUrl).origin || url.username || url.password || url.hash ||
+        ![`${prefix}ad-pending-images/${encoded}`, `${prefix}ad-images/${encoded}`].includes(url.pathname) ||
+        !url.searchParams.get("token") || [...url.searchParams.keys()].some(key => key !== "token")) return null;
+    return url.href;
+  } catch { return null; }
 }
 export function reviewKinds(ad) {
   if (!ad || ad.moderation_status === "removed") return [];
@@ -108,7 +111,9 @@ export async function startModeration(root, sdk, config, storage) {
     client = null,
     selected = null,
     cursor = null,
-    busy = false;
+    busy = false,
+    previewReady = false,
+    previewGeneration = 0;
   const node = (tag, text, cls) => {
     const e = root.createElement(tag);
     if (text != null) e.textContent = text;
@@ -120,6 +125,8 @@ export async function startModeration(root, sdk, config, storage) {
     $("message").className = error ? "error" : "";
   }
   function reviewComplete(id) {
+    ++previewGeneration;
+    previewReady = false;
     selected = null;
     $("detail").replaceChildren(
       node("h2", `Review complete for ad #${id}`),
@@ -133,6 +140,8 @@ export async function startModeration(root, sdk, config, storage) {
       $("queue").append(node("p", "No ads need human review.", "muted"));
   }
   function resetView() {
+    ++previewGeneration;
+    previewReady = false;
     $("workspace").hidden = true;
     $("queue").replaceChildren();
     $("detail").replaceChildren();
@@ -162,7 +171,7 @@ export async function startModeration(root, sdk, config, storage) {
     for (const control of $("detail").querySelectorAll(
       "button,input,textarea,select",
     ))
-      control.disabled = busy || !!saved;
+      control.disabled = busy || !!saved || !previewReady;
   }
   async function rpc(name, args) {
     const { data, error } = await db.rpc(name, args);
@@ -216,16 +225,18 @@ export async function startModeration(root, sdk, config, storage) {
     for (const b of $("queue").querySelectorAll("button"))
       b.classList.toggle("selected", b.dataset.id === selected);
   }
-  function creative(ad, heading) {
+  function creative(ad, heading, preview, loaded, failed) {
     const box = node("div", null, "creative");
     box.append(node("h3", heading));
-    const url = safeImageUrl(ad, config);
+    const url = safeImageUrl(ad, config, preview);
     if (url) {
       const img = node("img");
+      img.onload = loaded;
       img.src = url;
       img.alt = ad.title || "Ad creative";
       img.referrerPolicy = "no-referrer";
-      img.onerror = () =>
+      img.onerror = () => {
+        failed();
         img.replaceWith(
           node(
             "p",
@@ -233,6 +244,7 @@ export async function startModeration(root, sdk, config, storage) {
             "placeholder",
           ),
         );
+      };
       box.append(img);
     } else
       box.append(
@@ -253,8 +265,18 @@ export async function startModeration(root, sdk, config, storage) {
     );
     return box;
   }
-  function renderDetail(detail) {
+  function renderDetail(detail, previews) {
     const ad = detail.ad;
+    const generation = ++previewGeneration;
+    previewReady = false;
+    const required = new Set([ad.id, ...(ad.matched_ad ? [ad.matched_ad.id] : [])]);
+    const loaded = new Set();
+    const track = (id, success) => {
+      if (generation !== previewGeneration) return;
+      if (success) loaded.add(id); else loaded.delete(id);
+      previewReady = [...required].every(id => loaded.has(id));
+      controls();
+    };
     const pane = $("detail");
     pane.replaceChildren();
     pane.append(node("h2", `Review ad #${ad.id}`));
@@ -267,9 +289,11 @@ export async function startModeration(root, sdk, config, storage) {
       badges.append(node("span", `${name}: ${value}`, "badge"));
     pane.append(badges);
     const creatives = node("div", null, "creative-grid");
-    creatives.append(creative(ad, "Submitted creative"));
+    creatives.append(creative(ad, "Submitted creative", previews[ad.id],
+      () => track(ad.id, true), () => track(ad.id, false)));
     if (ad.matched_ad)
-      creatives.append(creative(ad.matched_ad, "Matched creative"));
+      creatives.append(creative(ad.matched_ad, "Matched creative", previews[ad.matched_ad.id],
+        () => track(ad.matched_ad.id, true), () => track(ad.matched_ad.id, false)));
     pane.append(creatives);
     pane.append(
       node("h3", "Why it needs review"),
@@ -348,7 +372,7 @@ export async function startModeration(root, sdk, config, storage) {
         node("h3", "Record your review"),
         node(
           "p",
-          "Clearing one check only publishes the ad if both checks pass.",
+          "Inspect both creatives before deciding. Clearing a check keeps the ad private until all screening and publication checks pass.",
           "muted",
         ),
         row,
@@ -357,6 +381,10 @@ export async function startModeration(root, sdk, config, storage) {
       );
       form.onsubmit = (e) => {
         e.preventDefault();
+        if (!previewReady) {
+          message("Wait for the review images to load. Use Refresh queue if a preview is unavailable.", true);
+          return;
+        }
         if (!form.reportValidity()) return;
         if (
           !root.defaultView.confirm(
@@ -406,6 +434,10 @@ export async function startModeration(root, sdk, config, storage) {
   }
   async function loadAd(id) {
     const ticket = epoch;
+    ++previewGeneration;
+    previewReady = false;
+    selected = id;
+    $("detail").replaceChildren(node("p", "Loading review and private previews..."));
     const detail = await rpc("moderator_ad", { p_ad_id: id });
     if (ticket !== epoch) return;
     if (!reviewKinds(detail.ad).length) {
@@ -413,9 +445,31 @@ export async function startModeration(root, sdk, config, storage) {
       message(`Ad #${id} has no remaining human-review checks.`);
       return;
     }
-    selected = id;
-    renderDetail(detail);
-    message(`Reviewing ad #${id}.`);
+    let previews = {};
+    let previewError = false;
+    try {
+      const { data, error } = await db.functions.invoke("moderator-ad-previews", {
+        body: { ad_id: id, expected_version: detail.version },
+      });
+      if (ticket !== epoch) return;
+      if (error?.context?.status === 401 || error?.context?.status === 403 ||
+          data?.error === "MODERATOR_ACCESS_REQUIRED") {
+        throw Object.assign(new Error("MODERATOR_ACCESS_REQUIRED"), { code: "42501" });
+      }
+      if (error || data?.ad_id !== id || data?.version !== detail.version ||
+          data?.expires_in !== 60 || !data?.previews || typeof data.previews !== "object") {
+        throw new Error("PREVIEW_UNAVAILABLE");
+      }
+      previews = data.previews;
+    } catch (error) {
+      if (ticket !== epoch) return;
+      if (error?.code === "42501") throw error;
+      previewError = true;
+    }
+    renderDetail(detail, previews);
+    message(previewError
+      ? "Preview unavailable. Use Refresh queue to retry before recording a decision."
+      : `Reviewing ad #${id}. Wait for both images to load before deciding.`, previewError);
     for (const b of $("queue").querySelectorAll("button"))
       b.classList.toggle("selected", b.dataset.id === id);
   }

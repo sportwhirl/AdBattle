@@ -1,0 +1,159 @@
+# Private pending ad images
+
+This document describes the private-media contract and the **test project**
+rollout. Production has not received this change.
+
+## Publication contract
+
+1. Browser uploads a JPEG or PNG (at most 10 MiB) into private
+   `ad-pending-images/<owner UUID>/<random UUID>.<ext>` with `upsert:false`.
+   The ad INSERT stores that path and an empty `image_url`. Database triggers
+   overwrite caller-supplied scan/publication status, URLs and hashes.
+2. Independent safety and duplicate webhook scanners load the same private
+   object under the authoritative ad owner. MIME metadata, magic bytes,
+   dimensions (at most 4096 pixels per edge / 16.8 million pixels total),
+   byte length, and exact hashes are checked. Both scans can finish in either
+   order. They cannot by themselves set `moderation_status='approved'`.
+3. Whichever scan passes second inserts one durable queue row. A webhook on
+   `ad_image_publication_queue` can invoke `publish-ad-image` with
+   `{"record":{"ad_id":123}}` and secret header
+   `x-adbattle-publisher-secret`. The worker's `{"action":"sweep"}` route
+   processes ten queued rows per call, including interrupted `publishing` rows.
+   Failed jobs receive increasing retry delays, so repeated failures do not
+   permanently occupy the first ten slots ahead of fresh work.
+4. A service-only claim checks that both scan hashes agree. The worker
+   re-downloads private bytes and checks their hash before upload. It uploads
+   a deterministic content-addressed path to public `ad-images` without
+   upsert, downloads that public copy, and checks the same hash before a
+   service-only completion RPC sets the URL and approved status. A retry may
+   encounter the same immutable object and verify it. An uncertain failure
+   leaves the row pending and queued. No browser can mutate either bucket's
+   scanned objects or write to the public bucket through old broad policies.
+5. Owner RPCs return no public URL for pending ads. The browser requests a
+   60-second signed preview from `pending-ad-previews`, which verifies the
+   bearer token, owner ID and still-pending state. Held and rejected items
+   display a neutral placeholder. Approved legacy ads retain their old URL.
+
+The staging AI route creates a canonical JPEG in the private draft bucket.
+`submit-ai-ad` verifies that object and copies its exact bytes into this
+private pending bucket. The ad carries the canonical SHA-256, stamped by the
+database from the completed owner draft; direct browser AI-origin INSERTs
+fail. Publication requires this hash to match both scanners and the fresh
+private bytes. This route still requires the separate adult staging claim and
+server post enable flag. See `AI_IMAGE_DRAFTS.md`.
+
+## Test-project rollout snapshot (2026-09-24)
+
+Project `nccqnrcdygujulrnwair` (`adbattle-test`) has the four initial image
+migrations in order: `20260923162944_ai_image_draft_quota.sql`,
+`20260923170000_private_pending_images.sql`,
+`20260923170351_openai_image_draft_model.sql`, and
+`20260923180000_ai_canonical_post.sql`. Hosted migration history records them
+as `20260923223756`, `20260923223804`, `20260923223816`, and
+`20260923223823`, respectively. The forward hash-guard migration
+`20260924012243_image_publication_hash_guard.sql` was applied as hosted
+`20260924012526`. It makes missing fingerprint or moderation hashes fail
+completion, including idempotent retries. The private `ad-pending-images`
+bucket exists.
+
+Before the migrations, the two unapproved staging images for ads #5 and #6
+were copied to the private bucket at their original paths and verified against
+their source SHA-256 values. The two public originals were then removed using
+the Storage API; their `image_url` fields are now empty strings. Ad #5 remains
+`pending_scan` with `duplicate_same_creator`; ad #6 remains `rejected`.
+Approved public images were preserved.
+
+Hosted test-project functions are active: `scan-ad` v14 and
+`scan-ad-duplicate` v13 (`verify_jwt=false`), `publish-ad-image` v4
+(`verify_jwt=false`), `pending-ad-previews` v9 (`verify_jwt=true`),
+`generate-ai-image` v4 and `submit-ai-ad` v2 (`verify_jwt=true`). The existing
+safety and duplicate scan webhooks remain active. The dedicated publisher
+secret is stored in staging Vault and Edge Secrets. The Dashboard saved one
+terminal newline with the Edge value, so the worker discards exactly that
+newline from its configured value before comparing the HTTP header. A
+Vault-backed queue INSERT wakeup trigger and every-minute sweep cron were
+installed as hosted migration `20260924001553`. A secret-authenticated empty
+sweep returned HTTP 200 (`completed:0`, `deferred:0`), while the same request
+without the secret returned 401. The queue is empty. AI generation and posting
+feature flags remain off. This is not an AI generation test or an all-ages
+release.
+
+The first authenticated posting smoke on 2026-09-24 covered both outcomes.
+Ad #9 (`ooga`) passed duplicate screening but was held for manual safety
+review of health efficacy claims in its image. Its source stayed private,
+with no public URL, public object, or publication queue row. Ad #10
+(`neutral screenshot`) passed both scanners and was approved about 6.1 seconds
+after submission. Its 66,258-byte private source and public copy both exist;
+the safety, duplicate-fingerprint, and recorded published SHA-256 values agree,
+the public URL names the published path, and the queue row was consumed.
+The publisher POST returned HTTP 200. This verifies the ordinary image hold
+and success paths in hosted staging; it does not exercise paid AI generation,
+both possible scan completion orders, or fault/retry behavior.
+
+An anonymous HTTP call to `get_public_ads_with_ai` returned six approved ads:
+#10 was present and held #9 absent. This verifies the public gallery RPC, not
+browser rendering. For #9, the private bucket has no public copy or URL;
+read-only RLS probes showed its pending object to the owner, but not to an
+anonymous or other authenticated user. An anonymous HTTP preview request was
+rejected with 401. The deployed preview code checks verified Auth identity and
+ownership before signing a 60-second URL; a live owner/stranger preview pair
+has not yet been exercised.
+
+Live Storage policy inspection showed restrictive RLS rules deny ordinary
+clients INSERT, UPDATE, and DELETE on public `ad-images`, despite an older
+authenticated owner policy. Private `ad-pending-images` permits owner-scoped
+uploads and reads, while client updates and deletes are blocked. A live
+upload-denial HTTP request has not yet been exercised.
+
+Legacy approved ad #3 remains in both anonymous gallery RPCs; its public PNG
+URL returned HTTP 200 with the expected 728,890-byte length. The active
+staging frontend selects `get_public_ads` while its AI image control is off.
+That RPC returned six ads, including approved #3 and #10 and excluding held
+#9. These are API and Storage checks, not browser rendering. The available
+database HTTP proxy permits only JSON POST bodies, so its Storage upload
+attempt failed MIME validation before it could test the RLS write denial.
+
+Publisher v4 checks the exact public bytes after every upload result, including
+an unfamiliar conflict or uncertain response. Missing or mismatched copies
+defer publication. The hosted function's files matched the reviewed source;
+a secret-authenticated empty sweep returned 200 (`completed:0`, `deferred:0`)
+and a request without the publisher secret returned 401. The queue stayed
+empty, and ads #3, #9, and #10 retained their expected states. Local tests
+passed 235/235, including a regression that demonstrates the prior nullable
+hash bypass.
+
+On 2026-09-24, a temporary staging-only, secret-gated fixed-fixture probe ran
+the exact deployed JPEG processor in the hosted Deno runtime. Its pixel-art
+1280x720 input produced 640x360 JPEG (6,927 bytes, 56 ms); its smooth-style
+1024x1024 input produced 640x640 JPEG (11,827 bytes, 95 ms). Both outputs
+decoded and met the 500 KiB bound. The original `generate-ai-image` files and
+`verify_jwt=true` were restored byte for byte (bundle SHA-256
+`cf16ccf50ddd0342606c8faf5c03173dfb44289d5a3e8dcf6468383c3051661c`).
+The restored endpoint returned 503 with generation disabled and 401 without
+authorization. This proves the hosted codec path for simple fixtures, not a
+provider response, high-entropy image, or end-to-end AI post.
+
+## Remaining staging steps
+
+1. Keep production public posting unchanged. Verify public-bucket write
+   denial over HTTP and owner/stranger signed previews using authenticated
+   clients. Confirm the staging frontend points only to the test project and
+   renders the approved-only gallery RPC result.
+2. The installed staging-only `operations/staging_image_publication_dispatch.sql`
+   reads the Vault secret at call time. Do not reapply it or apply it to
+   production. Keep the existing safety/duplicate webhooks in place. The
+   worker reads only `ad_id` from a wakeup and reloads the authoritative row.
+3. Monitor HTTP delivery as well as the scheduled SQL run;
+   `cron.job_run_details` success alone proves only SQL dispatch. Alert if
+   queue age exceeds several minutes, the worker repeatedly returns 503, or
+   `publishing` becomes stuck. Test the alternate scan completion order,
+   changed private bytes, and retry after upload. Test Seed/Support on an
+   approved staging ad to check wallet behavior.
+4. Before an approved adult staging AI test, verify provider access, provision
+   an adult test claim and the OpenAI key, and enable the separate server image
+   generation and posting flags. Keep the browser flag off until the staging
+   flow works. See `AI_IMAGE_DRAFTS.md`.
+
+Do not open all-ages creation on the strength of this media gate alone. Age
+assurance, parent consent, payments and the separate youth release gates in
+`docs/YOUTH_ACCESS_PLAN.md` still apply.

@@ -686,6 +686,36 @@ nav .post-button:hover {
     background: #38393b;
 }
 
+.ai-image-studio {
+    margin: 0 0 20px;
+    padding: 18px;
+    border: 1px solid #d7dfda;
+    border-radius: 11px;
+    background: #f3f8f4;
+}
+
+.ai-image-studio[hidden], .ai-image-preview[hidden] {
+    display: none;
+}
+
+.ai-image-studio textarea { min-height: 80px; }
+.ai-image-studio select { width: 100%; padding: 10px; margin-bottom: 12px; }
+.ai-image-studio button { margin: 8px 8px 0 0; }
+.ai-image-preview img {
+    display: block;
+    max-width: min(100%, 480px);
+    margin: 12px 0;
+    border-radius: 8px;
+}
+.ai-image-label {
+    display: inline-block;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: #e0e9dd;
+    font-size: .85rem;
+    font-weight: 700;
+}
+
 /* PAYMENTS */
 
 .payments-card {
@@ -1120,7 +1150,7 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
         accept="image/jpeg,image/png"
     >
 
-    <div class="ai-video-help">
+    <div class="ai-video-help" id="externalCreateHelp">
         <a
             class="gemini-button"
             href="https://gemini.google.com/"
@@ -1129,6 +1159,34 @@ if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
         >
             Make an ad
         </a>
+    </div>
+
+    <div class="ai-image-studio" id="aiImageStudio" hidden>
+        <strong>Create an image draft with AI</strong>
+        <p>Staging only. You can preview or discard it before posting. Up to three generations per day.</p>
+        <label for="aiImagePrompt">Describe your ad image</label>
+        <textarea id="aiImagePrompt" maxlength="400" placeholder="Describe your scene and any visual style you want"></textarea>
+        <label for="aiImageStyle">Optional style direction</label>
+        <select id="aiImageStyle">
+            <option value="freeform_simple">Your own style</option>
+            <option value="pixel_art">Pixel art</option>
+            <option value="flat_illustration">Flat illustration</option>
+            <option value="simple_3d">Simple 3D</option>
+            <option value="hand_drawn">Loose hand-drawn</option>
+        </select>
+        <label for="aiImageAspect">Shape</label>
+        <select id="aiImageAspect">
+            <option value="16:9">Wide 16:9</option>
+            <option value="1:1">Square 1:1</option>
+        </select>
+        <button type="button" id="generateAiImageButton" onclick="generateAiDraft()">Generate image</button>
+        <p id="aiImageStatus" role="status"></p>
+        <div class="ai-image-preview" id="aiImagePreview" hidden>
+            <span class="ai-image-label">AI-generated draft</span>
+            <img id="aiImagePreviewImage" alt="Generated image draft for review">
+            <button type="button" onclick="chooseAiDraft()">Use this image</button>
+            <button type="button" onclick="discardAiDraft()">Discard draft</button>
+        </div>
     </div>
 
     <label>Caption</label>
@@ -1310,6 +1368,10 @@ const db = supabase.createClient(
 let currentUser = null;
 let ads = [];
 let walletBalanceCents = 0;
+let generatedDraftFile = null;
+let generatedDraftUrl = null;
+let previewDraftFile = null;
+let generatedDraftRequestId = null;
 
 /* ========================================
    ELEMENTS
@@ -1381,6 +1443,10 @@ function applyEnvironmentConfiguration() {
         setupPaymentsButton.disabled = true;
         setupPaymentsButton.title = "Creator onboarding functions are not deployed in staging.";
         paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+    }
+    if (FEATURES.aiImageDrafts) {
+        document.getElementById("aiImageStudio").hidden = false;
+        document.getElementById("externalCreateHelp").hidden = true;
     }
 }
 
@@ -1858,6 +1924,7 @@ async function checkUser() {
 
     currentUser = user || null;
     updateAccountButton();
+    restorePendingAiDraft();
 }
 
 function updateAccountButton() {
@@ -1986,6 +2053,7 @@ async function signup() {
     if (data.session) {
         currentUser = data.user;
         updateAccountButton();
+        restorePendingAiDraft();
 
         await Promise.all([
             loadAds(),
@@ -2035,6 +2103,7 @@ async function login() {
     message.innerText = "";
 
     updateAccountButton();
+    restorePendingAiDraft();
 
     await Promise.all([
         loadAds(),
@@ -2045,6 +2114,7 @@ async function login() {
 }
 
 async function logout() {
+    resetAiDraftPreview();
     await db.auth.signOut();
 
     currentUser = null;
@@ -2065,10 +2135,14 @@ async function logout() {
 
 db.auth.onAuthStateChange(
     (event, session) => {
+        if (currentUser?.id !== session?.user?.id) {
+            resetAiDraftPreview();
+        }
         currentUser =
             session?.user || null;
 
         updateAccountButton();
+        restorePendingAiDraft();
 
         if (currentUser) {
             loadWalletBalance();
@@ -2119,6 +2193,7 @@ function createCard(ad, rank = null) {
             <p>
                 ${escapeHTML(ad.caption)}
             </p>
+            ${ad.aiGenerated ? '<span class="ai-image-label">Made with AdBattle AI</span>' : ""}
 
             ${
                 ad.owner
@@ -2920,6 +2995,134 @@ async function openSupport(id, button) {
 }
 
 /* ========================================
+   STAGING AI IMAGE DRAFT
+======================================== */
+
+function aiDraftKey() {
+    return `adbattle:ai-image-draft:${PROJECT_REF}:${currentUser.id}`;
+}
+
+function resetAiDraftPreview() {
+    generatedDraftFile = null;
+    previewDraftFile = null;
+    generatedDraftRequestId = null;
+    generatedDraftUrl = null;
+    document.getElementById("aiImagePreview").hidden = true;
+    document.getElementById("aiImagePreviewImage").removeAttribute("src");
+}
+
+function discardAiDraft() {
+    resetAiDraftPreview();
+    if (currentUser && FEATURES.aiImageDrafts) {
+        try { localStorage.removeItem(aiDraftKey()); }
+        catch { /* The published ad must still complete its UI update. */ }
+    }
+    document.getElementById("aiImageStatus").innerText = "";
+}
+
+function restorePendingAiDraft() {
+    if (!FEATURES.aiImageDrafts || !currentUser) return;
+    let pending;
+    try { pending = JSON.parse(localStorage.getItem(aiDraftKey()) || "null"); }
+    catch { pending = null; }
+    if (!pending || !pending.request_id || !pending.prompt || !pending.style ||
+        !pending.aspect_ratio) return;
+    document.getElementById("aiImagePrompt").value = pending.prompt;
+    document.getElementById("aiImageStyle").value = pending.style;
+    document.getElementById("aiImageAspect").value = pending.aspect_ratio;
+    document.getElementById("aiImageStatus").innerText =
+        "An earlier image draft can be recovered with Generate image.";
+}
+
+function aiDraftErrorMessage(message) {
+    if (message.includes("ELIGIBILITY_REQUIRED")) return "AI image drafts are limited to approved adult staging testers.";
+    if (message.includes("DAILY_GENERATION_LIMIT")) return "The daily AI image limit is reached.";
+    if (message.includes("GENERATION_IN_PROGRESS")) return "That image is still generating. Try recovery shortly.";
+    if (message.includes("PROMPT_NEEDS_REVIEW")) return "This ad idea needs review. Discard it to try another idea.";
+    if (message.includes("GENERATION_OUTCOME_UNCERTAIN")) return "The earlier attempt is uncertain. Discard it before a new request.";
+    if (message.includes("DRAFT_URL_UNAVAILABLE")) return "Draft download is unavailable. Retry the same request to recover it.";
+    if (message.includes("CANONICAL_DRAFT_UNAVAILABLE")) return "This older draft has no verified posting image. Discard it and generate a new one.";
+    if (message.includes("GENERATION_FAILED")) return "The draft failed. Discard it before trying another request.";
+    return message;
+}
+
+async function generateAiDraft() {
+    if (!FEATURES.aiImageDrafts) return;
+    if (!currentUser) { showLogin(); return; }
+    const status = document.getElementById("aiImageStatus");
+    const button = document.getElementById("generateAiImageButton");
+    const prompt = document.getElementById("aiImagePrompt").value.trim();
+    const style = document.getElementById("aiImageStyle").value;
+    const aspectRatio = document.getElementById("aiImageAspect").value;
+    if (!prompt || prompt.length > 400) {
+        status.innerText = "Describe the image in 400 characters or fewer.";
+        return;
+    }
+    let pending;
+    try {
+        pending = JSON.parse(localStorage.getItem(aiDraftKey()) || "null");
+        if (pending && (pending.prompt !== prompt || pending.style !== style ||
+            pending.aspect_ratio !== aspectRatio)) {
+            status.innerText = "Recover or discard the previous draft before changing the prompt.";
+            return;
+        }
+        if (!pending) {
+            pending = { request_id: crypto.randomUUID(), prompt, style, aspect_ratio: aspectRatio };
+            // Save before the request so an uncertain response cannot trigger another paid call.
+            localStorage.setItem(aiDraftKey(), JSON.stringify(pending));
+        }
+    } catch {
+        status.innerText = "Couldn't save draft retry state. No image was requested.";
+        return;
+    }
+    button.disabled = true;
+    status.innerText = "Generating one image draft...";
+    try {
+        const { data, error } = await db.functions.invoke("generate-ai-image", {
+            body: pending
+        });
+        if (error || !data?.url) {
+            const detail = error ? await functionErrorMessage(error, data, "Image generation is unavailable.") :
+                data?.error || "Image generation is unavailable.";
+            throw new Error(aiDraftErrorMessage(detail));
+        }
+        resetAiDraftPreview();
+        // The URL points to the server-created canonical JPEG. The browser
+        // only previews it; the trusted submit function copies the stored bytes.
+        generatedDraftRequestId = data.request_id;
+        generatedDraftUrl = data.url;
+        const previewImage = document.getElementById("aiImagePreviewImage");
+        previewImage.src = generatedDraftUrl;
+        try { await previewImage.decode(); }
+        catch {
+            resetAiDraftPreview();
+            throw new Error("Couldn't load the private draft. Try recovering it.");
+        }
+        previewDraftFile = true;
+        document.getElementById("aiImagePreview").hidden = false;
+        status.innerText = "Review the draft. It is not posted until you submit the ad.";
+    } catch (error) {
+        status.innerText = error instanceof Error ? error.message : "Image generation failed.";
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function chooseAiDraft() {
+    if (!previewDraftFile) return;
+    generatedDraftFile = previewDraftFile;
+    document.getElementById("newImage").value = "";
+    document.getElementById("aiImageStatus").innerText =
+        "AI-generated image selected. Add a title and caption, then submit when ready.";
+}
+
+document.getElementById("newImage").addEventListener("change", () => {
+    if (generatedDraftFile && document.getElementById("newImage").files.length) {
+        discardAiDraft();
+    }
+});
+
+/* ========================================
    POST AD
 ======================================== */
 
@@ -2943,7 +3146,7 @@ async function postAd() {
         document.getElementById("newImage");
 
     const imageFile =
-        imageInput.files[0];
+        generatedDraftFile || imageInput.files[0];
 
     // Retained only for the existing non-null ad schema. Wallet Support does
     // not allocate money to promotion channels.
@@ -2954,6 +3157,30 @@ async function postAd() {
         alert(
             "Please add a title, image and caption."
         );
+        return;
+    }
+    if (generatedDraftFile && !generatedDraftRequestId) {
+        alert("Recover the AI image draft before submitting it.");
+        return;
+    }
+    if (generatedDraftFile) {
+        const { data, error } = await db.functions.invoke("submit-ai-ad", {
+            body: { request_id: generatedDraftRequestId, title, caption }
+        });
+        if (error || data?.status !== "submitted") {
+            const detail = error ? await functionErrorMessage(error, data, "AI ad submission is unavailable.") :
+                data?.error || "AI ad submission is unavailable.";
+            alert(aiDraftErrorMessage(detail));
+            return;
+        }
+        document.getElementById("newTitle").value = "";
+        document.getElementById("newCaption").value = "";
+        imageInput.value = "";
+        discardAiDraft();
+        await loadAds();
+        alert("Ad submitted. It remains pending and private until both safety and duplicate screening are complete.");
+        showProfile();
+        profileSection("myads");
         return;
     }
 
@@ -2969,15 +3196,7 @@ async function postAd() {
         return;
     }
 
-    const rawExtension =
-        imageFile.name.includes(".")
-            ? imageFile.name.split(".").pop()
-            : "jpg";
-
-    const extension =
-        rawExtension
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, "") || "jpg";
+    const extension = imageFile.type === "image/png" ? "png" : "jpg";
 
     const fileName =
         `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
@@ -2985,7 +3204,7 @@ async function postAd() {
     const {
         error: uploadError
     } = await db.storage
-        .from("ad-images")
+        .from("ad-pending-images")
         .upload(
             fileName,
             imageFile,
@@ -3009,22 +3228,13 @@ async function postAd() {
         return;
     }
 
-    const {
-        data: publicUrlData
-    } = db.storage
-        .from("ad-images")
-        .getPublicUrl(fileName);
-
-    const imageUrl =
-        publicUrlData.publicUrl;
-
     const { error: adError } = await db
         .from("ads")
         .insert({
             user_id: currentUser.id,
             title,
             caption,
-            image_url: imageUrl,
+            image_url: "",
             image_storage_path: fileName,
             promotion_allocation:
                 promotionAllocation
@@ -3036,16 +3246,8 @@ async function postAd() {
             adError
         );
 
-        /*
-            Clean up the image if the ad row fails.
-        */
-        await db.storage
-            .from("ad-images")
-            .remove([fileName]);
-
         alert(
-            "Couldn't create the ad: " +
-            adError.message
+            "Couldn't create the ad. The private upload will be cleaned up later: " + adError.message
         );
 
         return;
@@ -3054,6 +3256,7 @@ async function postAd() {
     document.getElementById("newTitle").value = "";
     document.getElementById("newCaption").value = "";
     imageInput.value = "";
+    discardAiDraft();
 
     await loadAds();
 
@@ -3526,7 +3729,7 @@ async function loadAds() {
     const {
         data: publicAdData,
         error: publicAdError
-    } = await db.rpc("get_public_ads");
+    } = await db.rpc(FEATURES.aiImageDrafts ? "get_public_ads_with_ai" : "get_public_ads");
 
     if (publicAdError) {
         console.error(
@@ -3541,12 +3744,28 @@ async function loadAds() {
         const {
             data,
             error: ownerAdError
-        } = await db.rpc("get_my_ads");
+        } = await db.rpc(FEATURES.aiImageDrafts ? "get_my_ads_with_ai" : "get_my_ads");
         if (ownerAdError) {
             console.error("Couldn't load your ads:", ownerAdError);
             return;
         }
         ownerAdData = data || [];
+    }
+
+    // The owner-only RPC never includes a public URL for unreviewed uploads.
+    // Fetch short-lived signed URLs in batches; a failed preview stays blank.
+    const pendingPreviewUrls = new Map();
+    const pendingIds = ownerAdData
+        .filter(ad => ad.moderation_status === "pending_scan" && !ad.image_url)
+        .map(ad => Number(ad.id)).filter(Number.isSafeInteger);
+    for (let i = 0; i < pendingIds.length; i += 50) {
+        const { data, error } = await db.functions.invoke("pending-ad-previews", {
+            body: { ad_ids: pendingIds.slice(i, i + 50) }
+        });
+        if (error || !data?.previews) continue;
+        Object.entries(data.previews).forEach(([id, url]) => {
+            if (typeof url === "string") pendingPreviewUrls.set(Number(id), url);
+        });
     }
 
     // Owner rows replace their public copies, so approved owner ads appear once
@@ -3664,11 +3883,13 @@ async function loadAds() {
             creatorHandle: creatorHandles.get(ad.user_id) || "",
             title: ad.title,
             caption: ad.caption || "",
-            image: ad.image_url,
+            image: ad.image_url || (isOwner ? pendingPreviewUrls.get(numericAdId) : "") ||
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23e9eee9'/%3E%3C/svg%3E",
             seedCount:
                 seedCounts.get(numericAdId) || 0,
             seeded:
                 userSeededAdIds.has(numericAdId),
+            aiGenerated: Boolean(ad.ai_generated),
             support:
                 Number(ad.support_total) || 0,
 
