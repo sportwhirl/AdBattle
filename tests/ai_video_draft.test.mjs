@@ -11,10 +11,12 @@ const valid = { action: 'create', request_id: '00000000-0000-4000-8000-000000000
 
 test('staging guard and fixed generation parameters refuse arbitrary client knobs', async () => {
   assert.throws(() => assertStaging({ SUPABASE_URL: 'https://adbattle.io',
-    ADBATTLE_AI_STAGING_ENABLED: 'video-drafts-v1' }), /STAGING_GUARD/);
+    ADBATTLE_AI_STAGING_ENABLED: 'video-audio-drafts-v2' }), /STAGING_GUARD/);
   assert.throws(() => assertStaging({ SUPABASE_URL: 'https://nccqnrcdygujulrnwair.supabase.co' }), /STAGING_GUARD/);
+  assert.throws(() => assertStaging({ SUPABASE_URL: 'https://nccqnrcdygujulrnwair.supabase.co',
+    ADBATTLE_AI_STAGING_ENABLED: 'video-drafts-v1' }), /STAGING_GUARD/);
   assertStaging({ SUPABASE_URL: 'https://nccqnrcdygujulrnwair.supabase.co',
-    ADBATTLE_AI_STAGING_ENABLED: 'video-drafts-v1' });
+    ADBATTLE_AI_STAGING_ENABLED: 'video-audio-drafts-v2' });
   assert.equal(adultTestApproved({ app_metadata: { ai_video_adult_test_approved: true } }), true);
   assert.equal(adultTestApproved({ user_metadata: { ai_video_adult_test_approved: true } }), false);
   assert.equal(adultTestApproved({ app_metadata: { ai_video_adult_test_approved: 'true' } }), false);
@@ -25,6 +27,8 @@ test('staging guard and fixed generation parameters refuse arbitrary client knob
   assert.equal(request.model, 'ray-3.2');
   assert.equal(request.type, 'video');
   assert.equal(request.web_search, false);
+  assert.match(request.prompt, /synchronized, original AI-generated soundtrack/);
+  assert.match(request.prompt, /Do not imitate a named artist, celebrity/);
   assert.match(request.prompt, /Choose a visual style that fits the idea/);
   assert.match(providerRequest(normalizeDraft({ ...valid, style: 'pixel_art' })).prompt, /pixel art animation/);
   assert.throws(() => normalizeDraft({ ...valid, model: 'expensive' }), /UNSUPPORTED_PARAMETER/);
@@ -125,11 +129,20 @@ test('actual migration enforces day quotas, active slot, immutable request and o
       [users[index], `10000000-0000-4000-8000-${String(index * 10 + suffix + 1).padStart(12, '0')}`,
         'a'.repeat(64), prompt]);
     const first = (await insert(0)).rows[0].id;
-    assert.equal((await db.query('select model from public.ai_video_draft_jobs where id=$1', [first])).rows[0].model,
-      'ray-3.2');
+    const contract = (await db.query(
+      'select model,audio_required from public.ai_video_draft_jobs where id=$1', [first])).rows[0];
+    assert.equal(contract.model, 'ray-3.2');
+    assert.equal(contract.audio_required, true);
+    await assert.rejects(db.query(`insert into public.ai_video_draft_jobs
+      (user_id,request_id,request_hash,prompt,aspect_ratio,audio_required)
+      values ($1,$2,$3,$4,'16:9',false)`,
+      [users[6], '10000000-0000-4000-8000-000000000099', 'b'.repeat(64), prompt]),
+    /audio_required/);
     await assert.rejects(insert(0, 1), /AI_VIDEO_USER_DAILY_LIMIT/);
     await assert.rejects(db.query('update public.ai_video_draft_jobs set prompt=$1 where id=$2',
       ['changed text longer than twelve', first]), /AI_VIDEO_REQUEST_IMMUTABLE/);
+    await assert.rejects(db.query('update public.ai_video_draft_jobs set audio_required=false where id=$1',
+      [first]), /AI_VIDEO_REQUEST_IMMUTABLE|audio_required/);
     for (let n = 1; n < 5; n++) await insert(n);
     await assert.rejects(insert(5), /AI_VIDEO_GLOBAL_DAILY_LIMIT/);
 

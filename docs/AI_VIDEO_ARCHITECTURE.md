@@ -24,7 +24,7 @@ Confirm the teen path, commercial use, and 360p draft-tier publishing in
 writing before a public switch. AI-assisted animation from approved image
 generation is a separate proposed route, not part of this job scaffold.
 
-This feature creates a **draft before posting**. The creator can inspect it and either discard it or submit one immutable ad. It does not edit posted media, change the wallet ledger, spend promotion money, or change the existing Support and Seed rules. The first version is one original, 10-second, 360p, 24-fps clip; 16:9 and 9:16 are the permitted aspect ratios. The gallery serves a poster first, then a tiny muted hover derivative, then the full video only on user action. These are proposed AdBattle delivery limits, not provider policy or a claim that simple artwork costs fewer model tokens.
+This feature creates a **draft before posting**. The creator can inspect it and either discard it or submit one immutable ad. It does not edit posted media, change the wallet ledger, spend promotion money, or change the existing Support and Seed rules. The first version is one original, 10-second audiovisual clip delivered at 360p and 24 fps; 16:9 and 9:16 are the permitted aspect ratios. The gallery serves a poster first, then a tiny audio-free hover derivative, then the full video with sound only on deliberate user action. These are proposed AdBattle delivery limits, not provider policy or a claim that downscaling after generation lowers model cost.
 
 Optional style directions are **pixel art, flat illustration, low-poly 3D,
 loose hand-drawn, and the creator's own style**. Creators choose the scene,
@@ -33,7 +33,8 @@ Photorealistic fictional art and detailed ideas may be proposed; the small
 public file can lose fine detail, so preview legibility. Hold copied
 brands/characters, deceptive real-person impersonation, recognizable voice
 clones, known songs, and claims the scanner cannot verify. The first release
-produces a silent full clip and a silent hover clip. The model can deviate from
+requires one synchronized AI-generated soundtrack in the full clip and keeps
+the hover clip physically silent. The model can deviate from
 a style request, so inspect the actual output. Low-detail style is an option;
 model choice and duration determine generation cost, while transcoding
 determines delivery bytes.
@@ -54,7 +55,17 @@ pay-as-you-go price](https://docs.agents.lumalabs.ai/guides/pricing) is $0.18
 for one 10-second `type:"video"` 360p generation, subject to change. Shared
 capacity has no latency SLA. Record actual provider charge and wait time
 before setting a user-facing allowance or promise. Luma describes 360p as a
-draft tier; confirm public commercial publishing rights. Keep image generation
+draft tier; confirm public commercial publishing rights and actual audio
+behavior. At that published rate, twenty ten-second attempts cost $3.60 before
+failures, so the adapter cannot satisfy the product target of roughly twenty
+accepted audiovisual drafts per dollar. Lowering the served file to 360p does
+not lower a provider bill unless the provider itself offers a cheaper native
+resolution. The production cost candidate is self-hosted LTX-2.5 with native
+synchronized audio, benchmarked at a low-resolution generation profile. At a
+$1/GPU-hour operating cost, the target requires at least twenty accepted clips
+per GPU-hour—about three minutes per accepted clip including failures and
+model-load amortization. Do not advertise that target until measured for both
+orientations. Keep image generation
 as a separate OpenAI job and budget.
 
 Provider filters are only a first layer, not AdBattle approval. Retain the
@@ -85,10 +96,10 @@ Minimum job columns:
 | Column | Invariant |
 | --- | --- |
 | `id uuid`, `user_id uuid`, `client_request_id uuid`, `request_sha256 bytea` | `unique(user_id, client_request_id)`; retries with an identical hash return the same job, changed body returns 409. |
-| `prompt`, `style_preset`, `duration_seconds`, `resolution`, `aspect_ratio`, `provider`, `model` | Immutable after creation; initially 10, `360p`, and allowlisted aspect/style. Bounded prompt length and reference rights attestation. |
+| `prompt`, `style_preset`, `duration_seconds`, `resolution`, `aspect_ratio`, `provider`, `model`, `audio_required` | Immutable after creation; initially a 10-second `360p` generation request, `audio_required=true`, and allowlisted aspect/style. Bounded prompt length and reference rights attestation. |
 | `status`, `lease_owner`, `lease_expires_at`, `next_poll_at`, `created_at`, `updated_at` | Only a worker changes state via compare-and-swap/row-lock RPCs; lease expiry never authorizes a second ambiguous provider POST. |
 | `provider_request_started_at`, `provider_generation_id`, `provider_output_url`, `provider_status`, `provider_usage` | Provider ID unique when non-null. Persist the generation ID before polling. A completed output URL expires; download promptly with a host allowlist and byte cap. Keep only bounded diagnostics; never log prompt/media/API keys or expose the URL. |
-| `original_private_path`, `poster_private_path`, `hover_private_path`, `full_private_path`, `original_sha256`, `poster_sha256`, `full_sha256`, `hover_sha256` | Paths are server-created in owner/job namespaces; immutable hashes bind scans and published assets to one output. |
+| `original_private_path`, `poster_private_path`, `hover_private_path`, `full_private_path`, `original_sha256`, `poster_sha256`, `full_sha256`, `hover_sha256`, `transcript_sha256`, `audio_scan_version` | Paths are server-created in owner/job namespaces; immutable hashes bind visual, transcript/audio scans, and published assets to one output. |
 | `publish_request_sha256`, `ad_id`, `error_code`, `review_reason_code` | `ad_id` unique. A repeat publish with identical fields returns the same ad; changed fields fail. No raw provider error or private URI in browser responses. |
 
 Use `internal` only if the project's configured Data API schemas keep it unexposed. Supabase's [Data API guidance](https://supabase.com/docs/guides/api/securing-your-api) distinguishes grants from RLS; enable RLS even for private tables as defense in depth. If PostgREST access to a private-schema RPC is unavailable, place a `SECURITY INVOKER` transaction RPC in `public`, `REVOKE EXECUTE FROM PUBLIC, anon, authenticated`, and `GRANT EXECUTE TO service_role` only. Do not use an unrestricted `SECURITY DEFINER` public function. Explicitly grant the service role the required sequence/table/schema permissions.
@@ -184,7 +195,7 @@ payload is:
 {
   "model": "ray-3.2",
   "type": "video",
-  "prompt": "An original scene in the creator's chosen style ...",
+  "prompt": "An original scene with one synchronized original AI-generated soundtrack; do not imitate named artists, songs, celebrities, or real voices ...",
   "aspect_ratio": "16:9",
   "video": { "duration": "10s", "resolution": "360p" }
 }
@@ -213,7 +224,19 @@ provider POST and operator reconciliation.
 
 Keep FFmpeg/ffprobe in a constrained container worker, not an Edge Function. [Supabase Storage uploads](https://supabase.com/docs/guides/storage/uploads/standard-uploads) work best under 6 MB; use [resumable upload](https://supabase.com/docs/guides/storage/uploads/resumable-uploads) for larger objects, and enforce the project's [Storage object limit](https://supabase.com/docs/guides/storage/uploads/file-limits). Supabase documents image transformations, not a native video-transcoding service. The worker must use a temporary directory with size/time limits, fixed tool arguments, no shell interpolation of user prompts or filenames, and reject external/extra streams or unparseable media.
 
-Initial staging acceptance budgets (to be tuned after real samples): one H.264 MP4 input up to 30 MiB, 8–12 seconds for the requested ten-second output, matching 16:9 or 9:16 geometry and 12–60 fps, one video stream (the processor discards any audio). The bounded offline processor normalizes to a silent 10.0-second, 24-fps, 360p full MP4 of at most 5 MiB, a 360p JPEG poster of at most 100 KiB, and, if its hard cap is met, a separate silent four-second, 13-fps, 360p hover MP4 of at most 500 KiB. An oversized hover falls back to the poster; any other required-output failure fails the draft. These are **site delivery** budgets. Re-encoding and style presets do not imply a provider generation discount. Keep original bytes and SHA-256 privately; record derivative hashes, dimensions, durations, codecs, and byte sizes.
+Initial staging acceptance budgets (to be tuned after real samples): one MP4
+input up to 30 MiB, matching 8–12 second H.264 video and AAC mono/stereo audio,
+16:9 or 9:16 geometry, 12–60 fps, and no extra streams. The bounded offline
+processor fully decodes both tracks and fails closed on missing, extra,
+unsupported, delayed, mismatched, or effectively silent audio. It normalizes to a 10.0-second,
+24-fps, 360p H.264 full MP4 with normalized 48 kHz AAC stereo at most 5 MiB;
+a 360p JPEG poster at most 100 KiB; and, when its cap is met, a physically
+audio-free four-second, 13-fps, 360p hover MP4 at most 500 KiB. An oversized
+hover falls back to the poster; any other required-output failure fails the
+draft. These are **site delivery** budgets. Re-encoding does not imply a
+provider generation discount. Keep original bytes and SHA-256 privately;
+record derivative hashes, dimensions, durations, codecs, byte sizes,
+transcript hash, and audio scan version.
 
 Before a draft is offered, evaluate prompt and references, validate the generated file, and perform a preliminary content check. At posting, scan the complete ad context: title, caption, private poster, video frames across the timeline (including first/last and scene changes), OCR/text overlays, and a speech transcript plus audio-risk review. The existing `scan-ad` and duplicate scanner can handle a poster placed in `ad-pending-images`; add a video-specific scanner and immutable scan version/audit events. Compare exact video SHA-256 and sampled frame fingerprints to prior posted clips and hold suspicious duplicates. Automated samples can miss a brief unsafe frame; uncertain or high-risk cases require human review. A model's refusal/safety pass does not replace AdBattle policy. Do not claim that a generated soundtrack is free of rights issues.
 
@@ -221,7 +244,15 @@ The future submit worker first places the preliminarily screened poster in the p
 
 For approved video ads, serve the poster from `ad-images` and hover/full derivatives from `ad-videos`. Public storage denies browser write/upsert; private drafts and pending ads remain private. Removed ads stop appearing through public read RPCs, although [Supabase CDN behavior](https://supabase.com/docs/guides/storage/cdn/fundamentals) means removing a previously published object is not an instantaneous universal cache purge. No unscanned poster URL is public.
 
-The gallery renders `<img loading="lazy">` with an accessible play button. It does not set a video `src` or preload on initial card render. Pointer hover, after a short delay, fetches only the muted hover derivative when motion/data preferences permit; leave/cancel stops playback. Touch and keyboard users get the same explicit play control without hover. Full video uses `preload="none"`, `playsinline`, controls and initially muted playback; audible playback requires deliberate action. Do not auto-fetch video for every card. The existing card actions and owner moderation badge continue to work for image and video ads.
+The gallery renders `<img loading="lazy">` with an accessible **Play with
+sound** button. It does not set a video `src` or preload on initial card render.
+Pointer hover, after a short delay, fetches only the audio-free hover derivative
+when motion/data preferences permit; leave/cancel stops and unloads it. Touch
+and keyboard users get the same explicit play control without hover. Only the
+trusted click/tap handler loads the full video and may request audible playback;
+native controls remain available if browser autoplay rules reject it. Closing
+the player pauses, resets, and removes its source. Do not auto-fetch video for
+every card or let Seed/Support actions start sound.
 
 ## Verification and rollout
 
@@ -229,7 +260,7 @@ The gallery renders `<img loading="lazy">` with an accessible play button. It do
 2. **Mock provider tests:** Simulate accepted/queued/processing/completed states and expiring output URLs; definite rejection, 429, 5xx, timeout, malformed JSON, missing ID, blocked, and cancelled. Assert one provider POST maximum after ambiguous outcomes, persistent generation ID before polling, duplicate queue-message safety, bounded response/download bytes, immutable request hash, quotas, and atomic one-ad publication.
 3. **Fixture media tests:** Exercise invalid magic/container, truncation, codec/track anomalies, duration/dimension/file-size boundaries, failed transcodes, speech and scene-change extraction, frame/audio policy holds, fingerprint duplicate, and storage copy failure. Verify no video asset is copied before all scans pass; a copy failure or hash mismatch never approves; retries cannot overwrite an existing public object.
 4. **Browser tests:** Image cards still render; video cards issue no video requests on initial gallery load; hover fetch is conditional and muted; mobile/keyboard/reduced-motion/data-saver behavior, poster fallback, owner pending state, and explicit play work.
-5. **Restricted `adbattle-test` staging:** Deploy schema gate and code from one reviewed commit with generation disabled. Run authorization checks with two ordinary users, then enable one paid 10-second/360p Luma test only for approved adult testers. Record real output dimensions, response shape, generation time, provider billing, storage/transcode bytes, review results, and cancellation/retry behavior. Keep wallet and Stripe test mode unchanged.
+5. **Restricted `adbattle-test` staging:** Deploy schema gate and code from one reviewed commit with generation disabled. Run authorization checks with two ordinary users, then enable at most one paid 10-second/360p Luma compatibility test only for approved adult testers and only if synchronized audio behavior is confirmed. Separately benchmark the pinned self-hosted LTX audiovisual profile without connecting it to public posting. Record accepted-output rate, generation time, GPU-hour cost, actual dimensions, audio synchronization, storage/transcode bytes, review results, and failure behavior. Keep wallet and Stripe test mode unchanged.
 6. **Public release:** Remains blocked on the youth access plan, written provider clearance for the age band and use, verified access/price, validated transcoding and moderation operations, per-user/global cost controls, and a review process. Do not enable this through a feature flag alone before those gates pass.
 
-No live provider call, paid generation, hosted migration, or Edge deployment was performed. The separate offline FFmpeg processor passes synthetic fixtures for the size and format caps, but is not connected to the job worker. Without an authorized paid API key, actual 360p billing, `"10s"` behavior, provider quota, and response shape remain unverified. Real provider samples and full media moderation are still needed before publication.
+No live provider call, paid generation, hosted migration, or Edge deployment was performed. The separate offline FFmpeg processor passes synthetic audiovisual fixtures for H.264/AAC full output, silent hover output, size/format caps, and rejection of missing, extra, mismatched, or unsupported audio, but it is not connected to the job worker. Actual provider audio behavior, billing, self-hosted LTX throughput, and the 20-for-$1 target remain unverified. Real samples plus frame, transcript, music/voice, and non-speech audio moderation are still required before publication.

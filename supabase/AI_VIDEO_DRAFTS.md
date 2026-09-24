@@ -14,6 +14,7 @@ is downloaded, transcoded, displayed, published, or inserted into `ads`.
 | Model | `ray-3.2` |
 | Duration | `10s` |
 | Resolution | `360p` |
+| Audio | One synchronized, original AI-generated soundtrack is required |
 | Aspect | `16:9` or `9:16` |
 | Delivery | Async generation; one private presigned MP4 URL on completion |
 | Execution | `POST /v1/generations`, separate `GET /v1/generations/{id}` |
@@ -22,12 +23,18 @@ is downloaded, transcoded, displayed, published, or inserted into `ads`.
 
 The default freeform option lets the creator choose the visual style; the four
 named presets only guide the provider. The wrapper asks that the key subject
-remain legible at 360p. The output may have a soundtrack, which a future
-processor must strip before any public version. No reference uploads, edit,
+remain legible at 360p and explicitly requests synchronized AI-generated
+sound. A completed source without exactly one acceptable AAC track fails the
+downstream media contract; the full derivative preserves normalized audio and
+the hover derivative is physically silent. No reference uploads, edit,
 extension, web search grounding, HDR, model override, or arbitrary durations
 are accepted. Luma documents 360p as a lower-cost draft tier, but actual bytes,
 codec, run time and billable cost need real staging measurement. Treat a
-10-second generation as paid even if the output is rejected.
+10-second generation as paid even if the output is rejected. The published
+Luma draft price does not meet AdBattle's target of roughly twenty accepted
+10-second audiovisual drafts per dollar. This adapter is only a staging
+measurement path; the production cost candidate is a benchmarked self-hosted
+LTX pipeline.
 
 ## Request and review flow
 
@@ -49,7 +56,7 @@ aspect under the same UUID returns 409. `POST {"action":"status","job_id":"..."}
 shows only the caller's job and sanitized status, never a provider ID or URI.
 The endpoint only gives browser CORS to `http://localhost:8000`. It requires
 the exact staging `SUPABASE_URL` plus
-`ADBATTLE_AI_STAGING_ENABLED=video-drafts-v1`. User requests never call Luma.
+`ADBATTLE_AI_STAGING_ENABLED=video-audio-drafts-v2`. User requests never call Luma.
 
 The migration's insert trigger serializes quota decisions. It allows one
 attempt per user per UTC day and five attempts globally per UTC day. Rejected
@@ -119,10 +126,18 @@ manual review. A completed generation becomes `ready_for_processing`; the
 presigned URL remains private and is never returned to a user. It expires after
 about an hour and can be refreshed by another private generation GET.
 
+Provider completion is not proof that the soundtrack exists or passed review.
+The private processor independently downloads and hashes the source, requires
+one H.264 video stream plus one synchronized AAC track, fully decodes both,
+creates a 360p H.264/AAC full derivative and a silent hover derivative, and
+fails closed on missing, extra, unsupported, delayed, mismatched, or effectively
+silent audio.
+
 **Still to build:** a private processor must refresh and retrieve the signed
 URL, enforce a host allowlist, DNS/IP and redirect checks, byte/duration/codec
 bounds, and transcode a
-small preview, scan the actual media and audio, save it in private staging
+small preview, transcribe speech, scan the actual frames, transcript and
+non-speech audio/music/voice risks, save exact reviewed bytes in private staging
 storage, and expose it only after moderation and publication policy. A separate
 creator review/post flow, costs/billing display, accessible previews, lifecycle
 cleanup, operational alerts, and production policy/terms review are not in this

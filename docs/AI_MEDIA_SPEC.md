@@ -27,9 +27,9 @@ lower model bill. Measure actual provider usage before public pricing.
 | Task | Staging choice | Reason |
 | --- | --- | --- |
 | Image draft | OpenAI GPT Image 2.5 Flare, low quality | The Images API can use an approved Zero Data Retention project; downscale provider output to the site budget. Minor end users require parent/guardian consent. |
-| Exactly 10-second model video | Luma Agents Ray 3.2, 360p candidate | Staging job scaffold only. Published pay-as-you-go price is $0.18 for 10s standard 360p, subject to change. Under-13 access needs an explicit provider agreement or another backend. |
+| Exactly 10-second audiovisual model video | Luma Agents Ray 3.2, 360p compatibility probe only | Staging job scaffold only. The output must contain synchronized AI-generated audio or fail processing. Published pricing of $0.18 per 10s draft means 20 cost $3.60 before failures, so this route cannot satisfy the product cost target. Under-13 access needs an explicit provider agreement or another backend. |
 | All-ages motion alternative | AI-assisted animation from generated stills | Offline processor implemented for one or two approved JPEG/PNG stills: fixed pan/zoom, cut/dissolve, 10-second 360p derivatives. No account/API/gallery integration yet. It is not freeform model-generated motion. |
-| All-ages true video research | Self-hosted LTX-2.5 candidate | Its community license permits SaaS within conditions and has no stated end-user age floor. GPU cost, latency, output quality, downstream terms, and child-safety operation need validation before choosing it. |
+| All-ages true audiovisual video research | Self-hosted LTX-2.5 candidate | It generates synchronized video and audio and its community license permits commercial self-hosting under its revenue threshold. GPU cost, latency, low-resolution quality, failure rate, downstream terms, and child-safety operation must be benchmarked before promising 20 accepted drafts per dollar. |
 | OpenAI video | Do not start a Sora integration | OpenAI lists the Videos API and Sora 2 shutdown for 2026-09-24 with no replacement. |
 
 Sources: [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation),
@@ -37,6 +37,8 @@ Sources: [OpenAI image guide](https://developers.openai.com/api/docs/guides/imag
 [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data),
 [Luma video pricing](https://docs.agents.lumalabs.ai/guides/pricing),
 [Luma API terms](https://lumalabs.ai/legal/api-terms-of-use),
+[LTX open-source overview](https://docs.ltx.io/open-source-model/getting-started/overview),
+[LTX commercial license](https://ltx.io/model/license),
 [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
 Recheck model availability, price, and terms before deployment.
 
@@ -79,7 +81,7 @@ capacity, hosted verification, and provider approval.
 | Asset | Generation request | Public delivery limit | Behavior |
 | --- | --- | --- | --- |
 | Still image | One low-quality OpenAI image, 816×816 square or 1088×608 near-16:9 source | Canonical JPEG, 640×640 or 640×360, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. Preserve the whole wide source frame in the canonical resize. |
-| Video | Request one 10-second 16:9 or 9:16 clip at 360p; verify actual duration and frame rate | Silent H.264 MP4, 360p, <= 5 MiB; separate poster <= 100 KiB; separate 3–5-second muted hover clip, 12–15 fps, target 150–400 KiB and hard cap 500 KiB | Poster loads first. Hover starts after a short delay, only one in view plays, and leaves stop playback. Touch requires a tap. Full clip loads only on opening. |
+| Video | Request one 10-second 16:9 or 9:16 clip with synchronized AI-generated sound; use the lowest native generation profile that passes quality tests | H.264/AAC MP4, 360p delivery, <= 5 MiB; separate poster <= 100 KiB; separate 3–5-second audio-free hover clip, 12–15 fps, target 150–400 KiB and hard cap 500 KiB | Poster loads first. Hover stays silent and starts only after a short delay. Touch or the accessible play button opens the full clip; sound starts only after that deliberate action. |
 
 The video provider's original is kept private for provenance and processing;
 the public files are separate derivatives. A transcoded copy may not retain an
@@ -87,8 +89,9 @@ invisible provider watermark, so the interface explicitly labels generated
 media as AI-created. If the full file or poster cannot meet a public limit,
 hold the draft. If only the optional hover file misses its cap, use the still
 poster instead. Do not serve a full file through a small CSS box and call that
-a preview. Video audio is stripped in the first version;
-speech/music needs a separate rights and moderation path before release.
+a preview. The full derivative preserves one normalized AAC soundtrack; the
+hover derivative contains no audio. Speech, music, voice, and non-speech sound
+must pass a separate transcript/rights/audio-risk review before release.
 
 These public limits are an initial quality budget, not a promise that every
 prompt can produce a useful ad. A creator can reject the draft and use an
@@ -106,8 +109,9 @@ original upload instead. No automatic costly rerolls.
    total per UTC day; 1 video per user and 5 videos total per UTC day when a
    video backend exists. Provider-account spend limits remain an additional
    guard. Failed jobs do not silently retry paid generation.
-3. Only text-to-image and text-to-video are in the first version. No uploaded
-   likeness, voice, soundtrack, logo, or reference image is sent to a provider.
+3. Only text-to-image and text-to-audiovisual-video are in the first version.
+   The video model generates its own soundtrack. No uploaded likeness, voice,
+   soundtrack, logo, or reference image is sent to a provider.
    Prompt length is bounded, and the server owns the optional style wrapper, model,
    duration, and resolution. Client-supplied settings cannot raise them.
 4. The creator reviews the generated draft and may discard it. "Use image"
@@ -155,9 +159,10 @@ youngest audience. Provide reporting, prompt takedown, and child-safety
 escalation. Do not send known or suspected CSAM to a general moderation API.
 
 For video, sample frames over the entire clip, inspect visual text and all
-scene changes, verify the silent public derivative, and require a human to
-watch the entire final clip in the first video release. Review any retained
-source audio before any future audio-enabled release. Image-only moderation
+scene changes, transcribe all speech, review music/voice/non-speech audio risk,
+verify the exact H.264/AAC full derivative and silent hover derivative, and
+require a human to watch and listen to the entire final clip in the first
+video release. Image-only moderation
 cannot certify an entire moving clip. Preserve reviewer reasons and allow
 manual resolution without overwriting the original file or audit.
 
@@ -184,10 +189,16 @@ The AI-created page label is separate from both watermark versions.
    respective backend prerequisites are present, and never use the creation
    kill switch to hide provenance. Retain the private server key, server quota,
    mocked endpoint tests, and existing post/scan path.
-2. Make a dedicated Luma candidate video job, storage, and moderation design
+2. Keep the Luma adapter as an adult-only staging compatibility probe, not the
+   production cost solution. Build a dedicated audiovisual job, storage, and moderation design
    with an async worker/transcoder. Validate the REST generation ID, status,
    expiring output URL, and media bytes. Test duration and actual 360p billing
    with a real staging key under a small budget only after provider review.
+   In parallel, benchmark self-hosted LTX-2.5 at the fixed low-resolution
+   profile. At roughly $1 per GPU-hour, the 20-for-$1 target requires at least
+   20 accepted ten-second outputs per GPU-hour, including failures and model
+   load amortization; do not advertise the target until both portrait and
+   landscape runs demonstrate it.
 3. Add video-specific schema/RLS, private source and public derivatives,
    gallery rendering, poster-first loading, frame review, and an independent
    publication gate. Test safe and held outputs before any public toggle.
