@@ -160,15 +160,28 @@ Version `crop-grid-49-rgb-dhash128-v1` uses 49 regions: width and height each
 end. Each region has a 128-bit horizontal/vertical difference signature, a
 3×3 RGB color signature, and luminance contrast. Sampling is fixed at 254,016
 pixel reads per decoded image, with existing byte/dimension limits retained.
-A candidate must satisfy **all** of these conditions:
+A candidate must satisfy the aspect, contrast, and bit-diversity gates below,
+plus one of two distance/color rules. Migration
+`20260924022837_crop_color_supported_review.sql` adds the second rule without
+changing descriptors or requiring another backfill:
 
-- 128-bit Hamming distance at most 8 (the old 64-bit threshold is unchanged);
-- mean absolute RGB error at most 8/255 across the 27 color values;
+- **Strict:** 128-bit Hamming distance at most 8 and mean absolute RGB error
+  at most 8/255 across the 27 color values. This rule is unchanged.
+- **Color-supported:** distance 9–14, mean RGB error at most 5/255, and no
+  individual color value differing by more than 24/255. One side must be a
+  shortened region; this never broadens whole-to-whole matching.
 - region aspect ratios within a factor of 1.05;
 - luminance standard deviation at least 18 and 16–112 set hash bits.
 
+The old 64-bit whole-image threshold remains unchanged, and neither rule
+allows region-to-region comparisons.
+
 A hit becomes `review_similar`, with `match_method: crop_region` and region,
 distance, color-error, and version evidence in the existing scanner details.
+The updated matcher also records `matcher_version: crop-review-v2`,
+`match_rule: strict` or `color_supported`, and `color_error_max`. Consult
+`ad_scan_attempts.details` for the recorded duplicate result if a later safety
+scan replaces the ad's general moderation details.
 It never automatically rejects an ad or accuses someone of copying. Both
 safety and duplicate clearance plus verified-byte publication are still needed.
 The already approved cropped ad and previous review decisions are not rescanned
@@ -180,8 +193,44 @@ the new full-to-region comparison has distance 8/128 and color error 28/27
 and descriptors, not image bytes or account data. Tests also cover resized
 synthetic crops and unrelated/low-detail/color/aspect negative controls.
 This is limited evidence, not a measured production false-positive rate.
-Large/off-grid crops, rotations, overlays, borders, and heavily edited artwork
+The later staging `crop test` (ad #11, 2195×1906) exposed a gap between sampled
+sizes: the closest region of original #2 differs by 13/128 bits, color-error
+sum 110/27 (about 4.07), and maximum individual color error 16. The original
+rule returned no match. The color-supported rule holds that pair for review
+in either upload order, without relying on the previously indexed crop #7.
+The regression reproduces the old miss before applying the migration and
+checks the new scan RPC does not enqueue publication, even after safety passes.
+Negative controls include three unrelated stored staging creatives, generated
+textures, color/distance boundaries, aspect, contrast, and bit diversity.
+This fallback can increase review volume; it is not proof of copying.
+Some off-grid crops, large crops, rotations, overlays, borders, and heavily edited artwork
 can still evade this bounded matcher. Existing dHash collisions remain possible.
+
+### Follow-up rollout for an already backfilled project
+
+After review and merge, apply only
+`20260924022837_crop_color_supported_review.sql` to **adbattle-test**. It
+replaces the private matching helper and preserves its permissions. No Edge
+Function redeploy, new fingerprint version, or repeated backfill is needed.
+It does not change existing ads, fingerprints, audit rows, or publication
+queues. In particular, the already approved `crop test` remains approved.
+
+Before another upload, use this read-only check to compare the existing
+missed crop directly to its original (IDs below are staging fixtures):
+
+```sql
+select duplicate_private.crop_match(c.crop_fingerprint, o.crop_fingerprint) as match
+from public.ad_image_fingerprints c
+join public.ad_image_fingerprints o on o.ad_id = 2
+where c.ad_id = 11;
+```
+
+Expect `match_rule: color_supported`, distance 13, submitted region 0,
+matched region 42, and color-error sum 110. This proves the updated matcher,
+not a new upload flow: re-uploading identical bytes will exercise exact SHA
+matching, and a nearly identical upload may match ad #11 through the older
+whole-image path. Inspect the scan attempt's `match_method` and `crop_match`
+before claiming the crop fallback was exercised by a new browser submission.
 
 ### Staging rollout after review and merge
 
