@@ -125,7 +125,7 @@ test('missing, unknown, minor, wrong scope and expired records fail closed', asy
       'ordinary_post', 'creator_profile', 'connect_onboarding',
       'payout', 'all', '', null])
       assert.equal(await decide(db, adult, scope), false, String(scope));
-    for (const route of ['luma_video', 'still_animation', 'none', '', null])
+    for (const route of ['wan21_t2v', 'still_animation', 'none', '', null])
       assert.equal(await decide(db, adult, 'ai_image_generate', route),
         false, String(route));
     assert.equal(await decide(db, child), false);
@@ -143,17 +143,17 @@ test('provider route and action grants are separate; invalid pairs cannot be iss
   const db = await setup();
   try {
     await assess(db, adult);
-    const luma = await grant(db, adult, 'ai_video_create', 'luma_video');
-    assert.equal(await decide(db, adult, 'ai_video_create', 'luma_video'), true);
+    const wan21 = await grant(db, adult, 'ai_video_create', 'wan21_t2v');
+    assert.equal(await decide(db, adult, 'ai_video_create', 'wan21_t2v'), true);
     assert.equal(await decide(db, adult, 'ai_video_create', 'still_animation'), false);
-    assert.equal(await decide(db, adult, 'ai_video_dispatch', 'luma_video'), false);
+    assert.equal(await decide(db, adult, 'ai_video_dispatch', 'wan21_t2v'), false);
     assert.equal(await decide(db, adult, 'ai_image_generate', 'openai_images'), false);
     await assert.rejects(
       grant(db, adult, 'ai_video_create', 'openai_images'),
       /age_scope_provider_route/,
     );
     await assert.rejects(
-      grant(db, adult, 'ordinary_post', 'luma_video'),
+      grant(db, adult, 'ordinary_post', 'wan21_t2v'),
       /age_scope_provider_route/,
     );
     await grant(db, adult, 'ordinary_upload', 'none');
@@ -163,8 +163,8 @@ test('provider route and action grants are separate; invalid pairs cannot be iss
     // The trusted service role can immediately revoke a route under RLS.
     await db.exec('reset role; set role service_role');
     await db.query('update age_private.capability_grants set revoked_at=now() where id=$1',
-      [luma]);
-    assert.equal(await decide(db, adult, 'ai_video_create', 'luma_video'), false);
+      [wan21]);
+    assert.equal(await decide(db, adult, 'ai_video_create', 'wan21_t2v'), false);
   } finally { await db.close(); }
 });
 
@@ -186,7 +186,7 @@ test('public handle and Connect onboarding have distinct none-route grants, sepa
       /age_scope_provider_route/,
     );
     await assert.rejects(
-      grant(db, adult, 'connect_onboarding', 'luma_video'),
+      grant(db, adult, 'connect_onboarding', 'wan21_t2v'),
       /age_scope_provider_route/,
     );
     await grant(db, adult, 'payout', 'none');

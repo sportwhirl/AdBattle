@@ -26,27 +26,30 @@ code, and no output directory exists. Example errors include `WRONG_DURATION`,
 
 | File | Output | Hard size cap |
 | --- | --- | ---: |
-| `full.mp4` | 640×360 or 360×640, H.264, 24 fps, silent, exactly 10 seconds | 5 MiB |
-| `hover.mp4` | Same dimensions, H.264, 13 fps, first four seconds, silent; optional | 500 KiB |
+| `full.mp4` | 640×360 or 360×640, H.264, 24 fps, silent, exactly five seconds | 5 MiB |
+| `hover.mp4` | Same dimensions, H.264, 13 fps, first three seconds, silent; optional | 400 KiB |
 | `poster.jpg` | Same dimensions, still frame at 0.5 seconds | 100 KiB |
 
 Input must be a regular, non-symlink MP4 file at most 30 MiB, with exactly one
-H.264 video stream, square pixels, an 8–12 second video duration, a frame rate
-between 12 and 60 fps, and a 16:9 or 9:16 ratio within 1%. The shorter side must be
+H.264 video stream, square pixels, a 4.5–5.5 second video duration, a frame rate
+between 12 and 60 fps, and either exact 16:9 or 9:16, or Wan's native
+832×480 or 480×832 aspect, with at most 0.01 absolute ratio variation. The shorter side must be
 at least 360 pixels; input resolution is capped at 2,073,600 pixels. Audio on
 the source is allowed but excluded from both output videos. Source metadata,
 including title, comment, artist, chapters, and creation time, is excluded.
 The source is fully decoded before derivative generation. A corrupt, oversized,
-or nonconforming file fails before publication. Sources shorter than 10 seconds
-hold the final frame to reach exactly 10 seconds; sources longer than 10 seconds
-are trimmed at 10 seconds. The first four source seconds form the hover clip.
+or nonconforming file fails before publication. Sources slightly shorter than five
+seconds hold the final frame to reach exactly five seconds; sources slightly
+longer are trimmed. The first three source seconds form the hover clip.
+Native 832×480 and 480×832 inputs are fitted with a narrow matte rather than
+stretched or cropped to the exact 360p delivery canvas.
 
 All files are prepared in a private staging directory. The script verifies
 their output streams, dimensions, durations, formats and byte caps, then
 publishes the files with one atomic, no-replacement directory rename.
 Failed processing deletes the staging directory; a preexisting output is never
 replaced. The source is copied to staging first, leaving the original intact.
-If hover exceeds 500 KiB, the script omits it and identifies `poster.jpg` as
+If hover exceeds 400 KiB, the script omits it and identifies `poster.jpg` as
 the hover fallback. If the full video or poster exceeds its cap, the request
 fails closed without publishing files.
 

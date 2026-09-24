@@ -1,146 +1,94 @@
-# Staging video draft jobs
+# Wan2.1 1.3B five-second video drafts (staging)
 
-This is a **code-only staging scaffold**. Do not apply the migration or deploy
-these functions to the production project. The only permitted project is
-`adbattle-test` (`nccqnrcdygujulrnwair`). No paid provider call occurs merely
-by applying the migration or receiving a user draft request. No generated video
-is downloaded, transcoded, displayed, published, or inserted into `ads`.
+**Code only, disabled.** The video and adult entitlement migrations are
+unapplied in `adbattle-test`. Neither Edge Function nor the GPU worker is
+deployed. This path does not create a post or public gallery asset.
 
-## Fixed draft contract
+## Creation modes
 
-| Item | Value |
-| --- | --- |
-| Provider | Luma Agents REST API candidate, subject to audience permission |
-| Model | `ray-3.2` |
-| Duration | `10s` |
-| Resolution | `360p` |
-| Aspect | `16:9` or `9:16` |
-| Delivery | Async generation; one private presigned MP4 URL on completion |
-| Execution | `POST /v1/generations`, separate `GET /v1/generations/{id}` |
-| Style | `freeform_simple` (default), `pixel_art`, `flat_illustration`, `simple_3d`, `hand_drawn` |
-| Prompt | 12–600 normalized characters; text only |
-
-The default freeform option lets the creator choose the visual style; the four
-named presets only guide the provider. The wrapper asks that the key subject
-remain legible at 360p. The output may have a soundtrack, which a future
-processor must strip before any public version. No reference uploads, edit,
-extension, web search grounding, HDR, model override, or arbitrary durations
-are accepted. Luma documents 360p as a lower-cost draft tier, but actual bytes,
-codec, run time and billable cost need real staging measurement. Treat a
-10-second generation as paid even if the output is rejected.
-
-## Request and review flow
-
-`ai-video-draft` is a signed-in user Edge Function (`verify_jwt = true`). It
-requires the server-owned Auth `app_metadata.ai_video_adult_test_approved` claim
-to be exactly `true` for creation. The worker checks the user's current server
-claim again immediately before dispatch. This is a staging adult-test gate,
-not a public age-verification or guardian-permission system. It
-accepts `POST` with `Authorization: Bearer <user access token>`, a valid client
-UUID and JSON:
-
-```json
-{"action":"create","request_id":"10000000-0000-4000-8000-000000000001","prompt":"A playful pencil dances around a bright notebook","aspect_ratio":"16:9","style":"freeform_simple"}
-```
-
-It returns a private job ID and `pending_review`. Retrying with the same user
-UUID and same normalized draft returns the same job. A changed prompt, style or
-aspect under the same UUID returns 409. `POST {"action":"status","job_id":"..."}`
-shows only the caller's job and sanitized status, never a provider ID or URI.
-The endpoint only gives browser CORS to `http://localhost:8000`. It requires
-the exact staging `SUPABASE_URL` plus
-`ADBATTLE_AI_STAGING_ENABLED=video-drafts-v1`. User requests never call Luma.
-
-The migration's insert trigger serializes quota decisions. It allows one
-attempt per user per UTC day and five attempts globally per UTC day. Rejected
-and failed jobs still count; another active job also occupies the user's slot
-across midnight. The request identity and output choices cannot be edited.
-Authenticated users have an owner-only RLS SELECT policy for safe columns and
-no direct write privileges. Provider IDs, signed URLs, prompts and reviewer names
-are not readable through the browser's table grants.
-
-**Manual pre-provider safety gate:** The worker's private `inspect` action
-returns the prompt and hash to a trusted staging operator. The operator checks
-the prompt for prohibited or unsafe ad requests, rights to depict people and
-brands, minors, sexual content, hate, violence, fraud, false claims and other
-app/provider restrictions, then either rejects it or approves the exact hash.
-The `approve` action requires the literal attestation below. The paid worker
-claims only approved rows with the same immutable hash. This is a deliberate
-human review gate, not an automatic classifier. No unattended review/approval
-cron exists. A review process and provider terms assessment are still needed
-before any public or youth-facing creation feature. Public video creation stays
-disabled. Luma is a candidate only; written provider permission for an app
-accessible by under-13 users, or another compatible provider, is required
-before that use case can be implemented.
-
-`ai-video-draft-worker` requires a secret header of at least 32 characters,
-`x-adbattle-video-worker-secret`, disallows requests with a browser Origin, and
-has `verify_jwt = false` because it authenticates the private worker secret.
-Provision `ADBATTLE_VIDEO_WORKER_SECRET` and `LUMA_AGENTS_API_KEY` as Edge Function
-secrets only in staging; never put them in frontend config. Its private POST
-actions are:
-
-| Action | Body fields | Effect |
+| Mode | Creation | Delivery |
 | --- | --- | --- |
-| `inspect` | `job_id` | Reads exact prompt/hash for review |
-| `approve` | `job_id`, `request_hash`, `reviewer`, `review_attestation` | Moves reviewed prompt to `queued` |
-| `reject` | `job_id`, `request_hash`, `reviewer` | Rejects without provider call |
-| `dispatch` | none | Claims at most one queued job and makes one paid POST |
-| `poll` | none | Claims at most one due generation GET |
+| Instant Draft | Animate one or two approved AI stills locally with FFmpeg | Silent five-second 360p MP4, poster and optional separate hover; no video model call |
+| Standard Ad | One text-to-video scene from [Wan-AI/Wan2.1-T2V-1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | Same bounded derivatives; this is the selected model-backed path |
+| Enhanced Ad | Two generated scenes edited into a single five-second ad | Planned only; not in the staging queue until cost, timing, moderation and trimming are measured |
 
-Approval attestation value:
+No audio is retained. The video model may draw text imperfectly; reliable
+typography needs a separate controlled composition stage. Style presets guide
+the prompt and do not change the fixed checkpoint, steps, frames or quotas.
 
-```text
-I reviewed this exact prompt against the AdBattle video safety rules
-```
+## Standard draft contract
 
-Invoke each worker action separately. A scheduler is intentionally not set up;
-staging operators can exercise dispatch and polling after review. A later
-scheduler must keep the secret private and respect the same project guard.
+- Model: the official Apache-2.0 Hugging Face **Wan2.1 T2V 1.3B** checkpoint,
+  downloaded to a private GPU host and served by a pinned LightX2V runtime.
+  Configure `--model_cls wan2.1 --task t2v` with the Wan T2V config and the
+  1.3B checkpoint. This is self-hosted inference, not the hosted Wan API and
+  not a distilled or 14B checkpoint. Use 81 frames at 16 fps and 480p
+  (`[480,832]` landscape, `[832,480]` portrait). Model and runtime revisions,
+  actual output dimensions and frame rate must be recorded in the GPU smoke
+  test. The official unoptimized 4090 benchmark is about four minutes for a
+  five-second 480p clip; AdBattle end-to-end latency is unmeasured.
+- Input: an authenticated, approved adult staging tester supplies a text
+  prompt, preset style, 16:9 or 9:16 aspect and a client request UUID. There
+  is **no source image** in this T2V request. The server creates an immutable
+  request hash and refuses caller-controlled model, duration, resolution,
+  inference steps, seed and media URLs.
+- Output: local 480p MP4 processed to silent five-second 360p H.264 (at most
+  5 MiB), JPEG poster (at most 100 KiB) and optional separate silent
+  three-second 13 fps hover MP4 (400 KiB cap, poster fallback). The original
+  and derivatives stay in the private `ai-video-drafts` bucket. The
+  `ready_for_processing` state means **awaiting video safety review**, not
+  approved for preview, posting or publication.
+- Staging quota: one request per user and five globally per UTC day, including
+  failed or rejected attempts. These are initial staging caps, not the desired
+  eventual allowance of 20 videos per user per day.
 
-## Unknown outcomes and processing gap
+## Private flow
 
-The worker changes `queued` to `dispatching` **before** POSTing. It never POSTs
-that job again if the request times out, crashes, returns malformed or oversized
-JSON, or loses its response. It records `dispatch_unknown` when possible and
-needs operator reconciliation against provider records. If saving a known
-generation ID fails, the worker retries only that database write, then logs
-the job ID and generation ID for private reconciliation. Do not reset the
-status to `queued` or generate a new UUID to work around uncertainty.
+1. Review the migrations against the hosted staging schema and apply
+   `20260923163511_ai_video_draft_jobs.sql` plus the adult entitlement
+   foundation **only** in `adbattle-test`, in reviewed migration order.
+   No production apply is part of this branch.
+2. `ai-video-draft` (`verify_jwt=true`) checks current Auth identity, a
+   server-owned adult tester claim and the exact `ai_video_create`/
+   `wan21_t2v` grant. It inserts `pending_review`, with an owner-scoped
+   status read. The exact staging URL and `video-drafts-v1` flag gate it.
+3. The private `ai-video-draft-worker` review function (`verify_jwt=false`)
+   requires `ADBATTLE_VIDEO_WORKER_SECRET` from an operator. `inspect` returns
+   the prompt and hash; `approve` or `reject` records an explicit review of
+   that hash. The approval attestation is:
 
-The response reader checks `Content-Length` and enforces a 128 KiB streaming
-limit before JSON parsing. A Luma response must identify Ray 3.2 and a video
-generation with a UUID. `queued` and `processing` are polled via GET; `failed`
-is terminal. `completed` requires exactly one video output with a bounded HTTPS
-URL. IP literals, local/opaque hosts, URL credentials, fragments, and oversized
-URLs are held for review. The worker does not fetch the URL. GET polling can be
-retried after a lease timeout, with a ten-minute processing deadline before
-manual review. A completed generation becomes `ready_for_processing`; the
-presigned URL remains private and is never returned to a user. It expires after
-about an hour and can be refreshed by another private generation GET.
+   `I reviewed this exact prompt against the AdBattle video safety rules`
 
-**Still to build:** a private processor must refresh and retrieve the signed
-URL, enforce a host allowlist, DNS/IP and redirect checks, byte/duration/codec
-bounds, and transcode a
-small preview, scan the actual media and audio, save it in private staging
-storage, and expose it only after moderation and publication policy. A separate
-creator review/post flow, costs/billing display, accessible previews, lifecycle
-cleanup, operational alerts, and production policy/terms review are not in this
-change. `ready_for_processing` is not an ad and not a public URL.
+4. A private GPU host runs `scripts/wan21_t2v_gpu_worker.py`. The service-only
+   `claim_wan21_video_job()` atomically claims one reviewed job. The worker
+   rechecks the current Auth adult claim and `ai_video_dispatch`/
+   `wan21_t2v` grant, submits **one T2V request without an image** to the
+   loopback LightX2V server, polls, processes and privately uploads the media.
+   Bind the native GPU API to `127.0.0.1`, with a filesystem root shared with
+   the bridge. Pin and verify the exact checkpoint and runtime before use.
+5. An ambiguous submission leaves `dispatching` or `dispatch_unknown` and is
+   never automatically requeued. Inspect GPU tasks, private objects and job
+   state before reconciliation. There is no scheduler, final video safety
+   scan, creator preview, post RPC or public publication gate in this slice.
 
-## Local verification and deployment boundary
+The GPU worker needs `SUPABASE_SERVICE_ROLE_KEY`,
+`ADBATTLE_AI_STAGING_ENABLED=video-drafts-v1` and `WAN21_SHARED_ROOT` on the
+private host. `WAN21_SERVER` can set another loopback port; default is
+`http://127.0.0.1:8001`. One worker process per GPU is the starting limit.
+These credentials must never appear in frontend config or the repository.
 
-Run `npm ci --ignore-scripts`, then `node --test tests/ai_video_draft.test.mjs`
-to check the real migration in PGlite and mocked REST responses. There is no
-hosted migration, real Luma call, browser integration or cron in these tests.
-After review, an operator may apply only the generated
-`migrations/20260923163511_ai_video_draft_jobs.sql` to **adbattle-test** and
-deploy only these two Edge Functions there. Review the hosted schema first,
-especially `auth.users` and table grants; do not run a broad migration reset.
-Configure the staging opt-in and secrets on that project only. Start with one
-test user and a manually reviewed prompt; inspect the private job and provider
-usage before considering a scheduler.
+## Capacity and release
 
-Provider references: [Luma Agents quickstart](https://docs.agents.lumalabs.ai/),
-[Ray 3.2 generation and response](https://docs.agents.lumalabs.ai/guides/videos/generation/),
-[Generations REST schema](https://docs.agents.lumalabs.ai/api/resources/generations/methods/create).
+20,000 videos/day averages 0.231 completed videos/second before peaks,
+moderation, retries and processing. At the published four-minute unoptimized
+4090 estimate, that is **about 56 continuously busy GPUs at perfect
+utilization** for Standard Ad alone. This is arithmetic, not a tested fleet
+size or cost quote. A lighter checkpoint lowers memory needs but does not by
+itself deliver quick latency at that volume. Benchmark the exact host and
+runtime, queue wait, output quality, cost and peak traffic before setting a
+turnaround promise or scaling the quota.
+
+Before any public or youth creation, implement age and guardian gates across
+all routes, video frame/text/duplicate screening, private owner previews,
+immutable ad submission and joint poster/video publication. The live site
+and production Supabase project remain outside this staging build.

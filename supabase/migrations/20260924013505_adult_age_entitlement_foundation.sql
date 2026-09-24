@@ -49,7 +49,7 @@ create table age_private.capability_grants (
     'connect_onboarding', 'payout'
   )),
   provider_route text not null
-    check (provider_route in ('openai_images', 'still_animation', 'luma_video', 'none')),
+    check (provider_route in ('openai_images', 'still_animation', 'wan21_t2v', 'none')),
   entitlement_version bigint not null check (entitlement_version > 0),
   granted_at timestamptz not null default now(),
   expires_at timestamptz not null,
@@ -64,7 +64,7 @@ create table age_private.capability_grants (
     (scope in ('ai_image_generate', 'ai_image_submit')
       and provider_route = 'openai_images') or
     (scope in ('ai_video_create', 'ai_video_dispatch', 'ai_video_publish')
-      and provider_route in ('still_animation', 'luma_video')) or
+      and provider_route in ('still_animation', 'wan21_t2v')) or
     (scope in ('ordinary_upload', 'ordinary_post', 'creator_profile',
       'financial_support', 'financial_seed', 'wallet_topup',
       'connect_onboarding', 'payout')

@@ -82,9 +82,9 @@ class StillAnimationTests(unittest.TestCase):
         self.assertEqual(("h264", 640, 360),
                          (full[0]["codec_name"], full[0]["width"], full[0]["height"]))
         self.assertEqual(Fraction(24), Fraction(full[0]["avg_frame_rate"]))
-        self.assertAlmostEqual(10, float(full[0]["duration"]), delta=0.05)
+        self.assertAlmostEqual(5, float(full[0]["duration"]), delta=0.05)
         self.assertNotEqual(center_pixel(output / "full.mp4", 0.2),
-                            center_pixel(output / "full.mp4", 9.2))
+                            center_pixel(output / "full.mp4", 4.2))
         self._no_stage()
 
     def test_two_stills_dissolve_and_optional_cut(self) -> None:
@@ -92,8 +92,8 @@ class StillAnimationTests(unittest.TestCase):
         animation.animate_stills([self.red, self.blue], output, orientation="landscape",
                                  transition="dissolve", motion="hold")
         early = center_pixel(output / "full.mp4", 1)
-        middle = center_pixel(output / "full.mp4", 5)
-        late = center_pixel(output / "full.mp4", 9)
+        middle = center_pixel(output / "full.mp4", 2.5)
+        late = center_pixel(output / "full.mp4", 4.5)
         self.assertGreater(early[0], 150)
         self.assertLess(early[2], 80)
         self.assertGreater(middle[0], 60)
@@ -103,8 +103,8 @@ class StillAnimationTests(unittest.TestCase):
         cut = self.root / "cut"
         animation.animate_stills([self.red, self.blue], cut, orientation="landscape",
                                  transition="cut", motion="drift-left")
-        self.assertGreater(center_pixel(cut / "full.mp4", 4.8)[0], 150)
-        self.assertGreater(center_pixel(cut / "full.mp4", 5.2)[2], 150)
+        self.assertGreater(center_pixel(cut / "full.mp4", 2.3)[0], 150)
+        self.assertGreater(center_pixel(cut / "full.mp4", 2.7)[2], 150)
 
     def test_square_still_to_portrait_and_motion_presets(self) -> None:
         square = self.root / "square.png"
