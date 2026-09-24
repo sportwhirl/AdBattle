@@ -1,15 +1,17 @@
 # Staging AI image drafts
 
 This integration is limited to the adbattle-test project
-(nccqnrcdygujulrnwair) at http://localhost:8000. The public frontend feature
-flag `aiImageDrafts` and the server generation/posting flags are off. The
+(nccqnrcdygujulrnwair) at http://localhost:8000. The local staging frontend
+flag `aiImageDrafts` and the staging server generation/posting flags are on
+for the restricted adult test account. All production AI-creation flags remain
+off. The
 read-only AI provenance and private-media capabilities are separate controls;
 turning creation off must not erase an AI disclosure from an already-published
 ad or send staging uploads back to the public `ad-images` path.
 
 | Frontend capability | Local staging | Production | Purpose |
 | --- | --- | --- | --- |
-| `aiImageDrafts` | `false` | `false` | Shows and invokes AI image creation. |
+| `aiImageDrafts` | `true` | `false` | Shows and invokes AI image creation. |
 | `aiProvenanceReads` | `true` | `false` | Selects provenance-aware gallery RPCs independently of creation. |
 | `privateMediaPipeline` | `true` | `false` | Sends ordinary staging uploads through private pending storage. |
 
@@ -105,18 +107,20 @@ not override a broad `storage.objects` RLS policy. The forward migration
 `20260924015116_harden_ai_draft_storage.sql` in this branch adds restrictive
 SELECT, INSERT, UPDATE, and DELETE policies so browser roles cannot reach
 `ai-image-drafts` even if an older permissive policy also applies. That
-migration is **not applied to staging or production** at this checkpoint.
+migration was applied to adbattle-test on 2026-09-24 and remains unapplied to
+production.
 
-The test project has `generate-ai-image` v9 and
-`submit-ai-ad` v2 active with JWT verification on; the image scanners,
+The test project has `generate-ai-image` and `submit-ai-ad` active with JWT
+verification on; the image scanners,
 publisher, and owner-preview functions are also deployed (see
 `PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
 generation or posting. The hosted function now requests 816×816 or 1088×608
-sources, while the image feature flags remain off. Inspect the
-exact project and private bucket settings before enabling those flags. The
+sources. The staging flags were enabled only after the private-storage, JWT,
+entitlement, quota, and disabled-path checks passed. The
 publisher's matching secret, queue wakeup,
-and scheduled sweep are installed. An ordinary staging image ad completed
-the hosted scan and publication flow; no AI-generated ad has done so.
+and scheduled sweep are installed. Staging AI ad 15 completed generation,
+submission, both hosted scans, canonical-hash publication, and the public
+AI-provenance read path on 2026-09-24.
 Prefer deploying from the reviewed repository checkout so the function bundle
 resolves every relative import. If the Dashboard editor is used instead,
 `generate-ai-image` requires `_shared/http.ts` and
@@ -125,21 +129,17 @@ resolves every relative import. If the Dashboard editor is used instead,
 `_shared/storage-scan-policy.ts`. A function whose shared files are missing is
 not a successful deployment.
 
-Before setting either server enable flag, apply
-`20260924015116_harden_ai_draft_storage.sql` once to **adbattle-test** and
-verify that both `anon` and `authenticated` are denied draft-bucket SELECT,
-INSERT, UPDATE, and DELETE while `service_role` retains access. Then deploy the
-hardened `generate-ai-image` and `submit-ai-ad` source from the same reviewed
-commit with JWT verification enabled. Those code changes and the forward
-migration are pending, not hosted evidence. Apply the exact file through the
-Dashboard SQL editor; do **not** use a generic `supabase db push`. Local and
-hosted migration identifiers are already remapped, and the repository also
-contains earlier intentionally unhosted AI-video and age-entitlement
-migrations that are not part of this rollout. With the server flags still off, verify an
-authenticated request returns the disabled 503 response without contacting the
-provider. Separately confirm the hosted JWT gateway rejects a request with no
-valid authorization token with 401; do not infer that result from the function
-handler's flag-check order.
+Before the server flags were enabled,
+`20260924015116_harden_ai_draft_storage.sql` was applied once to
+**adbattle-test**. Both `anon` and `authenticated` were verified unable to
+SELECT, INSERT, UPDATE, or DELETE draft-bucket objects, while `service_role`
+retained access. The hardened `generate-ai-image` and `submit-ai-ad` sources
+from the reviewed merge commit were deployed with JWT verification enabled.
+An authenticated disabled-path request returned 503 without contacting the
+provider, and the hosted JWT gateway independently rejected a request without
+valid authorization with 401. The repository still contains intentionally
+unhosted AI-video and future age-entitlement migrations that are not part of
+this rollout; do **not** use a generic `supabase db push`.
 
 Set `OPENAI_API_KEY` as an Edge Function secret and set
 `ADBATTLE_AI_IMAGE_ENABLED=true` and `ADBATTLE_AI_IMAGE_POST_ENABLED=true`
@@ -172,11 +172,13 @@ pinned decoder/encoder on the new 1088×608 pixel-art and 816×816 smooth
 inputs. It produced decodable 640×360 and 640×640 JPEGs of 9,703 and 11,827
 bytes in 109 and 143 ms, respectively. The wide fixture checks that both
 colored source edges survive the resize. The temporary probe was removed and
-the exact v5 real-function source restored as v9 with JWT verification on;
-the endpoint returned 503 with generation disabled before this probe.
-This does not establish behavior on real provider or high-entropy images, or
-the full function's resource use. No hosted provider generation and complete
-AI publication flow has been verified yet. If preview expires, the saved
+the reviewed real-function source was deployed with JWT verification on; the
+endpoint returned 503 while generation was disabled. A later restricted
+staging smoke generated one 640×640 canonical JPEG (43,776 bytes) with
+`gpt-image-2.5-flare`, then published it only after one safety-provider check
+and one duplicate scan. This establishes the complete hosted flow for that
+single benign fixture, not representative cost, latency, or behavior across
+high-entropy images. If preview expires, the saved
 request ID can obtain a fresh signed URL without another image call.
 
 After a lost generation response, keep the saved request ID and prompt. The
