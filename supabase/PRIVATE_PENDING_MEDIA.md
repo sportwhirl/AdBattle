@@ -71,8 +71,20 @@ Vault-backed queue INSERT wakeup trigger and every-minute sweep cron were
 installed as hosted migration `20260924001553`. A secret-authenticated empty
 sweep returned HTTP 200 (`completed:0`, `deferred:0`), while the same request
 without the secret returned 401. The queue is empty. AI generation and posting
-feature flags remain off. This is not an end-to-end hosted publication test or
-an all-ages release.
+feature flags remain off. This is not an AI generation test or an all-ages
+release.
+
+The first authenticated posting smoke on 2026-09-24 covered both outcomes.
+Ad #9 (`ooga`) passed duplicate screening but was held for manual safety
+review of health efficacy claims in its image. Its source stayed private,
+with no public URL, public object, or publication queue row. Ad #10
+(`neutral screenshot`) passed both scanners and was approved about 6.1 seconds
+after submission. Its 66,258-byte private source and public copy both exist;
+the safety, duplicate-fingerprint, and recorded published SHA-256 values agree,
+the public URL names the published path, and the queue row was consumed.
+The publisher POST returned HTTP 200. This verifies the ordinary image hold
+and success paths in hosted staging; it does not exercise paid AI generation,
+both possible scan completion orders, or fault/retry behavior.
 
 ## Remaining staging steps
 
@@ -86,8 +98,8 @@ an all-ages release.
 3. Monitor HTTP delivery as well as the scheduled SQL run;
    `cron.job_run_details` success alone proves only SQL dispatch. Alert if
    queue age exceeds several minutes, the worker repeatedly returns 503, or
-   `publishing` becomes stuck. Test both scan completion orders, a review
-   hold, changed private bytes, retry after upload, owner/stranger previews,
+   `publishing` becomes stuck. Test the alternate scan completion order,
+   changed private bytes, retry after upload, owner/stranger previews,
    public-bucket write denial, and a legacy approved ad. Test Seed/Support on
    an approved staging ad to check wallet behavior.
 4. Before an approved adult staging AI test, verify the hosted JPEG processor
