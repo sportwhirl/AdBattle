@@ -6,9 +6,15 @@ import { sha256Hex } from "../_shared/image-fingerprint.ts";
 const PRIVATE_BUCKET = "ad-pending-images";
 const PUBLIC_BUCKET = "ad-images";
 function secretMatches(actual: string | null, expected: string | undefined) {
-  if (!expected || expected.length < 32 || !actual || actual.length !== expected.length) return false;
+  // The Dashboard's multiline secret field may retain one copied terminal LF.
+  // HTTP header values cannot contain it; preserve every other secret byte.
+  const normalizedExpected = expected?.endsWith("\n") ? expected.slice(0, -1) : expected;
+  if (!normalizedExpected || normalizedExpected.length < 32 || !actual ||
+      actual.length !== normalizedExpected.length) return false;
   let difference = 0;
-  for (let i = 0; i < expected.length; i++) difference |= actual.charCodeAt(i) ^ expected.charCodeAt(i);
+  for (let i = 0; i < normalizedExpected.length; i++) {
+    difference |= actual.charCodeAt(i) ^ normalizedExpected.charCodeAt(i);
+  }
   return difference === 0;
 }
 

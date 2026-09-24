@@ -90,8 +90,9 @@ The private buckets now exist. The test project has `generate-ai-image` v1 and
 publisher, and owner-preview functions are also deployed (see
 `PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
 generation or posting. Inspect the exact project and private bucket settings
-before enabling those flags. The publisher still needs its matching Edge secret,
-queue wakeup, and scheduled sweep before end-to-end posting can be tested.
+before enabling those flags. The publisher's matching secret, queue wakeup,
+and scheduled sweep are installed; a fresh eligible ad has not yet completed
+the hosted scan and publication flow.
 The dashboard editor may need the shared http.ts file copied locally, as
 described for existing functions in the Supabase README.
 

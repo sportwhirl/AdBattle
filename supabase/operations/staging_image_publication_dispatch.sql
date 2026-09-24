@@ -1,4 +1,6 @@
--- REVIEW-ONLY staging dispatch setup for AdBattle. DO NOT run until
+-- Applied to adbattle-test on 2026-09-24 as hosted migration 20260924001553.
+-- Keep as a staging operations record. DO NOT reapply or run in production.
+-- Originally guarded on this prerequisite:
 -- ADBATTLE_IMAGE_PUBLISHER_SECRET (Edge Functions > Secrets) holds the SAME
 -- value as the already created adbattle_image_publisher_secret (Vault).
 -- The existing adbattle_project_url Vault value must identify the test ref.

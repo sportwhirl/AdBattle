@@ -38,7 +38,7 @@ function bucket(sourceBytes, state, name) {
 }
 
 async function worker({ privateBytes=png, publicBytes=null, scanHash, beforeState='pending', sweep=false,
-                        aiSource=null, aiPostSha=null }={}) {
+                        aiSource=null, aiPostSha=null, configuredSecret=secret }={}) {
   const goodHash=await sha256Hex(png);
   const expectedSha=scanHash || goodHash;
   const state={calls:[],publicBytes,complete:0,eligibleFilter:null};
@@ -74,7 +74,7 @@ async function worker({ privateBytes=png, publicBytes=null, scanHash, beforeStat
   let handler;
   script.runInNewContext({
     Deno:{env:{get:key=>({SUPABASE_URL:projectUrl,SUPABASE_SERVICE_ROLE_KEY:'service',
-      ADBATTLE_IMAGE_PUBLISHER_SECRET:secret})[key]},serve:fn=>{handler=fn;}},
+      ADBATTLE_IMAGE_PUBLISHER_SECRET:configuredSecret})[key]},serve:fn=>{handler=fn;}},
     createClient:()=>admin,loadOwnedImage,sha256Hex,Request,Response,Blob,Uint8Array,Number,
     console:{error(){}},
     jsonResponse:(_req,body,status=200)=>Response.json(body,{status}),
@@ -92,6 +92,12 @@ test('publisher verifies fresh private and public bytes before finalizing', asyn
   assert.equal(result.body.status,'approved');
   assert.equal(result.state.complete,1);
   assert.ok(result.state.calls.find(c=>c[0]==='public' && c[1]==='download'));
+});
+
+test('publisher accepts the exact header when Dashboard saved one terminal LF', async () => {
+  const result=await worker({configuredSecret:`${secret}\n`});
+  assert.equal(result.status,200);
+  assert.equal(result.body.status,'approved');
 });
 
 test('changed pending object cannot be copied or published', async () => {

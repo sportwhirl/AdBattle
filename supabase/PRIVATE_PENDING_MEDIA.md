@@ -42,7 +42,7 @@ fail. Publication requires this hash to match both scanners and the fresh
 private bytes. This route still requires the separate adult staging claim and
 server post enable flag. See `AI_IMAGE_DRAFTS.md`.
 
-## Test-project rollout snapshot (2026-09-23)
+## Test-project rollout snapshot (2026-09-24)
 
 Project `nccqnrcdygujulrnwair` (`adbattle-test`) has the four image
 migrations in order: `20260923162944_ai_image_draft_quota.sql`,
@@ -60,29 +60,30 @@ the Storage API; their `image_url` fields are now empty strings. Ad #5 remains
 Approved public images were preserved.
 
 Hosted test-project functions are active: `scan-ad` v13 and
-`scan-ad-duplicate` v12 (`verify_jwt=false`), `publish-ad-image` v1
+`scan-ad-duplicate` v12 (`verify_jwt=false`), `publish-ad-image` v3
 (`verify_jwt=false`), `pending-ad-previews` v8 (`verify_jwt=true`), and
 `generate-ai-image` and `submit-ai-ad` v1 (`verify_jwt=true`). The existing
-safety and duplicate scan webhooks remain active. A dedicated 64-character
-publisher secret was generated into staging Vault without displaying its value;
-the matching Edge secret, queue INSERT trigger, and publication sweep cron are
-still absent. The queue is empty. AI generation and posting feature flags
-remain off. This is not an end-to-end hosted publication test or an all-ages
-release.
+safety and duplicate scan webhooks remain active. The dedicated publisher
+secret is stored in staging Vault and Edge Secrets. The Dashboard saved one
+terminal newline with the Edge value, so the worker discards exactly that
+newline from its configured value before comparing the HTTP header. A
+Vault-backed queue INSERT wakeup trigger and every-minute sweep cron were
+installed as hosted migration `20260924001553`. A secret-authenticated empty
+sweep returned HTTP 200 (`completed:0`, `deferred:0`), while the same request
+without the secret returned 401. The queue is empty. AI generation and posting
+feature flags remain off. This is not an end-to-end hosted publication test or
+an all-ages release.
 
 ## Remaining staging steps
 
 1. Keep public posting disabled. Verify private-bucket access, public-bucket
    write denial, and owner/stranger previews using anon and authenticated
    clients. Confirm the staging frontend points only to the test project.
-2. Set `ADBATTLE_IMAGE_PUBLISHER_SECRET` in the publisher Edge Function to the
-   existing staging Vault value named `adbattle_image_publisher_secret`. The
-   review-only `operations/staging_image_publication_dispatch.sql` uses that Vault secret
-   at call time for an INSERT wakeup on the durable queue and a once-per-minute
-   sweep. It is hard-coded to the **test project** and must not be applied to
+2. The installed staging-only `operations/staging_image_publication_dispatch.sql`
+   reads the Vault secret at call time. Do not reapply it or apply it to
    production. Keep the existing safety/duplicate webhooks in place. The
    worker reads only `ad_id` from a wakeup and reloads the authoritative row.
-3. Check that an empty sweep reaches `publish-ad-image` with HTTP 200;
+3. Monitor HTTP delivery as well as the scheduled SQL run;
    `cron.job_run_details` success alone proves only SQL dispatch. Alert if
    queue age exceeds several minutes, the worker repeatedly returns 503, or
    `publishing` becomes stuck. Test both scan completion orders, a review
