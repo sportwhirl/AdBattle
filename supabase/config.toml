@@ -1,0 +1,24 @@
+project_id = "adbattle"
+
+[functions.create-checkout-session]
+verify_jwt = true
+
+[functions.create-wallet-checkout]
+verify_jwt = true
+
+[functions.support-from-wallet]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.settle-wallet-support]
+verify_jwt = false
+
+[functions.scan-ad]
+verify_jwt = false
+
+[functions.scan-ad-duplicate]
+verify_jwt = false
+# Database Webhook: public.ads INSERT -> POST /functions/v1/scan-ad-duplicate
+# Header: x-adbattle-duplicate-scanner-secret: <private secret>

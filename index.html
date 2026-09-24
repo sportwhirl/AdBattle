@@ -28,7 +28,7 @@ header {
 .topbar {
     width: min(1200px, 94%);
     margin: auto;
-    padding: 22px 0;
+    padding: 12px 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -36,13 +36,65 @@ header {
 }
 
 .logo {
-    font-size: 1.8rem;
-    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: min(240px, 25vw);
+    min-width: 185px;
+    height: 104px;
+    padding: 0;
+    border: 0;
+    background: transparent;
     cursor: pointer;
 }
 
-.logo span {
-    color: #654cff;
+.logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.icon-button,
+.seed-count,
+.money {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5em;
+}
+
+.icon-button::before,
+.seed-count::before,
+.money::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 1.75em;
+    height: 1.75em;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.seed-mark::before,
+.seed-count::before {
+    background-image: url("./assets/seed-icon.png");
+}
+
+.support-mark::before,
+.money::before {
+    background-image: url("./assets/support-icon.png");
+}
+
+nav .icon-button::before {
+    width: 1.6em;
+    height: 1.6em;
+}
+
+.stats .seed-count,
+.stats .money {
+    justify-content: flex-start;
 }
 
 nav {
@@ -174,7 +226,7 @@ nav .post-button:hover {
     font-size: .9rem;
 }
 
-.like-count {
+.seed-count {
     color: #666;
     font-weight: normal;
 }
@@ -187,7 +239,7 @@ nav .post-button:hover {
     font-weight: bold;
 }
 
-.gallery.show-likes .like-count {
+.gallery.show-seeds .seed-count {
     font-weight: bold;
     color: #202124;
 }
@@ -201,7 +253,7 @@ nav .post-button:hover {
     margin-top: 15px;
 }
 
-.like-button,
+.seed-button,
 .support-button {
     padding: 12px;
     border-radius: 9px;
@@ -210,27 +262,34 @@ nav .post-button:hover {
     cursor: pointer;
 }
 
-.like-button {
+.seed-button {
     border: 1px solid #ccc;
     background: white;
     color: #222;
 }
 
-.like-button:hover {
+.seed-button:hover {
     background: #f5f5f5;
 }
 
-.like-button.liked {
-    background: #202124;
-    border-color: #202124;
-    color: white;
+.seed-button.seeded {
+    background: #edf8df;
+    border-color: #79a64a;
+    color: #254014;
 }
 
-.like-button:disabled {
+.seed-button:disabled {
     opacity: .5;
     cursor: not-allowed;
     background: #f3f3f3;
     color: #777;
+}
+
+.seed-button.seeded:disabled {
+    opacity: 1;
+    background: #edf8df;
+    border-color: #79a64a;
+    color: #254014;
 }
 
 .support-button {
@@ -241,6 +300,18 @@ nav .post-button:hover {
 
 .support-button:hover {
     background: #543bea;
+}
+
+.support-button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.action-explainer {
+    margin: 9px 2px 0;
+    color: #6b6b6b;
+    font-size: .82rem;
+    line-height: 1.4;
 }
 
 /* OWNER CONTROLS */
@@ -370,9 +441,73 @@ nav .post-button:hover {
     border-radius: 11px;
 }
 
+.creator-attribution {
+    margin: 9px 0 0;
+    color: #666;
+    font-size: .9rem;
+}
+
+.creator-attribution a {
+    color: #4f3bd4;
+    font-weight: 700;
+    text-decoration: none;
+}
+
 .support-question {
     font-weight: 700;
-    margin-bottom: 11px;
+    margin-bottom: 5px;
+}
+
+.support-help {
+    margin: 0 0 13px;
+    color: #666;
+    font-size: .88rem;
+    line-height: 1.45;
+}
+
+.support-selected {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 4px 0 8px;
+    font-size: .92rem;
+}
+
+.support-selected output {
+    color: #3f2ab7;
+    font-size: 1.08rem;
+    font-weight: 800;
+}
+
+.support-range {
+    width: 100%;
+    accent-color: #654cff;
+    cursor: pointer;
+}
+
+.support-range:disabled {
+    cursor: not-allowed;
+}
+
+.support-landmarks {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 4px 0 13px;
+    color: #777;
+    font-size: .75rem;
+}
+
+.support-landmarks span {
+    text-align: center;
+}
+
+.custom-support-label {
+    display: block;
+    margin: 4px 0 6px;
+    font-size: .88rem;
+    font-weight: 700;
 }
 
 .amount-entry {
@@ -383,6 +518,10 @@ nav .post-button:hover {
     border-radius: 9px;
     padding: 0 13px;
     margin-bottom: 10px;
+}
+
+.amount-entry[hidden] {
+    display: none;
 }
 
 .amount-entry:focus-within {
@@ -404,6 +543,19 @@ nav .post-button:hover {
     background: transparent;
 }
 
+.support-picker-message {
+    min-height: 1.25em;
+    margin: 1px 0 9px;
+    color: #666;
+    font-size: .83rem;
+    line-height: 1.4;
+}
+
+.support-picker-message.error {
+    color: #a12626;
+    font-weight: 700;
+}
+
 .confirm-support {
     width: 100%;
     padding: 12px;
@@ -413,6 +565,11 @@ nav .post-button:hover {
     color: white;
     font-weight: bold;
     cursor: pointer;
+}
+
+.confirm-support:disabled {
+    opacity: .55;
+    cursor: not-allowed;
 }
 
 .cancel-support {
@@ -575,6 +732,89 @@ nav .post-button:hover {
     cursor: wait;
 }
 
+.wallet-card {
+    margin-top: 22px;
+    padding: 18px;
+    border: 1px solid #dedbe9;
+    border-radius: 12px;
+    background: #f8f7ff;
+}
+
+.wallet-card h3 {
+    margin: 0 0 6px;
+}
+
+.wallet-card p {
+    margin: 0 0 12px;
+    color: #666;
+    line-height: 1.45;
+}
+
+.wallet-balance {
+    margin: 8px 0 14px;
+    font-size: 1.55rem;
+    font-weight: 800;
+}
+
+.topup-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px;
+}
+
+.topup-entry {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 9px;
+    padding: 0 12px;
+}
+
+.topup-entry:focus-within {
+    border-color: #654cff;
+}
+
+.topup-entry input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    padding: 11px 7px;
+    font: inherit;
+    font-weight: 700;
+    background: transparent;
+}
+
+.topup-button {
+    border: 0;
+    border-radius: 9px;
+    padding: 11px 15px;
+    background: #654cff;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.topup-button:disabled {
+    opacity: .65;
+    cursor: wait;
+}
+
+.wallet-message,
+.creator-balance-status {
+    margin-top: 10px;
+    color: #666;
+    font-size: .9rem;
+    line-height: 1.4;
+}
+
+.support-balance {
+    margin: -3px 0 11px;
+    color: #666;
+    font-size: .88rem;
+}
+
 
 
 /* IMMUTABLE ADS + MODERATION */
@@ -611,61 +851,6 @@ nav .post-button:hover {
 .moderation-badge.rejected,
 .moderation-badge.removed {
     background: #fdecec;
-}
-
-/* PROMOTION ALLOCATION */
-
-.promotion-allocation {
-    margin: 18px 0 20px;
-    padding: 16px;
-    border: 1px solid #e2e2e2;
-    border-radius: 11px;
-    background: #fafafa;
-}
-
-.promotion-allocation h3 {
-    margin: 0 0 6px;
-    font-size: 1rem;
-}
-
-.promotion-allocation p {
-    margin: 0 0 14px;
-    color: #666;
-    font-size: .9rem;
-    line-height: 1.45;
-}
-
-.promotion-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 12px;
-}
-
-.promotion-field label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: .88rem;
-}
-
-.promotion-field input {
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
-}
-
-.promotion-total {
-    margin-top: 12px;
-    font-weight: 700;
-}
-
-.promotion-total.invalid {
-    color: #b42318;
-}
-
-@media (max-width: 600px) {
-    .promotion-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* PROFILE */
@@ -737,6 +922,26 @@ nav .post-button:hover {
     color: #777;
 }
 
+/* ENVIRONMENT */
+
+.environment-label {
+    display: none;
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #7c2d12;
+    color: white;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    box-shadow: 0 3px 12px rgba(0,0,0,.24);
+}
+
+.environment-label.visible { display: block; }
+
 /* RETURN MESSAGE */
 
 .return-message {
@@ -762,6 +967,12 @@ nav .post-button:hover {
         padding: 17px 0;
     }
 
+    .logo {
+        width: 220px;
+        min-width: 0;
+        height: 96px;
+    }
+
     nav {
         justify-content: center;
         flex-wrap: wrap;
@@ -779,36 +990,53 @@ nav .post-button:hover {
     .stats {
         flex-direction: column;
     }
+
+    .topup-row {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
+<!-- Runtime configuration is injected in memory by scripts/serve_staging.py. -->
+<script src="./adbattle.local-config.js"></script>
+<script src="./frontend-config.js"></script>
+
 </head>
 
 <body>
 
+<div id="environmentLabel" class="environment-label" role="status">ADBATTLE TEST · LOCAL STAGING</div>
+<script>
+if (window.ADBATTLE_LOCAL_CONFIG?.environment === "staging") {
+    document.getElementById("environmentLabel").classList.add("visible");
+}
+</script>
+
 <header>
     <div class="topbar">
-        <div class="logo" onclick="showSupported()">
-            Ad<span>Battle</span>
-        </div>
+        <button class="logo" type="button" onclick="showSupported()" aria-label="AdBattle home">
+            <img src="./assets/adbattle-logo.png" alt="AdBattle">
+        </button>
 
         <nav>
             <button
                 id="supportedNav"
-                class="active"
+                class="active icon-button support-mark"
                 onclick="showSupported()"
             >
-                ⚡ Most Supported
+                Most Supported
             </button>
 
             <button
-                id="likedNav"
-                onclick="showMostLiked()"
+                id="seededNav"
+                class="icon-button seed-mark"
+                onclick="showMostSeeded()"
             >
-                ♡ Most Liked
+                Most Seeded
             </button>
 
             <button
                 class="post-button"
+                id="postNav"
                 onclick="showPost()"
             >
                 + POST AN AD
@@ -839,7 +1067,7 @@ nav .post-button:hover {
     <h2>Log In</h2>
 
     <p class="auth-description">
-        Log in to post ads, like ads and manage your profile.
+        Log in to post ads, seed ads and manage your profile.
     </p>
 
     <label>Email</label>
@@ -889,7 +1117,7 @@ nav .post-button:hover {
     <input
         id="newImage"
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png"
     >
 
     <div class="ai-video-help">
@@ -903,52 +1131,6 @@ nav .post-button:hover {
         </a>
     </div>
 
-    <div class="promotion-allocation">
-        <h3>Promotion budget</h3>
-
-        <p>
-            Every Support is fixed at 1% AdBattle, 9% creator,
-            and 90% promotion. Choose where that 90% promotion
-            budget should run. These percentages must total 100%.
-        </p>
-
-        <div class="promotion-grid">
-            <div class="promotion-field">
-                <label for="newYoutubePct">YouTube %</label>
-                <input id="newYoutubePct" type="number" min="0" max="100" step="1" value="20"
-                    oninput="updatePromotionTotal('new')">
-            </div>
-
-            <div class="promotion-field">
-                <label for="newInstagramPct">Instagram %</label>
-                <input id="newInstagramPct" type="number" min="0" max="100" step="1" value="20"
-                    oninput="updatePromotionTotal('new')">
-            </div>
-
-            <div class="promotion-field">
-                <label for="newTiktokPct">TikTok %</label>
-                <input id="newTiktokPct" type="number" min="0" max="100" step="1" value="20"
-                    oninput="updatePromotionTotal('new')">
-            </div>
-
-            <div class="promotion-field">
-                <label for="newSnapchatPct">Snapchat %</label>
-                <input id="newSnapchatPct" type="number" min="0" max="100" step="1" value="20"
-                    oninput="updatePromotionTotal('new')">
-            </div>
-
-            <div class="promotion-field">
-                <label for="newFacebookPct">Facebook %</label>
-                <input id="newFacebookPct" type="number" min="0" max="100" step="1" value="20"
-                    oninput="updatePromotionTotal('new')">
-            </div>
-        </div>
-
-        <div class="promotion-total" id="newPromotionTotal">
-            Total: 100%
-        </div>
-    </div>
-
     <label>Caption</label>
     <textarea
         id="newCaption"
@@ -957,7 +1139,7 @@ nav .post-button:hover {
 
     <div class="post-lock-notice">
         <strong>Final after posting:</strong>
-        the image, text, and promotion percentages cannot be edited or deleted after submission.
+        the image and text cannot be edited or deleted after submission.
         The ad is scanned before it becomes public or can receive Support.
     </div>
 
@@ -982,6 +1164,13 @@ nav .post-button:hover {
             Account
         </div>
 
+        <div id="creatorIdentity">
+            <label for="creatorHandle">Public creator handle</label>
+            <input id="creatorHandle" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="creator_name">
+            <button class="auth-secondary-button" onclick="saveCreatorHandle()">Save creator handle</button>
+            <div id="creatorHandleMessage" class="creator-balance-status"></div>
+        </div>
+
         <button
             class="logout-button"
             onclick="logout()"
@@ -989,11 +1178,58 @@ nav .post-button:hover {
             Log Out
         </button>
 
+        <div class="wallet-card">
+            <h3>AdBattle Balance</h3>
+
+            <p>
+                Add at least $10 to your balance, then support any ad with any amount from $0.01 up.
+                Creators receive 90%; AdBattle's 10% covers all Stripe service fees.
+            </p>
+
+            <div class="wallet-balance" id="walletBalance">
+                $0.00
+            </div>
+
+            <div class="topup-row">
+                <div class="topup-entry">
+                    <span>$</span>
+                    <input
+                        id="walletTopupAmount"
+                        type="number"
+                        min="10"
+                        max="10000"
+                        step="0.01"
+                        value="10.00"
+                        aria-label="Amount to add"
+                    >
+                </div>
+
+                <button
+                    class="topup-button"
+                    id="walletTopupButton"
+                    onclick="addWalletFunds()"
+                >
+                    Add Funds
+                </button>
+            </div>
+
+            <div class="wallet-message" id="walletMessage">
+                Your full top-up becomes available to support ads.
+            </div>
+        </div>
+
         <div class="payments-card">
             <h3>Payments</h3>
 
             <p>
-                Connect Stripe to receive support from your ads.
+                Connect Stripe to receive your 90% creator share.
+            </p>
+
+            <p>
+                Transfers are batched at $10, $25, $50, $100, then doubling,
+                or after 24 hours without new Support when at least $10 is pending.
+                Stripe fees never reduce your creator share, and fractional cents
+                roll into your next transfer.
             </p>
 
             <div
@@ -1001,6 +1237,13 @@ nav .post-button:hover {
                 id="paymentStatus"
             >
                 Checking payment setup...
+            </div>
+
+            <div
+                class="creator-balance-status"
+                id="creatorBalanceStatus"
+            >
+                Pending creator balance: $0.00
             </div>
 
             <button
@@ -1022,10 +1265,10 @@ nav .post-button:hover {
             </button>
 
             <button
-                id="myLikesTab"
-                onclick="profileSection('liked')"
+                id="mySeededTab"
+                onclick="profileSection('seeded')"
             >
-                Liked
+                Seeded
             </button>
 
             <button
@@ -1044,8 +1287,7 @@ nav .post-button:hover {
 </section>
 
 <!-- SUPABASE LIBRARY -->
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1"></script>
 
 <script>
 
@@ -1053,20 +1295,23 @@ nav .post-button:hover {
    SUPABASE
 ======================================== */
 
-const SUPABASE_URL =
-    "https://bmsrdzqprxvldltaislp.supabase.co";
+const APP_CONFIG = AdBattleConfig.resolve(
+    window.location,
+    window.ADBATTLE_LOCAL_CONFIG
+);
+const SUPABASE_URL = APP_CONFIG.supabaseUrl;
+const SUPABASE_PUBLISHABLE_KEY = APP_CONFIG.publishableKey;
+const PROJECT_REF = APP_CONFIG.projectRef;
+const FEATURES = APP_CONFIG.features;
 
-const SUPABASE_PUBLISHABLE_KEY =
-    "sb_publishable__DHmkTcq5Utga1QQHn1smg_09D9Nqrd";
-
-const db =
-    supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY
-    );
+const db = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+);
 
 let currentUser = null;
 let ads = [];
+let walletBalanceCents = 0;
 
 /* ========================================
    ELEMENTS
@@ -1102,14 +1347,49 @@ const paymentStatus =
 const setupPaymentsButton =
     document.getElementById("setupPaymentsButton");
 
+const walletBalance =
+    document.getElementById("walletBalance");
 
-const PROMOTION_PLATFORMS = [
-    ["youtube", "Youtube"],
-    ["instagram", "Instagram"],
-    ["tiktok", "Tiktok"],
-    ["snapchat", "Snapchat"],
-    ["facebook", "Facebook"]
-];
+const walletTopupAmount =
+    document.getElementById("walletTopupAmount");
+
+const walletTopupButton =
+    document.getElementById("walletTopupButton");
+
+const walletMessage =
+    document.getElementById("walletMessage");
+
+const creatorBalanceStatus =
+    document.getElementById("creatorBalanceStatus");
+
+function applyEnvironmentConfiguration() {
+    if (APP_CONFIG.environment === "staging") {
+        document.getElementById("environmentLabel").classList.add("visible");
+    }
+    if (!FEATURES.seeds) {
+        const seededNav = document.getElementById("seededNav");
+        const mySeededTab = document.getElementById("mySeededTab");
+        seededNav.disabled = true;
+        seededNav.title = "Seeding is unavailable.";
+        mySeededTab.disabled = true;
+        mySeededTab.title = seededNav.title;
+    }
+    if (!FEATURES.adImages) {
+        const postNav = document.getElementById("postNav");
+        postNav.disabled = true;
+        postNav.title = "Ad posting is unavailable in staging because ad-images is not deployed.";
+    }
+    if (!FEATURES.creatorOnboarding) {
+        setupPaymentsButton.disabled = true;
+        setupPaymentsButton.title = "Creator onboarding functions are not deployed in staging.";
+        paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+    }
+    if (!FEATURES.duplicateScreening) {
+        document.getElementById("creatorIdentity").hidden = true;
+    }
+}
+
+applyEnvironmentConfiguration();
 
 function defaultPromotionAllocation() {
     return {
@@ -1121,99 +1401,450 @@ function defaultPromotionAllocation() {
     };
 }
 
-function getPromotionAllocation(prefix) {
-    const allocation = {};
+function formatCents(cents) {
+    return `$${(
+        Number(cents || 0) / 100
+    ).toFixed(2)}`;
+}
 
-    for (const [key, idName] of PROMOTION_PLATFORMS) {
-        const input =
-            document.getElementById(
-                `${prefix}${idName}Pct`
-            );
+const SUPPORT_FIBONACCI_CENTS = Object.freeze([
+    1, 2, 3, 5, 8, 13, 21, 34, 55,
+    89, 144, 233, 377, 610, 987,
+    1597, 2584, 4181
+]);
+const SUPPORT_CUSTOM_INDEX =
+    SUPPORT_FIBONACCI_CENTS.length;
+const CUSTOM_SUPPORT_MINIMUM_CENTS = 5000;
 
-        const value =
-            Number(input?.value);
+function supportPresetCents(index) {
+    const normalized = Number(index);
+    return Number.isInteger(normalized) &&
+        normalized >= 0 &&
+        normalized < SUPPORT_FIBONACCI_CENTS.length
+            ? SUPPORT_FIBONACCI_CENTS[normalized]
+            : null;
+}
 
-        allocation[key] =
-            Number.isFinite(value)
-                ? Math.min(
-                    100,
-                    Math.max(0, value)
-                )
-                : 0;
+function supportPresetIndex(amountCents) {
+    const index =
+        SUPPORT_FIBONACCI_CENTS.indexOf(
+            Number(amountCents)
+        );
+    return index >= 0
+        ? index
+        : SUPPORT_CUSTOM_INDEX;
+}
+
+function pendingSupportKey() {
+    return `adbattle:pending-support:${PROJECT_REF}:${currentUser.id}`;
+}
+
+function pendingSupportAction(pending) {
+    return pending?.action === "seed"
+        ? "seed"
+        : "support";
+}
+
+function readPendingSupport() {
+    const key = pendingSupportKey();
+    let raw = localStorage.getItem(key);
+    const legacyKey = `adbattle:pending-support:${currentUser.id}`;
+    if (!raw) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+            // Move, never discard, a request saved before storage was project-scoped.
+            localStorage.setItem(key, legacy);
+            localStorage.removeItem(legacyKey);
+            raw = legacy;
+        }
     }
-
-    return allocation;
+    return raw ? JSON.parse(raw) : null;
 }
 
-function promotionAllocationTotal(allocation) {
-    return Object.values(allocation)
-        .reduce(
-            (sum, value) =>
-                sum + Number(value || 0),
-            0
+function reconcileRecordedSeedPending(
+    userSeededAdIds
+) {
+    if (!currentUser) return;
+
+    try {
+        const pending = readPendingSupport();
+        if (
+            pending &&
+            pendingSupportAction(pending) === "seed" &&
+            userSeededAdIds.has(Number(pending.ad_id))
+        ) {
+            // The authoritative marker proves the one-time action completed,
+            // even if the browser lost the original response.
+            localStorage.removeItem(pendingSupportKey());
+        }
+    } catch (error) {
+        console.error(
+            "Couldn't reconcile the saved Seed request:",
+            error
         );
+    }
 }
 
-function updatePromotionTotal(prefix) {
-    const allocation =
-        getPromotionAllocation(prefix);
-
-    const total =
-        promotionAllocationTotal(allocation);
-
-    const totalElement =
-        document.getElementById(
-            `${prefix}PromotionTotal`
-        );
-
-    if (!totalElement) return;
-
-    totalElement.innerText =
-        `Total: ${total}%`;
-
-    totalElement.classList.toggle(
-        "invalid",
-        Math.abs(total - 100) > 0.001
-    );
+async function submitWalletSupport(
+    adId,
+    amountCents,
+    action = "support"
+) {
+    const key = pendingSupportKey();
+    let pending = readPendingSupport();
+    const existingAction = pendingSupportAction(pending);
+    if (
+        pending &&
+        (
+            pending.ad_id !== adId ||
+            pending.amount_cents !== amountCents ||
+            existingAction !== action
+        )
+    ) {
+        const pendingLabel =
+            existingAction === "seed"
+                ? "Seed"
+                : "Support";
+        throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} ${pendingLabel} for ad #${pending.ad_id} first. Retry that same action; it will not be charged twice.`);
+    }
+    if (!pending) {
+        pending = {
+            ad_id: adId,
+            amount_cents: amountCents,
+            request_id: crypto.randomUUID(),
+            action
+        };
+        // Persist BEFORE sending. If storage is unavailable, fail without spending.
+        localStorage.setItem(key, JSON.stringify(pending));
+    }
+    const { data, error } = await db.functions.invoke("support-from-wallet", { body: pending });
+    if (error || !data?.ok) {
+        throw new Error(await functionErrorMessage(error, data,
+            action === "seed"
+                ? "Seed could not be confirmed. Retry the same ad; it will not be charged twice."
+                : "Support could not be confirmed. Retry the same ad and amount."));
+    }
+    localStorage.removeItem(key);
+    return data;
 }
 
-function validatePromotionAllocation(prefix) {
-    const allocation =
-        getPromotionAllocation(prefix);
+function formatMicros(micros) {
+    const fixed = (
+        Number(micros || 0) / 1000000
+    ).toFixed(3);
 
-    const total =
-        promotionAllocationTotal(allocation);
+    return `$${
+        fixed.endsWith("0")
+            ? fixed.slice(0, -1)
+            : fixed
+    }`;
+}
 
-    if (Math.abs(total - 100) > 0.001) {
-        alert(
-            "Your YouTube, Instagram, TikTok, Snapchat and Facebook percentages must total 100%."
-        );
+function inputDollarsToCents(value) {
+    const normalized =
+        String(value ?? "").trim();
 
+    if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(normalized)) {
         return null;
     }
 
-    return allocation;
+    const cents =
+        Math.round(Number(normalized) * 100);
+
+    return Number.isSafeInteger(cents)
+        ? cents
+        : null;
 }
 
-function setPromotionAllocation(prefix, allocation) {
-    const safe = {
-        ...defaultPromotionAllocation(),
-        ...(allocation || {})
-    };
+async function functionErrorMessage(
+    error,
+    data,
+    fallback
+) {
+    let message =
+        data?.error ||
+        error?.message ||
+        fallback;
 
-    for (const [key, idName] of PROMOTION_PLATFORMS) {
-        const input =
-            document.getElementById(
-                `${prefix}${idName}Pct`
-            );
+    try {
+        if (error?.context) {
+            const body =
+                await error.context.json();
 
-        if (input) {
-            input.value =
-                Number(safe[key] ?? 0);
+            if (body?.error) {
+                message = body.error;
+            }
         }
+    } catch (bodyError) {
+        console.error(
+            "Couldn't read function error body:",
+            bodyError
+        );
     }
 
-    updatePromotionTotal(prefix);
+    return message;
+}
+
+/* ========================================
+   ADBATTLE WALLET
+======================================== */
+
+async function loadWalletBalance() {
+    const loadId = ++walletLoadId;
+    const userId = currentUser?.id;
+    if (!userId) {
+        walletBalanceCents = 0;
+        walletBalance.innerText = "$0.00";
+        walletMessage.innerText =
+            "Your full top-up becomes available to support ads.";
+        showWalletReturnMessage();
+        return;
+    }
+
+    // Read the receipt first so the following balance includes its committed credit.
+    try {
+        await reconcilePendingTopup();
+    } catch (error) {
+        console.error("Couldn't read top-up retry state:", error);
+    }
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
+
+    const {
+        data,
+        error
+    } = await db
+        .from("wallets")
+        .select("available_cents, status")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (currentUser?.id !== userId || loadId !== walletLoadId) return;
+    if (error) {
+        console.error(
+            "Couldn't load wallet balance:",
+            error
+        );
+
+        walletMessage.innerText =
+            "Couldn't load your balance right now.";
+        showWalletReturnMessage(false);
+        return;
+    }
+
+    walletBalanceCents =
+        Number(data?.available_cents) || 0;
+
+    walletBalance.innerText =
+        formatCents(walletBalanceCents);
+
+    walletMessage.innerText =
+        data?.status === "frozen"
+            ? "Your balance is on hold for payment review; Support is unavailable."
+            : "Your full top-up becomes available to support ads.";
+
+    showWalletReturnMessage(true, data?.status);
+}
+
+async function loadCreatorBalance() {
+    if (!currentUser) {
+        creatorBalanceStatus.innerText =
+            "Pending creator balance: $0.00";
+        return;
+    }
+
+    const {
+        data,
+        error
+    } = await db
+        .from("ad_settlement_state")
+        .select("pending_creator_micros")
+        .eq("creator_user_id", currentUser.id);
+
+    if (error) {
+        console.error(
+            "Couldn't load creator balance:",
+            error
+        );
+        return;
+    }
+
+    const pendingMicros =
+        (data || []).reduce(
+            (sum, row) =>
+                sum +
+                (Number(row.pending_creator_micros) || 0),
+            0
+        );
+
+    creatorBalanceStatus.innerText =
+        `Pending creator balance: ${formatMicros(pendingMicros)}`;
+}
+
+function pendingTopupKey() {
+    return `adbattle:pending-topup:${PROJECT_REF}:${currentUser.id}`;
+}
+
+function readPendingTopup() {
+    const raw = localStorage.getItem(pendingTopupKey());
+    return raw ? JSON.parse(raw) : null;
+}
+
+let walletLoadId = 0;
+// Page-local receipt evidence keeps refreshes from reverting to a verification
+// message after reconciliation removes the pending request. Never trust the URL.
+let recordedTopup = null;
+
+function showWalletReturnMessage(balanceLoaded = false, walletStatus = null) {
+    const result = new URLSearchParams(window.location.search).get("wallet");
+    if (result !== "success" && result !== "cancel") return;
+    if (!currentUser) {
+        showReturnMessage("Log in to check the result of your top-up.");
+        return;
+    }
+    if (!balanceLoaded) {
+        showReturnMessage("Your balance could not be verified. Refresh to check again before retrying your top-up.");
+        return;
+    }
+
+    let message;
+    let confirmed = false;
+    try {
+        if (readPendingTopup()) {
+            message = "Your top-up has not been verified yet. Its pending request has been preserved. Refresh to check again before retrying.";
+        } else if (recordedTopup?.key === pendingTopupKey()) {
+            message = `Your ${formatCents(recordedTopup.amount_cents)} top-up was recorded.`;
+            confirmed = recordedTopup.status === "paid";
+        } else {
+            message = "Checkout returned. Your recorded balance is shown below.";
+        }
+    } catch (error) {
+        message = "Your pending top-up could not be verified. Keep its saved request and refresh before retrying.";
+    }
+    const held = walletStatus === "frozen";
+    if (held) message += " Your balance is on hold for payment review; Support is unavailable.";
+    showReturnMessage(message, confirmed && !held);
+}
+
+const TOPUP_RETRY_LIMIT_MS = 20 * 60 * 60 * 1000;
+
+function assertPendingTopupRetryable(pending, now = Date.now()) {
+    const createdAt = Number(pending?.created_at_ms);
+    if (!Number.isFinite(createdAt)) {
+        throw new Error("This pending top-up has unknown age. Keep its request ID and reconcile it before trying another payment.");
+    }
+    const age = now - createdAt;
+    if (age < 0 || age >= TOPUP_RETRY_LIMIT_MS) {
+        throw new Error("This pending top-up is too old to retry safely. Keep its request ID and reconcile it; do not create another payment.");
+    }
+}
+
+function stripeTestSessionId(url) {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/(cs_test_[A-Za-z0-9]+)(?:\/|$)/);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "checkout.stripe.com" ||
+        parsed.username || parsed.password || (parsed.port && parsed.port !== "443") || !match) {
+        throw new Error("Stripe did not return an approved TEST Checkout URL.");
+    }
+    return match[1];
+}
+
+async function reconcilePendingTopup() {
+    if (!currentUser) return false;
+    const userId = currentUser.id;
+    const key = pendingTopupKey();
+    const raw = localStorage.getItem(key);
+    const pending = raw ? JSON.parse(raw) : null;
+    if (!pending?.checkout_session_id) return false;
+    const { data, error } = await db
+        .from("wallet_topups")
+        .select("amount_cents,status")
+        .eq("user_id", userId)
+        .eq("stripe_session_id", pending.checkout_session_id);
+    if (error) {
+        console.error("Couldn't reconcile pending top-up:", error);
+        return false;
+    }
+    // These rows are created atomically with the original credit. A later refund
+    // or dispute changes their status but does not make that Checkout uncertain.
+    if (data?.length === 1 &&
+        ["paid", "partially_refunded", "refunded", "disputed"].includes(data[0].status) &&
+        data[0].amount_cents === pending.amount_cents) {
+        // Another tab or auth change must not let this delayed read clear a new request.
+        if (currentUser?.id !== userId || localStorage.getItem(key) !== raw) return false;
+        localStorage.removeItem(key);
+        recordedTopup = { key, amount_cents: data[0].amount_cents, status: data[0].status };
+        return true;
+    }
+    return false;
+}
+
+async function addWalletFunds() {
+    if (!currentUser) {
+        showLogin();
+        return;
+    }
+
+    const amountCents = inputDollarsToCents(walletTopupAmount.value);
+    if (amountCents === null || amountCents < 1000) {
+        walletMessage.innerText = "The minimum account top-up is $10.00.";
+        walletTopupAmount.focus();
+        return;
+    }
+    if (amountCents > 1000000) {
+        walletMessage.innerText = "The maximum account top-up is $10,000.00.";
+        walletTopupAmount.focus();
+        return;
+    }
+
+    const key = pendingTopupKey();
+    let pending;
+    try {
+        pending = readPendingTopup();
+        if (pending && pending.amount_cents !== amountCents) {
+            throw new Error(`Resolve your pending ${formatCents(pending.amount_cents)} top-up first. Retry that same amount; it will not create a second Checkout.`);
+        }
+        if (pending) {
+            assertPendingTopupRetryable(pending);
+        }
+        if (!pending) {
+            pending = {
+                amount_cents: amountCents,
+                request_id: crypto.randomUUID(),
+                created_at_ms: Date.now()
+            };
+            // Persist BEFORE sending. If storage is unavailable, fail without creating Checkout.
+            localStorage.setItem(key, JSON.stringify(pending));
+        }
+    } catch (error) {
+        walletMessage.innerText = error instanceof Error ? error.message : "Couldn't save top-up retry state.";
+        return;
+    }
+
+    walletTopupButton.disabled = true;
+    walletTopupButton.innerText = "Opening Stripe...";
+    walletMessage.innerText = "Preparing your secure payment page...";
+
+    try {
+        const { data, error } = await db.functions.invoke("create-wallet-checkout", {
+            body: pending
+        });
+        if (error) {
+            throw new Error(await functionErrorMessage(error, data,
+                "Couldn't start the top-up. Retry the same amount."));
+        }
+        if (!data?.url) {
+            throw new Error(data?.error || "Stripe did not return a Checkout URL.");
+        }
+        pending.checkout_session_id = stripeTestSessionId(data.url);
+        // Persist the session before navigation so a reload can verify the exact credit.
+        localStorage.setItem(key, JSON.stringify(pending));
+        window.location.href = data.url;
+    } catch (error) {
+        console.error(error);
+        walletMessage.innerText = error instanceof Error ? error.message : "Couldn't start the top-up.";
+        walletTopupButton.disabled = false;
+        walletTopupButton.innerText = "Add Funds";
+    }
 }
 
 /* ========================================
@@ -1253,6 +1884,34 @@ function updateAccountButton() {
     }
 }
 
+async function loadCreatorHandle() {
+    if (!currentUser || !FEATURES.duplicateScreening) return;
+    const { data, error } = await db.from("creator_profiles")
+        .select("handle").eq("user_id", currentUser.id).maybeSingle();
+    if (error) {
+        document.getElementById("creatorHandleMessage").innerText =
+            "Creator name is unavailable; attribution will report it as missing.";
+        return;
+    }
+    document.getElementById("creatorHandle").value = data?.handle || "";
+}
+
+async function saveCreatorHandle() {
+    if (!currentUser || !FEATURES.duplicateScreening) return;
+    const handle = document.getElementById("creatorHandle").value.trim();
+    const message = document.getElementById("creatorHandleMessage");
+    if (!/^[A-Za-z0-9_]{1,30}$/.test(handle)) {
+        message.innerText = "Use 1–30 letters, numbers, or underscores.";
+        return;
+    }
+    const { error } = await db.from("creator_profiles").upsert({
+        user_id: currentUser.id,
+        handle
+    }, { onConflict: "user_id" });
+    message.innerText = error ? `Couldn't save creator name: ${error.message}` : "Creator name saved.";
+    if (!error) await loadAds();
+}
+
 async function handleProfileClick() {
     /*
         Re-check the current Supabase session when Profile is clicked.
@@ -1266,7 +1925,12 @@ async function handleProfileClick() {
     updateAccountButton();
 
     if (currentUser) {
-        await loadAds();
+        await Promise.all([
+            loadAds(),
+            loadCreatorHandle(),
+            loadWalletBalance(),
+            loadCreatorBalance()
+        ]);
         showProfile();
     } else {
         showLogin();
@@ -1328,7 +1992,11 @@ async function signup() {
         currentUser = data.user;
         updateAccountButton();
 
-        await loadAds();
+        await Promise.all([
+            loadAds(),
+            loadWalletBalance(),
+            loadCreatorBalance()
+        ]);
         showProfile();
     } else {
         message.innerText =
@@ -1373,7 +2041,11 @@ async function login() {
 
     updateAccountButton();
 
-    await loadAds();
+    await Promise.all([
+        loadAds(),
+        loadWalletBalance(),
+        loadCreatorBalance()
+    ]);
     showProfile();
 }
 
@@ -1381,6 +2053,13 @@ async function logout() {
     await db.auth.signOut();
 
     currentUser = null;
+    walletBalanceCents = 0;
+    walletBalance.innerText = "$0.00";
+    walletMessage.innerText =
+        "Your full top-up becomes available to support ads.";
+    creatorBalanceStatus.innerText =
+        "Pending creator balance: $0.00";
+    showWalletReturnMessage();
     updateAccountButton();
 
     await loadAds();
@@ -1395,6 +2074,11 @@ db.auth.onAuthStateChange(
             session?.user || null;
 
         updateAccountButton();
+
+        if (currentUser) {
+            loadWalletBalance();
+            loadCreatorBalance();
+        }
     }
 );
 
@@ -1423,6 +2107,20 @@ function createCard(ad, rank = null) {
             >
         </div>
 
+        ${
+            FEATURES.duplicateScreening
+                ? `
+                    <div class="creator-attribution">
+                        ${
+                            ad.creatorHandle
+                                ? `By <a href="#creator/${encodeURIComponent(ad.userId)}" onclick="showCreatorProfile('${encodeURIComponent(ad.userId)}'); return false">@${escapeHTML(ad.creatorHandle)}</a>`
+                                : "Creator name unavailable"
+                        }
+                    </div>
+                `
+                : ""
+        }
+
         <div class="caption">
 
             <h2>
@@ -1447,13 +2145,29 @@ function createCard(ad, rank = null) {
                                             : "Removed"
                             )}
                         </div>
+                        ${
+                            FEATURES.duplicateScreening
+                                ? ad.duplicateStatus === "duplicate_same_creator" && ad.duplicateOfAdId
+                                    ? `
+                                        <div class="owner-duplicate-message">
+                                            You already posted this image.
+                                            <button type="button" onclick="showExistingAd(${ad.duplicateOfAdId})">
+                                                View existing ad #${ad.duplicateOfAdId}
+                                            </button>
+                                        </div>
+                                    `
+                                    : ["review_identical", "review_similar"].includes(ad.duplicateStatus)
+                                        ? `<div class="owner-duplicate-message">Image match is being reviewed.</div>`
+                                        : ""
+                                : ""
+                        }
                     `
                     : ""
             }
 
             <div class="stats">
-                <span class="like-count">
-                    ♡ ${ad.likes.toLocaleString()} likes
+                <span class="seed-count">
+                    ${ad.seedCount.toLocaleString()} ${ad.seedCount === 1 ? "seed" : "seeds"}
                 </span>
 
                 <span class="money">
@@ -1464,31 +2178,72 @@ function createCard(ad, rank = null) {
             <div class="action-buttons">
 
                 <button
-                    class="like-button ${ad.liked ? "liked" : ""}"
-                    onclick="toggleLike(${ad.id})"
-                    ${ad.owner ? "disabled" : ""}
-                    title="${ad.owner ? "You can't like your own ad." : ""}"
+                    type="button"
+                    class="seed-button icon-button seed-mark ${ad.seeded ? "seeded" : ""}"
+                    onclick="seedAd(${ad.id}, this)"
+                    ${(
+                        !FEATURES.seeds ||
+                        ad.owner ||
+                        ad.seeded ||
+                        ad.moderationStatus !== "approved"
+                    ) ? "disabled" : ""}
+                    title="${
+                        !FEATURES.seeds
+                            ? "Seeding is unavailable."
+                            : ad.owner
+                                ? "You can't Seed your own ad."
+                                : ad.seeded
+                                    ? "This one-time Seed spent 1¢ from your balance and cannot be undone."
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Seed opens after safety approval."
+                                        : "Spend 1¢ from your AdBattle balance once. This cannot be undone."
+                    }"
+                    aria-label="${
+                        !FEATURES.seeds
+                            ? "Seeding is unavailable"
+                            : ad.owner
+                                ? "Your own ad cannot be Seeded"
+                                : ad.seeded
+                                    ? "Seeded once with one cent; this cannot be undone"
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Seeding opens after safety approval"
+                                        : "Seed this ad once with one cent; this cannot be undone"
+                    }"
+                    aria-describedby="actionExplainer-${ad.id}"
                 >
                     ${
-                        ad.owner
-                            ? "♡ Your Ad"
-                            : (ad.liked ? "♥ Liked" : "♡ Like")
+                        !FEATURES.seeds
+                            ? "Seeding unavailable"
+                            : ad.owner
+                                ? "Your Ad"
+                                : ad.seeded
+                                    ? "Seeded · 1¢"
+                                    : ad.moderationStatus !== "approved"
+                                        ? "Awaiting approval"
+                                        : "Seed · 1¢"
                     }
                 </button>
 
                 <button
-                    class="support-button"
+                    type="button"
+                    class="support-button icon-button support-mark"
                     onclick="openSupport(${ad.id}, this)"
                     ${ad.moderationStatus !== "approved" ? "disabled" : ""}
                     title="${ad.moderationStatus !== "approved" ? "Support opens after safety approval." : ""}"
+                    aria-label="Choose a Support amount"
+                    aria-describedby="actionExplainer-${ad.id}"
                 >
                     ${
                         ad.moderationStatus === "approved"
-                            ? "⚡ Support"
+                            ? "Support"
                             : "Awaiting approval"
                     }
                 </button>
 
+            </div>
+
+            <div class="action-explainer" id="actionExplainer-${ad.id}">
+                Seed spends 1¢ from your balance once per ad and can’t be undone. Support lets you choose more.
             </div>
 
 
@@ -1505,7 +2260,7 @@ function createCard(ad, rank = null) {
 function showSupported() {
     showGallery();
 
-    gallery.classList.remove("show-likes");
+    gallery.classList.remove("show-seeds");
     gallery.classList.add("show-support");
 
     pageTitle.innerText =
@@ -1527,31 +2282,62 @@ function showSupported() {
 }
 
 /* ========================================
-   MOST LIKED
+   MOST SEEDED
 ======================================== */
 
-function showMostLiked() {
+function showMostSeeded() {
+    if (!FEATURES.seeds) {
+        showSupported();
+        return;
+    }
     showGallery();
 
     gallery.classList.remove("show-support");
-    gallery.classList.add("show-likes");
+    gallery.classList.add("show-seeds");
 
     pageTitle.innerText =
-        "Most Liked";
+        "Most Seeded";
 
     pageDescription.innerText =
-        "The ads the internet likes most.";
+        "The ads people have seeded most.";
 
-    setNav("likedNav");
+    setNav("seededNav");
 
     const sorted =
         ads
             .filter(ad => ad.moderationStatus === "approved")
             .sort(
-                (a, b) => b.likes - a.likes
+                (a, b) => b.seedCount - a.seedCount
             );
 
     renderGallery(sorted);
+}
+
+function showCreatorProfile(encodedUserId) {
+    const userId = decodeURIComponent(encodedUserId);
+    const creatorAds = ads.filter(ad => ad.userId === userId && ad.moderationStatus === "approved");
+    const handle = creatorAds.find(ad => ad.creatorHandle)?.creatorHandle;
+    showGallery();
+    gallery.classList.remove("show-seeds");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = handle ? `@${handle}` : "Creator name unavailable";
+    pageDescription.innerText = "Approved ads by this creator.";
+    history.replaceState(null, "", `#creator/${encodeURIComponent(userId)}`);
+    renderGallery(creatorAds);
+}
+
+function showExistingAd(id) {
+    const existingAd = ads.find(ad => ad.id === id && ad.owner);
+    if (!currentUser || !existingAd) {
+        alert("That ad is not available in your account.");
+        return;
+    }
+    showGallery();
+    gallery.classList.remove("show-seeds");
+    gallery.classList.add("show-support");
+    pageTitle.innerText = "Your existing ad";
+    pageDescription.innerText = `Ad #${existingAd.id}`;
+    renderGallery([existingAd]);
 }
 
 /* ========================================
@@ -1578,74 +2364,117 @@ function renderGallery(list) {
 }
 
 /* ========================================
-   LIKE
+   SEED
 ======================================== */
 
-async function toggleLike(id) {
+async function seedAd(id, button) {
+    if (!FEATURES.seeds) {
+        alert("Seeding is unavailable.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
 
         document
             .getElementById("authMessage")
             .innerText =
-                "Log in to like ads.";
+                "Log in to Seed this ad with 1¢ from your AdBattle balance.";
 
         return;
     }
+
+    await loadWalletBalance();
 
     const ad =
         ads.find(ad => ad.id === id);
 
     if (!ad) return;
 
-    if (ad.owner) {
-        alert("You can't like your own ad.");
+    if (ad.moderationStatus !== "approved") {
+        alert("This ad is not approved for Seeding yet.");
         return;
     }
 
-    if (ad.liked) {
-        const { error } = await db
-            .from("likes")
-            .delete()
-            .eq("ad_id", id)
-            .eq("user_id", currentUser.id);
-
-        if (error) {
-            console.error(error);
-            alert(
-                "Couldn't remove like: " +
-                error.message
-            );
-            return;
-        }
-    } else {
-        const { error } = await db
-            .from("likes")
-            .insert({
-                ad_id: id,
-                user_id: currentUser.id
-            });
-
-        if (error) {
-            console.error(error);
-            alert(
-                "Couldn't save like: " +
-                error.message
-            );
-            return;
-        }
+    if (ad.owner) {
+        alert("You can't Seed your own ad.");
+        return;
     }
 
-    await loadAds();
-    refreshCurrentView();
+    if (ad.seeded) {
+        alert("You already permanently Seeded this ad with 1¢.");
+        return;
+    }
+
+    let pending;
+    try {
+        pending = readPendingSupport();
+    } catch (_error) {
+        alert("Browser storage is unavailable. Seeding is paused to protect against duplicate charges.");
+        return;
+    }
+
+    if (!pending && walletBalanceCents < 1) {
+        alert("You need at least 1¢ in your AdBattle balance to Seed this ad.");
+        return;
+    }
+
+    button.disabled = true;
+    button.innerText = "Seeding...";
+
+    try {
+        const data =
+            await submitWalletSupport(
+                id,
+                1,
+                "seed"
+            );
+
+        walletBalanceCents =
+            Number(data?.balance_cents) || 0;
+        walletBalance.innerText =
+            formatCents(walletBalanceCents);
+
+        await Promise.allSettled([
+            loadAds(),
+            loadCreatorBalance()
+        ]);
+        refreshCurrentView();
+
+        showReturnMessage(
+            data?.already_seeded
+                ? "This ad was already permanently Seeded. No additional cent was charged."
+                : "1¢ of Support recorded: 90% goes to the creator and 10% to AdBattle. Your one-time Seed can’t be undone.",
+            true
+        );
+    } catch (error) {
+        console.error(error);
+        alert(
+            error instanceof Error
+                ? error.message
+                : "Couldn't Seed this ad."
+        );
+
+        button.disabled = false;
+        let retryPending = null;
+        try {
+            retryPending = readPendingSupport();
+        } catch (_error) {
+            // The original error already explains the failed action.
+        }
+        button.innerText =
+            retryPending?.ad_id === id &&
+            pendingSupportAction(retryPending) === "seed"
+                ? "Retry Seed · 1¢"
+                : "Seed · 1¢";
+    }
 }
 
 /* ========================================
    SUPPORT
-   STRIPE CHECKOUT
+   ADBATTLE WALLET
 ======================================== */
 
-function openSupport(id, button) {
+async function openSupport(id, button) {
     if (!currentUser) {
         showLogin();
 
@@ -1656,6 +2485,8 @@ function openSupport(id, button) {
 
         return;
     }
+
+    await loadWalletBalance();
 
     const ad =
         ads.find(ad => ad.id === id);
@@ -1670,6 +2501,27 @@ function openSupport(id, button) {
         return;
     }
 
+    let pendingAtOpen;
+    try {
+        pendingAtOpen = readPendingSupport();
+    } catch (_error) {
+        alert("Browser storage is unavailable. Support is paused to protect against duplicate charges.");
+        return;
+    }
+
+    if (pendingAtOpen) {
+        const action =
+            pendingSupportAction(pendingAtOpen);
+        if (action !== "support") {
+            alert(`Resolve your pending ${formatCents(pendingAtOpen.amount_cents)} Seed for ad #${pendingAtOpen.ad_id} first. Retry Seed; it will not be charged twice.`);
+            return;
+        }
+        if (pendingAtOpen.ad_id !== id) {
+            alert(`Resolve your pending ${formatCents(pendingAtOpen.amount_cents)} Support for ad #${pendingAtOpen.ad_id} first. Retry that same ad and amount; it will not be charged twice.`);
+            return;
+        }
+    }
+
     document
         .querySelectorAll(".support-box")
         .forEach(box => box.remove());
@@ -1678,28 +2530,96 @@ function openSupport(id, button) {
         document.createElement("div");
 
     box.className = "support-box";
+    box.setAttribute("role", "group");
+    box.setAttribute(
+        "aria-labelledby",
+        `supportQuestion-${id}`
+    );
 
     box.innerHTML = `
-        <div class="support-question">
-            How much would you like to support?
+        <div class="support-question" id="supportQuestion-${id}">
+            Choose your Support
         </div>
 
-        <div class="amount-entry">
-            <span>$</span>
+        <p class="support-help">
+            Slide through Fibonacci amounts from 1¢ to $41.81. The final stop opens Custom $50+.
+        </p>
+
+        <div class="support-balance">
+            Available balance: ${formatCents(walletBalanceCents)}
+        </div>
+
+        <div class="support-picker">
+            <div class="support-selected">
+                <label for="supportSlider-${id}">Support amount</label>
+                <output
+                    id="supportSelection-${id}"
+                    for="supportSlider-${id}"
+                >$0.01</output>
+            </div>
 
             <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="5.00"
+                id="supportSlider-${id}"
+                class="support-range"
+                type="range"
+                min="0"
+                max="${SUPPORT_CUSTOM_INDEX}"
+                step="1"
+                value="0"
+                aria-describedby="supportPickerHelp-${id}"
+                aria-valuetext="$0.01"
+                aria-controls="supportCustomEntry-${id}"
+                aria-expanded="false"
             >
+
+            <div class="support-landmarks" aria-hidden="true">
+                <span>1¢</span>
+                <span>Custom $50+</span>
+            </div>
         </div>
 
-        <button class="confirm-support">
-            ⚡ Support
+        <div
+            id="supportCustomEntry-${id}"
+            class="custom-support-entry"
+            hidden
+        >
+            <label
+                class="custom-support-label"
+                for="supportCustom-${id}"
+            >
+                Enter a custom amount ($50.00 or more)
+            </label>
+
+            <div class="amount-entry">
+                <span aria-hidden="true">$</span>
+
+                <input
+                    id="supportCustom-${id}"
+                    class="custom-support-input"
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="50.00"
+                    aria-describedby="supportPickerHelp-${id}"
+                >
+            </div>
+        </div>
+
+        <div
+            id="supportPickerHelp-${id}"
+            class="support-picker-message"
+            role="status"
+            aria-live="polite"
+        ></div>
+
+        <button
+            type="button"
+            class="confirm-support icon-button support-mark"
+        >
+            Support $0.01
         </button>
 
-        <button class="cancel-support">
+        <button type="button" class="cancel-support">
             Cancel
         </button>
     `;
@@ -1708,8 +2628,23 @@ function openSupport(id, button) {
         .closest(".caption")
         .appendChild(box);
 
-    const input =
-        box.querySelector("input");
+    const picker =
+        box.querySelector(".support-picker");
+
+    const slider =
+        box.querySelector(".support-range");
+
+    const selection =
+        box.querySelector("output");
+
+    const customEntry =
+        box.querySelector(".custom-support-entry");
+
+    const customInput =
+        box.querySelector(".custom-support-input");
+
+    const pickerMessage =
+        box.querySelector(".support-picker-message");
 
     const confirm =
         box.querySelector(".confirm-support");
@@ -1717,22 +2652,125 @@ function openSupport(id, button) {
     const cancel =
         box.querySelector(".cancel-support");
 
-    input.focus();
+    let activePending = pendingAtOpen;
 
-    input.addEventListener(
+    function showPickerMessage(text, isError = false) {
+        pickerMessage.textContent = text;
+        pickerMessage.classList.toggle("error", isError);
+    }
+
+    function enterPendingMode(pending) {
+        activePending = pending;
+        picker.hidden = true;
+        customEntry.hidden = true;
+        confirm.disabled = false;
+        showPickerMessage(
+            `A previous ${formatCents(pending.amount_cents)} Support may already have been recorded. Retry this exact amount; the same request will not be charged twice.`
+        );
+        confirm.innerText =
+            `Retry ${formatCents(pending.amount_cents)} Support`;
+        confirm.focus();
+    }
+
+    function updatePicker() {
+        const presetCents =
+            supportPresetCents(slider.value);
+        const custom = presetCents === null;
+
+        customEntry.hidden = !custom;
+        slider.setAttribute(
+            "aria-expanded",
+            String(custom)
+        );
+
+        if (custom) {
+            slider.setAttribute(
+                "aria-valuetext",
+                "Custom amount, $50 or more"
+            );
+            const customCents =
+                inputDollarsToCents(
+                    customInput.value
+                );
+            const customIsValid =
+                customCents !== null &&
+                customCents >= CUSTOM_SUPPORT_MINIMUM_CENTS;
+            customInput.setAttribute(
+                "aria-invalid",
+                String(
+                    customCents !== null &&
+                    !customIsValid
+                )
+            );
+            selection.textContent =
+                customCents !== null
+                    ? formatCents(customCents)
+                    : "Custom $50+";
+            confirm.innerText =
+                customIsValid
+                    ? `Support ${formatCents(customCents)}`
+                    : "Enter custom amount";
+            confirm.disabled = !customIsValid;
+            if (
+                customCents !== null &&
+                customCents < CUSTOM_SUPPORT_MINIMUM_CENTS
+            ) {
+                showPickerMessage(
+                    "Custom Support must be at least $50.00.",
+                    true
+                );
+            } else {
+                showPickerMessage(
+                    "Type any amount of $50.00 or more."
+                );
+            }
+            return;
+        }
+
+        const formatted =
+            formatCents(presetCents);
+        customInput.setAttribute(
+            "aria-invalid",
+            "false"
+        );
+        selection.textContent = formatted;
+        slider.setAttribute(
+            "aria-valuetext",
+            formatted
+        );
+        confirm.innerText =
+            `Support ${formatted}`;
+        confirm.disabled = false;
+        showPickerMessage("");
+    }
+
+    if (activePending) {
+        enterPendingMode(activePending);
+        confirm.focus();
+    } else {
+        updatePicker();
+        slider.focus();
+    }
+
+    slider.addEventListener(
         "input",
         () => {
-            const amount =
-                parseFloat(input.value);
-
-            confirm.innerText =
-                amount > 0
-                    ? `⚡ Support $${amount.toFixed(2)}`
-                    : "⚡ Support";
+            updatePicker();
+            if (
+                Number(slider.value) ===
+                SUPPORT_CUSTOM_INDEX
+            ) {
+                customInput.focus();
+            }
         }
     );
 
-    input.addEventListener(
+    customInput.addEventListener(
+        "input",
+        updatePicker
+    );
+
+    customInput.addEventListener(
         "keydown",
         event => {
             if (event.key === "Enter") {
@@ -1742,85 +2780,115 @@ function openSupport(id, button) {
     );
 
     confirm.onclick = async () => {
-        const amount =
-            parseFloat(input.value);
+        if (confirm.disabled) return;
+        let pending;
+        try { pending = readPendingSupport(); }
+        catch (_error) {
+            alert("Cannot read pending Support. No payment was sent.");
+            return;
+        }
+
+        if (activePending) {
+            if (
+                !pending ||
+                pending.request_id !== activePending.request_id ||
+                pending.ad_id !== id ||
+                pending.amount_cents !== activePending.amount_cents ||
+                pendingSupportAction(pending) !== "support"
+            ) {
+                alert("The pending Support changed. Close this box and reopen Support before sending anything.");
+                return;
+            }
+        } else if (pending) {
+            alert("A pending wallet action appeared. Close this box and reopen it before sending anything.");
+            return;
+        }
+
+        const customSelected =
+            Number(slider.value) ===
+            SUPPORT_CUSTOM_INDEX;
+        const amountCents =
+            activePending
+                ? activePending.amount_cents
+                : customSelected
+                    ? inputDollarsToCents(
+                        customInput.value
+                    )
+                    : supportPresetCents(
+                        slider.value
+                    );
 
         if (
-            !amount ||
-            amount < 0.50
+            amountCents === null ||
+            amountCents < 1
         ) {
             alert(
-                "Minimum support amount is $0.50."
+                "The minimum Support is $0.01."
             );
 
-            input.focus();
+            (customSelected
+                ? customInput
+                : slider).focus();
+            return;
+        }
+
+        if (
+            customSelected &&
+            !activePending &&
+            amountCents < CUSTOM_SUPPORT_MINIMUM_CENTS
+        ) {
+            showPickerMessage(
+                "Custom Support must be at least $50.00.",
+                true
+            );
+            customInput.focus();
+            return;
+        }
+
+        if (amountCents > walletBalanceCents && !pending) {
+            showPickerMessage(
+                "Your AdBattle balance is too low. Add funds from your Profile.",
+                true
+            );
+
+            (customSelected
+                ? customInput
+                : slider).focus();
             return;
         }
 
         confirm.disabled = true;
         confirm.innerText =
-            "Opening payment...";
+            "Recording Support...";
 
         try {
-            const {
-                data,
-                error
-            } = await db.functions.invoke(
-                "create-checkout-session",
-                {
-                    body: {
-                        ad_id: id,
-                        amount: amount
-                    }
-                }
+            const data =
+                await submitWalletSupport(
+                    id,
+                    amountCents,
+                    "support"
+                );
+
+            walletBalanceCents =
+                Number(data?.balance_cents) || 0;
+
+            walletBalance.innerText =
+                formatCents(walletBalanceCents);
+
+            // Payment has been acknowledged: remove the retry button before
+            // refreshing unrelated UI, which may fail independently.
+            box.remove();
+            await Promise.allSettled([
+                loadAds(),
+                loadCreatorBalance()
+            ]);
+
+            refreshCurrentView();
+
+            showReturnMessage(
+                `${formatCents(amountCents)} Support recorded. 90% goes to the creator and 10% to AdBattle.`,
+                true
             );
-
-            if (error) {
-                console.error(
-                    "Checkout function error:",
-                    error
-                );
-
-                let detailedMessage =
-                    data?.error ||
-                    error.message ||
-                    "Couldn't start payment.";
-
-                /*
-                    Supabase FunctionHttpError stores the
-                    response body on error.context.
-                */
-                try {
-                    if (error.context) {
-                        const body =
-                            await error.context.json();
-
-                        if (body?.error) {
-                            detailedMessage =
-                                body.error;
-                        }
-                    }
-                } catch (bodyError) {
-                    console.error(
-                        "Couldn't read function error body:",
-                        bodyError
-                    );
-                }
-
-                throw new Error(
-                    detailedMessage
-                );
-            }
-
-            if (!data?.url) {
-                throw new Error(
-                    data?.error ||
-                    "Stripe did not return a Checkout URL."
-                );
-            }
-
-            window.location.href =
-                data.url;
 
         } catch (error) {
             console.error(error);
@@ -1828,23 +2896,40 @@ function openSupport(id, button) {
             alert(
                 error instanceof Error
                     ? error.message
-                    : "Couldn't start payment."
+                    : "Couldn't record this Support."
             );
 
             confirm.disabled = false;
+            let retryPending = null;
+            try {
+                retryPending =
+                    readPendingSupport();
+            } catch (_storageError) {
+                // The original error already explains the failed action.
+            }
 
-            const currentAmount =
-                parseFloat(input.value);
-
-            confirm.innerText =
-                currentAmount > 0
-                    ? `⚡ Support $${currentAmount.toFixed(2)}`
-                    : "⚡ Support";
+            if (
+                retryPending?.ad_id === id &&
+                pendingSupportAction(retryPending) === "support"
+            ) {
+                enterPendingMode(retryPending);
+            } else {
+                updatePicker();
+            }
         }
     };
 
-    cancel.onclick =
-        () => box.remove();
+    cancel.onclick = () => {
+        box.remove();
+        button.focus();
+    };
+
+    box.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            box.remove();
+            button.focus();
+        }
+    });
 }
 
 /* ========================================
@@ -1852,6 +2937,10 @@ function openSupport(id, button) {
 ======================================== */
 
 async function postAd() {
+    if (!FEATURES.adImages) {
+        alert("Ad posting is unavailable in staging because ad-images is not deployed.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
         return;
@@ -1869,17 +2958,20 @@ async function postAd() {
     const imageFile =
         imageInput.files[0];
 
+    // Retained only for the existing non-null ad schema. Wallet Support does
+    // not allocate money to promotion channels.
     const promotionAllocation =
-        validatePromotionAllocation("new");
-
-    if (!promotionAllocation) {
-        return;
-    }
+        defaultPromotionAllocation();
 
     if (!title || !caption || !imageFile) {
         alert(
             "Please add a title, image and caption."
         );
+        return;
+    }
+
+    if (!["image/jpeg", "image/png"].includes(imageFile.type)) {
+        alert("Please choose a JPEG or PNG image.");
         return;
     }
 
@@ -1939,18 +3031,22 @@ async function postAd() {
     const imageUrl =
         publicUrlData.publicUrl;
 
-    const {
-        error: adError
-    } = await db
+    const adInsert = {
+        user_id: currentUser.id,
+        title,
+        caption,
+        image_url: imageUrl,
+        promotion_allocation:
+            promotionAllocation
+    };
+
+    if (FEATURES.duplicateScreening) {
+        adInsert.image_storage_path = fileName;
+    }
+
+    const { error: adError } = await db
         .from("ads")
-        .insert({
-            user_id: currentUser.id,
-            title,
-            caption,
-            image_url: imageUrl,
-            promotion_allocation:
-                promotionAllocation
-        });
+        .insert(adInsert);
 
     if (adError) {
         console.error(
@@ -1977,15 +3073,12 @@ async function postAd() {
     document.getElementById("newCaption").value = "";
     imageInput.value = "";
 
-    setPromotionAllocation(
-        "new",
-        defaultPromotionAllocation()
-    );
-
     await loadAds();
 
     alert(
-        "Ad submitted. It is locked and will become public after the safety scan approves it."
+        FEATURES.duplicateScreening
+            ? "Ad submitted. It remains pending and private until both safety and duplicate screening are complete."
+            : "Ad submitted. It is locked and will become public after the safety scan approves it."
     );
 
     showProfile();
@@ -1997,6 +3090,10 @@ async function postAd() {
 ======================================== */
 
 function showPost() {
+    if (!FEATURES.adImages) {
+        alert("Ad posting is unavailable in staging because ad-images is not deployed.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
 
@@ -2027,6 +3124,12 @@ function showPost() {
 ======================================== */
 
 async function loadPaymentStatus() {
+    if (!FEATURES.creatorOnboarding) {
+        paymentStatus.innerText = "Creator onboarding is unavailable in local staging.";
+        setupPaymentsButton.innerText = "Unavailable in staging";
+        setupPaymentsButton.disabled = true;
+        return;
+    }
     if (!currentUser) {
         return;
     }
@@ -2143,6 +3246,10 @@ async function loadPaymentStatus() {
 }
 
 async function setupPayments() {
+    if (!FEATURES.creatorOnboarding) {
+        alert("Creator onboarding functions are not deployed in staging.");
+        return;
+    }
     if (!currentUser) {
         showLogin();
         return;
@@ -2227,16 +3334,21 @@ function showProfile() {
         "Your Profile";
 
     pageDescription.innerText =
-        "Your ads, likes and support.";
+        "Your ads, seeds and support.";
 
     setNav("profileNav");
 
+    loadWalletBalance();
+    loadCreatorBalance();
     loadPaymentStatus();
 
     profileSection("myads");
 }
 
 function profileSection(section) {
+    if (section === "seeded" && !FEATURES.seeds) {
+        section = "myads";
+    }
     document
         .querySelectorAll(".profile-tabs button")
         .forEach(
@@ -2255,13 +3367,13 @@ function profileSection(section) {
             ads.filter(ad => ad.owner);
     }
 
-    if (section === "liked") {
+    if (section === "seeded") {
         document
-            .getElementById("myLikesTab")
+            .getElementById("mySeededTab")
             .classList.add("active");
 
         list =
-            ads.filter(ad => ad.liked);
+            ads.filter(ad => ad.seeded);
     }
 
     if (section === "supported") {
@@ -2286,9 +3398,9 @@ function profileSection(section) {
                 "You haven't posted an ad yet.";
         }
 
-        if (section === "liked") {
+        if (section === "seeded") {
             message =
-                "You haven't liked any ads yet.";
+                "You haven't seeded any ads yet.";
         }
 
         if (section === "supported") {
@@ -2318,6 +3430,31 @@ function profileSection(section) {
 /* ========================================
    HELPERS
 ======================================== */
+
+function showReturnMessage(message, success = false) {
+    document
+        .querySelectorAll(".return-message")
+        .forEach(element => element.remove());
+
+    const notice =
+        document.createElement("div");
+
+    notice.className =
+        `return-message${success ? " success" : ""}`;
+
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    notice.setAttribute("aria-atomic", "true");
+
+    notice.textContent = message;
+
+    document
+        .querySelector(".hero")
+        .insertAdjacentElement(
+            "afterend",
+            notice
+        );
+}
 
 function hideAll() {
     gallery.style.display =
@@ -2368,11 +3505,11 @@ function refreshCurrentView() {
 
     if (
         document
-            .getElementById("likedNav")
+            .getElementById("seededNav")
             .classList
             .contains("active")
     ) {
-        showMostLiked();
+        showMostSeeded();
         return;
     }
 
@@ -2404,43 +3541,114 @@ function escapeHTML(text) {
 ======================================== */
 
 async function loadAds() {
-    /* GET ADS */
+    let publicAdData = [];
+    let ownerAdData = [];
 
-    const {
-        data: adData,
-        error: adError
-    } = await db
-        .from("ads")
-        .select("*")
-        .order(
-            "created_at",
-            { ascending: false }
-        );
+    if (FEATURES.duplicateScreening) {
+        const {
+            data,
+            error
+        } = await db.rpc("get_public_ads");
+        if (error) {
+            console.error("Couldn't load public ads:", error);
+            return;
+        }
+        publicAdData = data || [];
 
-    if (adError) {
-        console.error(
-            "Couldn't load ads:",
-            adError
-        );
-        return;
+        if (currentUser) {
+            const {
+                data: mine,
+                error: ownerAdError
+            } = await db.rpc("get_my_ads");
+            if (ownerAdError) {
+                console.error("Couldn't load your ads:", ownerAdError);
+                return;
+            }
+            ownerAdData = mine || [];
+        }
+    } else {
+        // Preserve the production query and RLS behavior used before duplicate
+        // screening. Authenticated creators still receive their own private ads.
+        const {
+            data,
+            error
+        } = await db
+            .from("ads")
+            .select("*")
+            .order("created_at", { ascending: false });
+        if (error) {
+            console.error("Couldn't load ads:", error);
+            return;
+        }
+        publicAdData = data || [];
     }
 
-    /* GET LIKES */
+    const adData = FEATURES.duplicateScreening
+        ? (() => {
+            // Owner rows replace their public copies, so approved owner ads
+            // appear once while private review rows remain creator-only.
+            const adRowsById = new Map(
+                publicAdData.map(ad => [ad.id, ad])
+            );
+            ownerAdData.forEach(ad => adRowsById.set(ad.id, ad));
+            return [...adRowsById.values()].sort(
+                (left, right) =>
+                    new Date(right.created_at).getTime() -
+                    new Date(left.created_at).getTime()
+            );
+        })()
+        : publicAdData;
 
-    const {
-        data: likeData,
-        error: likeError
-    } = await db
-        .from("likes")
-        .select("ad_id, user_id");
-
-    if (likeError) {
-        console.error(
-            "Couldn't load likes:",
-            likeError
-        );
-        return;
+    const ownerIds = [...new Set((adData || []).map(ad => ad.user_id).filter(Boolean))];
+    let profileData = [];
+    if (FEATURES.duplicateScreening && ownerIds.length) {
+        const { data, error: profileError } = await db
+            .from("creator_profiles")
+            .select("user_id,handle")
+            .in("user_id", ownerIds);
+        if (profileError) {
+            console.error("Couldn't load creator attribution:", profileError);
+        } else {
+            profileData = data || [];
+        }
     }
+    const creatorHandles = new Map(profileData.map(profile => [profile.user_id, profile.handle]));
+
+    /* GET PAID SEEDS */
+
+    let seedCountData = [];
+    let userSeedData = [];
+    if (FEATURES.seeds) {
+        const { data, error: seedCountError } =
+            await db.rpc("get_seed_counts");
+        if (seedCountError) {
+            console.error("Couldn't load Seed counts:", seedCountError);
+            return;
+        }
+        seedCountData = data || [];
+
+        if (currentUser) {
+            const { data: mine, error: userSeedError } =
+                await db.rpc("get_my_seeded_ad_ids");
+            if (userSeedError) {
+                console.error("Couldn't load your Seeds:", userSeedError);
+                return;
+            }
+            userSeedData = mine || [];
+        }
+    }
+    const seedCounts = new Map(
+        seedCountData.map(row => [
+            Number(row.ad_id),
+            Number(row.seed_count) || 0
+        ])
+    );
+    const userSeededAdIds = new Set(
+        userSeedData.map(row => Number(row.ad_id))
+    );
+    reconcileRecordedSeedPending(
+        userSeededAdIds
+    );
 
     /* GET THIS USER'S REAL SUPPORT HISTORY */
 
@@ -2470,18 +3678,8 @@ async function loadAds() {
     }
 
     ads = adData.map(ad => {
-        const adLikes =
-            likeData.filter(
-                like => like.ad_id === ad.id
-            );
-
-        const userLiked =
-            currentUser
-                ? adLikes.some(
-                    like =>
-                        like.user_id === currentUser.id
-                )
-                : false;
+        const isOwner = Boolean(currentUser && ad.user_id === currentUser.id);
+        const numericAdId = Number(ad.id);
 
         const userSupport =
             currentUser
@@ -2500,17 +3698,17 @@ async function loadAds() {
 
         return {
             id: ad.id,
+            userId: ad.user_id,
+            creatorHandle: creatorHandles.get(ad.user_id) || "",
             title: ad.title,
             caption: ad.caption || "",
             image: ad.image_url,
-            likes: adLikes.length,
-            liked: userLiked,
+            seedCount:
+                seedCounts.get(numericAdId) || 0,
+            seeded:
+                userSeededAdIds.has(numericAdId),
             support:
                 Number(ad.support_total) || 0,
-
-            promotionAllocation:
-                ad.promotion_allocation ||
-                defaultPromotionAllocation(),
 
             moderationStatus:
                 ad.moderation_status ||
@@ -2520,11 +3718,21 @@ async function loadAds() {
                 ad.moderation_reason ||
                 "",
 
+            // Duplicate moderation details are retained only in the owner's
+            // in-memory model and are never rendered on another viewer's card.
+            duplicateStatus:
+                isOwner && FEATURES.duplicateScreening
+                    ? ad.duplicate_status || "pending"
+                    : null,
+
+            duplicateOfAdId:
+                isOwner && FEATURES.duplicateScreening &&
+                Number.isSafeInteger(Number(ad.duplicate_of_ad_id))
+                    ? Number(ad.duplicate_of_ad_id)
+                    : null,
+
             userSupport,
-            owner:
-                currentUser
-                    ? ad.user_id === currentUser.id
-                    : false
+            owner: isOwner
         };
     });
 }
@@ -2534,10 +3742,12 @@ async function loadAds() {
 ======================================== */
 
 async function startApp() {
-    updatePromotionTotal("new");
-
     await checkUser();
-    await loadAds();
+    await Promise.all([
+        loadAds(),
+        loadWalletBalance(),
+        loadCreatorBalance()
+    ]);
 
     const params =
         new URLSearchParams(
@@ -2546,7 +3756,10 @@ async function startApp() {
 
     if (
         currentUser &&
-        params.has("stripe")
+        (
+            params.has("stripe") ||
+            params.has("wallet")
+        )
     ) {
         showProfile();
 
@@ -2555,6 +3768,23 @@ async function startApp() {
     }
 
     if (
+        params.get("wallet") === "success"
+    ) {
+        setTimeout(
+            async () => {
+                await loadWalletBalance();
+            },
+            1800
+        );
+
+        setTimeout(
+            async () => {
+                await loadWalletBalance();
+            },
+            5000
+        );
+
+    } else if (
         params.get("support") === "success"
     ) {
         showReturnMessage(

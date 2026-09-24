@@ -1,0 +1,36 @@
+name: Wallet health report
+
+on:
+  pull_request:
+    branches: [wallet-ledger-90-10]
+    paths:
+      - '.github/workflows/wallet-health.yml'
+      - 'supabase/staging/check_wallet_health.sql'
+      - 'tests/wallet_health.test.mjs'
+      - 'tests/wallet_monitor.test.mjs'
+      - 'tests/wallet_monitor_test.py'
+      - 'scripts/monitor_wallet_health.py'
+      - 'scripts/systemd/adbattle-wallet-monitor.*'
+      - 'supabase/staging/00_test_base.sql'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test tests/wallet_health.test.mjs tests/wallet_monitor.test.mjs
