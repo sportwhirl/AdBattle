@@ -1,6 +1,12 @@
 # AdBattle AI video architecture (design only)
 
-**Status:** proposed end-to-end video design, 2026-09-23. The image path now has code and migrations for private pending uploads, independent scans, and service-only publication; these changes have not been deployed. A separate staging-only video job scaffold and offline processor implement limited portions, but no video job is connected to ad posting, moderation, or the gallery. This document does not enable generation or authorize a public launch. Model availability, prices, provider responses, and limits must be rechecked at implementation time.
+**Status:** proposed end-to-end video design, 2026-09-24. The image path has
+been deployed and exercised in the test project for an ordinary held ad and
+an approved ad; production is unchanged. A separate code-only video job
+scaffold and offline processor implement limited portions, but no video job is
+connected to ad posting, moderation, or the gallery. This document does not
+enable generation or authorize a public launch. Model availability, prices,
+provider responses, and limits must be rechecked at implementation time.
 
 ## Release gate and scope
 
@@ -34,8 +40,8 @@ determines delivery bytes.
 
 ## Existing integration points
 
-- The image code and migration in this branch move new JPEG/PNG posts into private `ad-pending-images/<owner UUID>/<random UUID>.<ext>`. New ads start with empty `image_url`, a private `image_storage_path`, `image_publication_state='pending'`, and `moderation_status='pending_scan'`. Existing approved images retain their public `ad-images` URLs and `legacy_public` state. AI image submissions use a server-created canonical derivative in the same private pending bucket.
-- `scan-ad` and `scan-ad-duplicate` load the same owner-bound private object through the service role and independently record exact hashes. Both passes enqueue `ad_image_publication_queue`; its service-only claim checks that the hashes match. `publish-ad-image` rechecks the private bytes, copies them to service-write-only public `ad-images`, verifies that copy, and then calls a service-only finalization RPC to set `image_url`, `image_publication_state='public'`, and approval together. A failed copy keeps the row pending and queued for retry. The private image work is code and migration only, with no hosted deployment yet.
+- The image code and migrations in this branch move new JPEG/PNG posts into private `ad-pending-images/<owner UUID>/<random UUID>.<ext>` in staging. New ads start with empty `image_url`, a private `image_storage_path`, `image_publication_state='pending'`, and `moderation_status='pending_scan'`. Existing approved images retain their public `ad-images` URLs and `legacy_public` state. AI image submissions use a server-created canonical derivative in the same private pending bucket.
+- `scan-ad` and `scan-ad-duplicate` load the same owner-bound private object through the service role and independently record exact hashes. Both passes enqueue `ad_image_publication_queue`; its service-only claim checks that the hashes match. `publish-ad-image` rechecks the private bytes, copies them to service-write-only public `ad-images`, verifies that copy, and then calls a service-only finalization RPC to set `image_url`, `image_publication_state='public'`, and approval together. A failed copy keeps the row pending and queued for retry. The test project has verified an ordinary image hold and success path, but not a generated image or a video.
 - Fixed-column `get_public_ads[_with_ai]()` exposes only approved ads. `get_my_ads[_with_ai]()` exposes the owner's rows, and `pending-ad-previews` issues short-lived owner-checked private preview URLs; pending images have no public URL. Browser roles cannot directly SELECT scanner fields from `ads` or write the public ad bucket. `createCard()` still consumes an image URL, but the owner preview supplies it for pending cards. Wallet and Support eligibility still follows the ad's approval state.
 
 There is a critical publication invariant: **a video poster passing the two image scanners must neither approve the ad nor copy its poster into the public bucket while the video scan is pending**. The proposed video migration must add a video gate to the approval trigger, status refresh, image publication queue/claim, and a separate video finalization transaction before any video ad can be inserted. The original remains private; poster, hover, and full bytes remain private until the complete video ad passes review.

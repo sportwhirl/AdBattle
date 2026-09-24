@@ -38,9 +38,12 @@ children under 13, alongside the applicable parental consent path.
    posted image still must pass the existing image safety and duplicate scans.
 4. The server calls OpenAI `POST /v1/images/generations` with
    `gpt-image-2.5-flare`, `quality=low`, `n=1`, JPEG output, provider moderation
-   at `auto`, and no image or reference input. The square request is
-   1024x1024; the smallest supported exact 16:9 request under the model's
-   minimum-area and dimension rules is 1280x720. The server validates the
+   at `auto`, and no image or reference input. The square source request is
+   816×816 (665,856 pixels); the near-16:9 source is 1088×608 (661,504
+   pixels). Both satisfy the model's 16-pixel dimension increments and
+   655,360-pixel minimum. An exact 16:9 source at this minimum would need
+   1280×720, so the landscape canonical resize preserves the whole frame
+   while adjusting its aspect by about 0.66%. The server validates the
    raw `data[0].b64_json`, expected dimensions, JPEG markers, and an 8 MiB
    byte ceiling. It never sends the browser's raw provider settings.
 5. The unmodified provider image is saved privately under the owner's path.
@@ -85,12 +88,14 @@ reservation rows to Flare without rewriting existing draft history. The
 canonical-post migration adds the byte binding and a backoff queue for
 publication retries. Older completed draft rows without canonical fields
 cannot be posted; make a new draft rather than silently trusting the browser.
-The private buckets now exist. The test project has `generate-ai-image` v4 and
+The private buckets now exist. The test project has `generate-ai-image` v9 and
 `submit-ai-ad` v2 active with JWT verification on; the image scanners,
 publisher, and owner-preview functions are also deployed (see
 `PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
-generation or posting. Inspect the exact project and private bucket settings
-before enabling those flags. The publisher's matching secret, queue wakeup,
+generation or posting. The hosted function now requests 816×816 or 1088×608
+sources, while the image feature flags remain off. Inspect the
+exact project and private bucket settings before enabling those flags. The
+publisher's matching secret, queue wakeup,
 and scheduled sweep are installed. An ordinary staging image ad completed
 the hosted scan and publication flow; no AI-generated ad has done so.
 The dashboard editor may need the shared http.ts file copied locally, as
@@ -108,15 +113,22 @@ publishable key. Test with an approved adult signed-in account: generate one
 harmless image, inspect the private bucket and quota row, review and select
 the draft, submit it, and confirm the two scanner statuses and public badge.
 Automated tests mock both model calls and run the real quota SQL locally; they
-make no paid generation request. OpenAI account
+make no paid generation request. Smaller source dimensions reduce local decode
+work and may reduce transfer bytes, but they do not guarantee a proportional
+drop in provider tokens, charges, or generation time. Capture the real image
+response's `usage`, elapsed time, and billed amount for representative prompts
+and both shapes before settling the budget or widening access. OpenAI account
 access to Flare, any organization verification, actual output shape/latency,
 and provider usage or invoice cost must be checked in restricted staging.
 
 The browser displays the signed private canonical URL directly; it never
 compresses or uploads the AI post bytes. A hosted fixed-fixture smoke ran the
-pinned decoder/encoder on a 1280x720 pixel-art input and 1024x1024 smooth
-input, producing decodable 640-pixel JPEGs under 500 KiB in 56 ms and 95 ms,
-respectively; the original function was restored and generation remains off.
+pinned decoder/encoder on the new 1088×608 pixel-art and 816×816 smooth
+inputs. It produced decodable 640×360 and 640×640 JPEGs of 9,703 and 11,827
+bytes in 109 and 143 ms, respectively. The wide fixture checks that both
+colored source edges survive the resize. The temporary probe was removed and
+the exact v5 real-function source restored as v9 with JWT verification on;
+the endpoint returned 503 with generation disabled before this probe.
 This does not establish behavior on real provider or high-entropy images, or
 the full function's resource use. No hosted provider generation and complete
 AI publication flow has been verified yet. If preview expires, the saved

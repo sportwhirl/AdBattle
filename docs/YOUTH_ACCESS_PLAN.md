@@ -1,14 +1,13 @@
 # AdBattle: all-ages creative access plan
 
-**Status (2026-09-23):** product target and release gates. The current branch is
-staging-only and permits approved adult testers; it does not establish a child
+**Status (2026-09-24):** product target and release gates. The test project
+now has private pending-image storage, a hash-bound publication worker, and
+an ordinary posting hold/success smoke. Production remains unchanged; the
+AI image generation and posting flags are off. This does not establish a child
 account, parental-consent flow, Zero Data Retention (ZDR), or a public video
-publishing path. The existing signup, ordinary image posting, Support, Seed,
-and wallet endpoints also have **no age entitlement**. This branch adds a
-private pending-image gate and server-bound AI derivatives, but neither has
-been deployed or verified in hosted staging. The deployed ordinary posting
-path still uses public storage before scanning. Public AI creation remains
-off until the applicable gates are implemented and verified. The current site
+publishing path. Signup, ordinary image posting, Support, Seed, and wallet
+endpoints still have **no age entitlement**. Public AI creation remains off
+until the applicable gates are implemented and verified. The current site
 must not be presented as child-safe. This plan needs review for each launch
 jurisdiction.
 
@@ -40,9 +39,12 @@ to text moderation and policy-review calls that receive a child's prompt or
 personal data; verify the entire request chain's eligibility. Do not send raw
 birth dates, parent contact details, email addresses, or account IDs to a model.
 
-Do not use Gemini in this general-audience app: its
+Do not use the standard Gemini API in this general-audience app: its
 [API terms](https://ai.google.dev/gemini-api/terms) prohibit an API client likely to be
-accessed by under-18s, even when the API credential stays on the server. The
+accessed by under-18s, even when the API credential stays on the server.
+The standard [Google Cloud service terms](https://cloud.google.com/terms/service-terms)
+also restrict generative AI in applications likely accessed by under-18s;
+seek provider-specific written terms before reconsidering that route. The
 proposed Luma Ray 3.2 video adapter remains staging-only. Luma's
 [individual terms](https://lumalabs.ai/legal/terms-of-service) say under-13
 users are unauthorized, and its
@@ -80,11 +82,11 @@ teen use also needs confirmation under the chosen account agreement.
    define retention/deletion for already held drafts. Existing accounts must
    be classified safely before a public switch.
 5. Keep pending uploads in private storage until the exact media and text pass
-   age-suitable review, then publish only checked derivatives. The branch
-   implements private pending storage and a hash-bound publisher for images;
-   hosted rollout must inventory and remove preexisting unreviewed public
-   objects, verify the new policies and worker, and address rejected assets
-   and stale CDN copies explicitly.
+   age-suitable review, then publish only checked derivatives. The test project
+   implements this image boundary and has verified ordinary hold and approval
+   outcomes. Production rollout still needs its own inventory, cleanup,
+   policy and worker verification, including rejected assets and stale CDN
+   copies.
 6. Use contextual display only for children. Audit cookies, analytics,
    embedded media, storage/CDN logs, public creator handles, outgoing links,
    and any advertising or third-party scripts. Under COPPA, a persistent
@@ -167,8 +169,8 @@ model until a bounded staging benchmark proves it.
   youngest-audience standard.
 - Upload, posting, wallet, Support, Seed, promotion, and payout paths honor the
   age entitlements server-side; no cross-user or browser override works. The
-  existing public-bucket-before-scan path is replaced with private pending
-  media and exact-byte review. The 640px/500KiB image publication budget is
+  production public-bucket-before-scan path is replaced with private pending
+  media and exact-byte review. The 640px/500KiB AI image publication budget is
   enforced on the server, not only by the browser's draft conversion.
 - Video jobs remain disabled for an age band until its provider confirms the
   route in writing and full-video scanning/publication is tested. Do not

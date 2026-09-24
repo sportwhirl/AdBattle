@@ -7,10 +7,12 @@ import { Image } from 'imagescript';
 
 const source = readFileSync(new URL('../supabase/functions/generate-ai-image/index.ts', import.meta.url), 'utf8');
 const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')));
-const landscape = readFileSync(new URL('./fixtures/images/openai_1280x720.jpg', import.meta.url));
-const square = readFileSync(new URL('./fixtures/images/openai_1024x1024.jpg', import.meta.url));
+const landscape = readFileSync(new URL('./fixtures/images/openai_1088x608.jpg', import.meta.url));
+const square = readFileSync(new URL('./fixtures/images/openai_816x816.jpg', import.meta.url));
+const oldLandscape = readFileSync(new URL('./fixtures/images/openai_1280x720.jpg', import.meta.url));
+const oldSquare = readFileSync(new URL('./fixtures/images/openai_1024x1024.jpg', import.meta.url));
 const good = { data: [{ b64_json: landscape.toString('base64') }],
-  output_format: 'jpeg', size: '1280x720' };
+  output_format: 'jpeg', size: '1088x608' };
 const allowPolicy = { status: 'completed', output: [
   { type: 'reasoning', summary: [] },
   { type: 'message', role: 'assistant', status: 'completed', content: [
@@ -120,7 +122,7 @@ test('eligible staging creator requests one low-quality image and stores private
   assert.equal(app.calls.policy[0].headers.authorization, 'Bearer private-openai-test-key');
   const payload = app.calls.provider[0].body;
   assert.equal(payload.model, 'gpt-image-2.5-flare');
-  assert.equal(payload.size, '1280x720');
+  assert.equal(payload.size, '1088x608');
   assert.equal(payload.quality, 'low');
   assert.equal(payload.n, 1);
   assert.equal(payload.output_format, 'jpeg');
@@ -138,6 +140,10 @@ test('eligible staging creator requests one low-quality image and stores private
   assert.ok(app.calls.uploads[1].bytes.length <= 500 * 1024);
   const posted = await Image.decode(app.calls.uploads[1].bytes);
   assert.deepEqual([posted.width, posted.height], [640, 360]);
+  const left = posted.getRGBAAt(4, 180);
+  const right = posted.getRGBAAt(635, 180);
+  assert.ok(left[0] > 150 && left[2] < 80, 'left edge of full source remains visible');
+  assert.ok(right[2] > 150 && right[0] < 80, 'right edge of full source remains visible');
   assert.equal(app.calls.updates[0].post_bytes, app.calls.uploads[1].bytes.length);
   assert.equal(app.calls.updates[0].post_sha256,
     Buffer.from(await globalThis.crypto.subtle.digest('SHA-256', app.calls.uploads[1].bytes)).toString('hex'));
@@ -183,9 +189,10 @@ test('malformed, wrong-size or duplicate provider images fail closed and consume
     { data: [] },
     { data: [{ b64_json: landscape.toString('base64') }, { b64_json: landscape.toString('base64') }] },
     { data: [{ b64_json: square.toString('base64') }] },
+    { data: [{ b64_json: oldLandscape.toString('base64') }] },
     { data: [{ b64_json: 'not base64!' }] },
     { ...good, output_format: 'png' },
-    { ...good, size: '1024x1024' },
+    { ...good, size: '1280x720' },
   ]) {
     const app = fixture({ provider });
     const result = await app.run();
@@ -216,10 +223,13 @@ test('square request uses supported square size and accepts its image', async ()
   const app = fixture({ provider: { data: [{ b64_json: square.toString('base64') }] } });
   const result = await app.run({ body: { aspect_ratio: '1:1', style: 'hand_drawn' } });
   assert.equal(result.status, 200);
-  assert.equal(app.calls.provider[0].body.size, '1024x1024');
+  assert.equal(app.calls.provider[0].body.size, '816x816');
   assert.match(app.calls.provider[0].body.prompt, /Loose hand-drawn lines/);
   const posted = await Image.decode(app.calls.uploads[1].bytes);
   assert.deepEqual([posted.width, posted.height], [640, 640]);
+  const oldSize = fixture({ provider: { data: [{ b64_json: oldSquare.toString('base64') }] } });
+  assert.equal((await oldSize.run({ body: { aspect_ratio: '1:1' } })).status, 503);
+  assert.equal(oldSize.calls.uploads.length, 0);
 });
 
 test('freeform prompt permits detailed fictional imagery under the same output limits', async () => {

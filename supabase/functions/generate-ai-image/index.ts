@@ -19,8 +19,9 @@ const STYLES = Object.freeze({
   freeform_simple: "Follow the creator's own visual style direction in the creative request.",
 });
 const ASPECT_RATIOS = Object.freeze(["1:1", "16:9"]);
-// Both dimensions must be multiples of 16 and the area at least 655,360 px.
-const IMAGE_SIZES = Object.freeze({ "1:1": "1024x1024", "16:9": "1280x720" });
+// GPT Image 2.5 requires 16 px multiples and at least 655,360 pixels.
+// Keep provider sources just above the minimum; canonical posts stay smaller.
+const IMAGE_SIZES = Object.freeze({ "1:1": "816x816", "16:9": "1088x608" });
 
 function draftRequest(body: unknown) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
@@ -197,12 +198,14 @@ function imageFromOpenAI(result: any, aspectRatio: string) {
 async function canonicalPostJpeg(source: Uint8Array, style: string, aspectRatio: string) {
   // Never accept a browser-supplied derivative. Decode the actual provider
   // output before the service uploads the exact bytes the ad scanners will see.
-  const expected = aspectRatio === "1:1" ? [1024, 1024] : [1280, 720];
+  const expected = IMAGE_SIZES[aspectRatio as keyof typeof IMAGE_SIZES].split("x").map(Number);
   const dimensions = aspectRatio === "1:1" ? [640, 640] : [640, 360];
   const image = await Image.decode(source);
   if (image.width !== expected[0] || image.height !== expected[1]) {
     throw new Error("INVALID_IMAGE_OUTPUT");
   }
+  // 1088x608 is near 16:9; scaling to 640x360 changes its aspect by ~0.66%.
+  // Preserve the complete source frame so text or objects at the edges survive.
   const resized = style === "pixel_art"
     ? image.resize(dimensions[0], dimensions[1])
     : smoothResize(image, dimensions[0], dimensions[1]);

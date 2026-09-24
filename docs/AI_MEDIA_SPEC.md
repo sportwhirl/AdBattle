@@ -1,10 +1,12 @@
 # AdBattle AI media: staging specification
 
-Status: proposed product rules and implementation gates, 2026-09-23. The
-image draft feature is the first staging slice; video publishing is a separate
-change. The target is creative access for **all ages**, with parent-controlled
-access for children. The [youth access plan](YOUTH_ACCESS_PLAN.md) is a public
-release gate. Neither AI feature is enabled on the production site.
+Status: proposed product rules and implementation gates, 2026-09-24. The
+image draft function is deployed in disabled staging form with 816×816 square
+and 1088×608 wide source requests; its codec passed a hosted fixed-fixture
+smoke. No real provider image has been generated or posted. Video publishing
+is a separate change. The target is creative access for **all ages**, with
+parent-controlled access for children. The [youth access plan](YOUTH_ACCESS_PLAN.md)
+is a public release gate. Neither AI feature is enabled on the production site.
 
 ## Product intent
 
@@ -76,7 +78,7 @@ capacity, hosted verification, and provider approval.
 
 | Asset | Generation request | Public delivery limit | Behavior |
 | --- | --- | --- | --- |
-| Still image | One low-quality OpenAI image, square or wide; provider output exceeds delivery dimensions | JPEG or PNG, longest edge <= 640 px, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. |
+| Still image | One low-quality OpenAI image, 816×816 square or 1088×608 near-16:9 source | Canonical JPEG, 640×640 or 640×360, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. Preserve the whole wide source frame in the canonical resize. |
 | Video | Request one 10-second 16:9 or 9:16 clip at 360p; verify actual duration and frame rate | Silent H.264 MP4, 360p, <= 5 MiB; separate poster <= 100 KiB; separate 3–5-second muted hover clip, 12–15 fps, target 150–400 KiB and hard cap 500 KiB | Poster loads first. Hover starts after a short delay, only one in view plays, and leaves stop playback. Touch requires a tap. Full clip loads only on opening. |
 
 The video provider's original is kept private for provenance and processing;

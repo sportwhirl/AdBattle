@@ -13,7 +13,7 @@ const owner='00000000-0000-4000-8000-000000000001';
 const stranger='00000000-0000-4000-8000-000000000002';
 const requestId='00000000-0000-4000-8000-000000000321';
 const project='https://nccqnrcdygujulrnwair.supabase.co';
-const original=readFileSync(new URL('./fixtures/images/openai_1280x720.jpg',import.meta.url));
+const original=readFileSync(new URL('./fixtures/images/openai_1088x608.jpg',import.meta.url));
 const image=await Image.decode('jpeg',original);
 image.resize('cubic',640,360);
 const canonical=await image.encode('jpeg',{quality:68});

@@ -1,12 +1,63 @@
 # AdBattle age and guardian entitlement contract
 
-**Design status — 2026-09-23.** This is a proposed implementation contract for
-an all-ages AdBattle. It is not a claim that the current site is suitable for
-children or that AI creation, posting, or payments are cleared for them. No
-hosted migration, consent provider, OpenAI Zero Data Retention (ZDR) approval,
-or production age gate is included here. Apply this alongside
+**Design status — 2026-09-24.** This is a proposed implementation contract for
+an all-ages AdBattle. An adult-only, server-owned entitlement migration and
+PGlite tests now exist in this branch; the migration has **not** been applied
+to staging or production, and no endpoint uses it yet. It is not a claim that
+the current site is suitable for children or that AI creation, posting, or
+payments are cleared for them. No consent provider, OpenAI Zero Data Retention
+(ZDR) approval, or production age gate is included here. Apply this alongside
 [the youth access plan](YOUTH_ACCESS_PLAN.md), with launch-jurisdiction legal
 review before a public switch.
+
+## Adult-only foundation in this branch
+
+[`20260924013505_adult_age_entitlement_foundation.sql`](../supabase/migrations/20260924013505_adult_age_entitlement_foundation.sql)
+creates private `age_private.age_entitlements` and
+`age_private.capability_grants` tables. Both have RLS and no browser grants.
+Only `service_role` can call `public.has_adult_entitlement(p_user_id,
+p_scope, p_provider_route)`, an invoker RPC that checks the current Auth user,
+active adult assessment, expiry, revocation, entitlement version, and the
+specific action/route grant. It returns `false` when any record is absent.
+No existing account is classified or granted access by the migration. No raw
+birth date, child contact, or guardian proof is stored. This fail-closed
+result governs only callers that invoke the new RPC; existing posting,
+financial, and other routes continue under their current rules until wired.
+
+The grant key is action plus provider route. It intentionally has no wildcard:
+
+| Action scopes | Allowed provider routes |
+| --- | --- |
+| `ai_image_generate`, `ai_image_submit` | `openai_images` |
+| `ai_video_create`, `ai_video_dispatch`, `ai_video_publish` | `still_animation` or `luma_video`, each requiring its own grant |
+| `ordinary_upload`, `ordinary_post`, `financial_support`, `financial_seed`, `wallet_topup`, `payout` | `none` |
+
+A backend route must validate the user's current Auth identity and session,
+derive the subject UUID from that identity, then call the RPC with its own
+server-held service credential and a **fixed** scope/route for that operation.
+Do not accept those three arguments from request JSON, and do not treat the
+RPC as a substitute for provider flags, quotas, safety scans, payment checks,
+or age assessment. Recheck immediately before a paid provider call and before
+public delivery, including delayed workers. The current functions, browser
+posting, storage, and financial routes are **not wired to this gate**; the
+migration alone does not protect them.
+
+The next implementation slice is a vetted adult-age assessment and trusted
+issuance path, followed by server enforcement at every action boundary and
+direct-write policy transitions. The issuer must verify the age proof, map it
+to the supported jurisdiction and **current** policy version, set a short
+assessment and grant expiry, then issue only the required action/route grant
+against that assessment version. The route must reject a stale policy version
+until reassessment; the migration stores the version but does not know the
+current policy. `service_role` can insert assessments and grants, so this
+schema alone does not establish proof or activate enforcement. Only after the
+issuance and route checks are in place may an adult staging tester receive a
+short-lived grant. An assessment change increments its version and invalidates
+old grants; a revoked grant cannot be made live by updating it.
+Youth access requires a separate neutral age-entry, Auth creation gate,
+verified guardian consent, exact-content publication approval, and child-data
+provider/privacy work described below. Never mark a minor adult to reuse this
+foundation.
 
 ## Product and trust boundary
 
@@ -22,9 +73,10 @@ eligibility is not approval for AdBattle. Check the entire prompt, moderation,
 and image request chain for eligible endpoints and model limitations.
 
 An age checkbox, a client-side flag, or a user-editable JWT claim cannot grant
-any capability. All write authorization is based on a current, server-owned
-database entitlement. The browser may read a sanitized capability summary to
-draw controls, but its value is never accepted as proof. In particular,
+any capability in the target design. Every write route must eventually check
+the current, server-owned database entitlement. The browser may read a
+sanitized capability summary to draw controls, but its value is never accepted
+as proof. In particular,
 Supabase warns that `user_metadata` is editable by the user and JWT contents
 can remain stale until refresh; revocation-sensitive checks must query current
 state.
@@ -38,7 +90,7 @@ their columns and constraints are the API contract, not ready-to-run SQL.
 | Entity | Required fields and invariant |
 | --- | --- |
 | `age_tickets` | Opaque one-use proof hash, age band (`below_local_consent`, `minor_eligible`, `adult`), jurisdiction and threshold version, issuance/expiry/consumption, assessment method. Do not retain raw birth date. The neutral screen can ask month and year; classify a boundary month conservatively or ask for a fresh assessment. Redact inputs from logs. A below-threshold ticket contains no child email or profile. |
-| `age_entitlements` | `user_id` unique, age band, jurisdiction, state (`pending`, `active`, `blocked`, `revoked`), assessment method/time, `version`, expiry, created/updated timestamps. Existing accounts without a row have **no write capabilities** until classified. Reassessment is required when moving age bands; avoid deriving birthdays from a stored date of birth. |
+| `age_entitlements` | `user_id` unique, age band, jurisdiction, state (`pending`, `active`, `blocked`, `revoked`), assessment method/time, `version`, expiry, created/updated timestamps. Existing accounts without a row must be denied **once every write path uses the entitlement**; the current unwired routes do not enforce this yet. Reassessment is required when moving age bands; avoid deriving birthdays from a stored date of birth. |
 | `guardian_links` | `child_user_id`, `guardian_user_id`, status, verification vendor/method and opaque verification reference, verified time and expiry. The guardian is an independently authenticated adult. Do not store identity document images in AdBattle. One adult proof does not automatically approve every child action. |
 | `guardian_consents` | Child and guardian IDs, distinct `scope`, notice/terms version, method, verified proof reference, granted/expiry/revoked timestamps and audit version. Unique active scope per child; an old consent cannot revive after revocation. Initial scopes: `account_and_private_draft`, `openai_image`, `public_posting`; reserve a separate `third_party_disclosure` scope when required. Financial scopes remain unavailable in the first youth release. |
 | `parent_ad_approvals` | Guardian/child/draft IDs, SHA-256 digest of **the exact media bytes and canonical title, caption, creator handle, link, and promotion metadata**, associated consent version, approved/expiry/consumed timestamps. Any edit or replacement invalidates approval. This per-ad approval for under-13 publication is an AdBattle safety rule. |
@@ -54,9 +106,11 @@ and trusted database transitions. Limit `SECURITY DEFINER` helpers to a
 non-exposed schema, revoke default `PUBLIC` execution and test cross-user
 calls. A worker using `service_role` must perform the same check itself.
 
-## Action gate matrix
+## Target action gate matrix
 
 `Unknown` includes existing accounts until they complete the age flow.
+These are release requirements, not current permissions. The adult-only
+predicate is not yet connected to the application routes.
 Financial actions for all minors are intentionally deferred; a guardian's
 separate adult account may be evaluated under its own payment rules later.
 
@@ -139,10 +193,10 @@ assurances and retain only the minimum proof reference.
 | Route or data path | Current behavior | Server-side change before youth release |
 | --- | --- | --- |
 | `index.html` `signup()` / Auth | Email/password signup has no age input; login restores full UI. | Neutral pre-signup flow plus Auth creation hook/server registration; deny unclassified writes even if an Auth user exists. |
-| `index.html` `postAd()` and `public.ads` | Browser uploads into public `ad-images` before scan and inserts `ads` directly; owner-only INSERT policy does not check age. | Private pending bucket with service-controlled promotion of exact approved bytes; RLS/trusted insert with entitlement and parent digest checks. |
+| `index.html` `postAd()` and `public.ads` | Staging uploads to private `ad-pending-images` and publishes only approved, byte-verified media; production still uses the older public-upload path. The browser inserts `ads` directly, and owner INSERT policy does not check age. | Keep pending media private in every environment and close direct age/guardian bypasses with entitlement-aware RLS or a trusted posting transition plus exact parent approval where required. |
 | `saveCreatorHandle()` / `creator_profiles` | Any authenticated owner can write a publicly readable handle. | Age-safe handle defaults and policy; guardian/public identity scope and moderation. |
 | `scan-ad`, `scan-ad-duplicate`, `refresh_ad_moderation_status`, public gallery RPCs | Scanner sends title/caption/image to OpenAI and passes safety/duplicate; passing rows become public. | ZDR-eligible child-data scan path, youngest-audience review, current entitlement and parent exact-digest check at publication; public RPC includes only cleared state. |
-| `generate-ai-image`, `reserve_ai_image_draft`, `set_ad_ai_origin` | Staging adult tester check; draft ownership but no youth consent. Uploaded posted bytes are not bound to draft source hash. | Check entitlement before spend and signed draft URL; bind generated output to posted bytes and recheck before submit. |
+| `generate-ai-image`, `reserve_ai_image_draft`, `set_ad_ai_origin`, `submit-ai-ad` | Staging adult tester check and draft ownership but no youth consent. Submission verifies the server-created canonical post bytes against the draft SHA-256, and the ad/publication checks preserve that hash. | Check live age/provider entitlement before reservation, paid dispatch, draft delivery, and submission; add exact-content guardian approval and age-safe review for youth. |
 | `ai-video-draft` / worker | Staging adult gate; async job can outlive request. | Recheck consent/version before provider dispatch and final delivery; no under-13 Luma path. |
 | Wallet checkout, `support-from-wallet`, paid Seed, direct Support webhook, settlement | Auth/payment/ledger controls exist but no age restriction; delayed webhooks and payout worker continue independently. | Adult-only financial entitlement at entry and ledger transition; review pending payments, refunds, holds and payout when age state changes. |
 | Stripe Connect creation/status | Frontend invokes deployed functions absent from this checkout. | Inspect deployed source, gate Connect and payout for age and guardian representative before minor support is considered. |
@@ -157,15 +211,18 @@ assurances and retain only the minimum proof reference.
    current public site.
 2. **Guardian flow and private media:** integrate a suitable verifiable
    consent method; implement parent review/revoke/delete and exact-ad
-   approval. Move *ordinary and AI* pending uploads to private storage,
-   rescan original/final bytes and require a trusted publish transition.
-   Review all historical approved ads before promising a child-safe gallery.
+   approval. Carry the staging private pending-image and byte-verified publish
+   path into production, then connect both ordinary and AI posting to the age
+   and parent gates. Review all historical approved ads before promising a
+   child-safe gallery.
 3. **AI image release gate:** obtain OpenAI approval and turn on ZDR for the
    actual project; confirm generation and every moderation/review call are
    eligible. Test under-13 personal-data cases, 13–17 guardian permission,
    provider errors, race/retry/revocation, content reporting and takedown.
-   Keep youth payment actions off. The low-resolution 640px/500KiB cap needs
-   a server check; it is a delivery budget, not a restriction on creativity.
+   Keep youth payment actions off. The staging image function enforces its
+   640px/500KiB canonical JPEG cap server-side; verify it again in the full
+   provider-to-publication flow. This is a delivery budget, not a restriction
+   on creativity.
 4. **Video and money separately:** connect the local still-animation route
    only after private-media/consent gates. True model video needs a provider
    whose terms cover the actual ages and a reviewed worker/publication path.
