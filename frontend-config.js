@@ -59,7 +59,7 @@
                 adImages: true,
                 creatorOnboarding: false,
                 duplicateScreening: true,
-                aiImageDrafts: false,
+                aiImageDrafts: true,
                 aiProvenanceReads: true,
                 privateMediaPipeline: true
             })

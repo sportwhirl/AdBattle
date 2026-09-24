@@ -218,7 +218,7 @@ test("local frontend fails closed unless explicit adbattle-test config is exact"
     adImages: true,
     creatorOnboarding: false,
     duplicateScreening: true,
-    aiImageDrafts: false,
+    aiImageDrafts: true,
     aiProvenanceReads: true,
     privateMediaPipeline: true,
   });
@@ -333,7 +333,7 @@ test("Checkout redirects come only from validated server configuration", () => {
   assert.match(checkoutTs, /startsWith\("sk_test_"\)/);
 });
 
-test("staging enables paid Seeds and image posting while unavailable integrations stay gated", () => {
+test("staging enables paid Seeds, image posting, and AI drafts while other integrations stay gated", () => {
   assert.match(html, /if \(FEATURES\.seeds\)[\s\S]*?db\.rpc\("get_seed_counts"\)/);
   assert.match(html, /db\.rpc\("get_my_seeded_ad_ids"\)/);
   assert.doesNotMatch(html, /\.from\("likes"\)/);
@@ -354,7 +354,7 @@ test("staging enables paid Seeds and image posting while unavailable integration
   assert.equal(staging.features.seeds, true);
   assert.equal(staging.features.adImages, true);
   assert.equal(staging.features.duplicateScreening, true);
-  assert.equal(staging.features.aiImageDrafts, false);
+  assert.equal(staging.features.aiImageDrafts, true);
   assert.equal(staging.features.aiProvenanceReads, true);
   assert.equal(staging.features.privateMediaPipeline, true);
 });
