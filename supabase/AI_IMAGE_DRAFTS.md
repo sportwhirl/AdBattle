@@ -85,14 +85,14 @@ reservation rows to Flare without rewriting existing draft history. The
 canonical-post migration adds the byte binding and a backoff queue for
 publication retries. Older completed draft rows without canonical fields
 cannot be posted; make a new draft rather than silently trusting the browser.
-The private buckets now exist. The test project has `generate-ai-image` v1 and
-`submit-ai-ad` v1 active with JWT verification on; the image scanners,
+The private buckets now exist. The test project has `generate-ai-image` v4 and
+`submit-ai-ad` v2 active with JWT verification on; the image scanners,
 publisher, and owner-preview functions are also deployed (see
 `PRIVATE_PENDING_MEDIA.md`). Their deployment alone does not turn on AI
 generation or posting. Inspect the exact project and private bucket settings
 before enabling those flags. The publisher's matching secret, queue wakeup,
-and scheduled sweep are installed; a fresh eligible ad has not yet completed
-the hosted scan and publication flow.
+and scheduled sweep are installed. An ordinary staging image ad completed
+the hosted scan and publication flow; no AI-generated ad has done so.
 The dashboard editor may need the shared http.ts file copied locally, as
 described for existing functions in the Supabase README.
 
@@ -113,12 +113,14 @@ access to Flare, any organization verification, actual output shape/latency,
 and provider usage or invoice cost must be checked in restricted staging.
 
 The browser displays the signed private canonical URL directly; it never
-compresses or uploads the AI post bytes. Confirm that hosted Edge Functions
-can bundle and run the pinned image decoder/encoder within their CPU and
-memory limits before enabling posting. The private buckets are present in
-hosted staging, but no hosted provider generation and complete publication
-flow has been verified yet. If preview expires, the saved request ID can
-obtain a fresh signed URL without another image call.
+compresses or uploads the AI post bytes. A hosted fixed-fixture smoke ran the
+pinned decoder/encoder on a 1280x720 pixel-art input and 1024x1024 smooth
+input, producing decodable 640-pixel JPEGs under 500 KiB in 56 ms and 95 ms,
+respectively; the original function was restored and generation remains off.
+This does not establish behavior on real provider or high-entropy images, or
+the full function's resource use. No hosted provider generation and complete
+AI publication flow has been verified yet. If preview expires, the saved
+request ID can obtain a fresh signed URL without another image call.
 
 After a lost response, keep the saved request ID and prompt and recover the
 draft. A three-minute abandoned reservation becomes unknown, remains counted
