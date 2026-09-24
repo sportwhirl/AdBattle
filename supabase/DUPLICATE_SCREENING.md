@@ -45,10 +45,11 @@ Safety scanner decisions are terminal. Only `pending` may transition to
 while a different terminal result is rejected. `scan-ad` reloads
 `safety_status` and skips all validation and OpenAI work once a terminal result
 exists, even if duplicate screening still keeps the ad pending. Operational
-failures leave safety `pending` so a later webhook delivery can retry. There is
-not yet a separate trusted moderator RPC for resolving a safety `held` state.
+failures leave safety `pending` so a later webhook delivery can retry. The optional [private moderation review migration](MODERATION_REVIEW.md)
+adds a separate authenticated moderator path for resolving a safety `held` state;
+scanner retries still cannot override it.
 
-### Policy response parsing and staging retry
+### Historical policy response parsing and staging retry
 
 The safety scanner calls the OpenAI Responses API with raw `fetch`. Generated
 text must be read from assistant messages in `output[].content[]` with type
@@ -67,23 +68,72 @@ an incomplete result now reports `max_output_tokens` or `content_filter` when
 provided, rather than being mistaken for missing SDK output.
 
 The staging upload test on 2026-09-23 reached duplicate `passed` but safety
-`pending` with `OpenAI policy review returned no output_text.` After merging
-the parser fix, redeploy only `scan-ad` to **adbattle-test** with its existing
-secrets and private `x-adbattle-scanner-secret` authentication. Preserve
-`verify_jwt=false`: the function itself authenticates that private webhook
-header. No migration or duplicate-scanner deployment is needed for this fix.
-Invoke the existing scanner for the same pending ad ID (for the reported
-`Staging Upload Test`, `{"ad_id":4}`), using the existing private header.
-Do not upload another copy or manually change screening statuses. Check the
-new safety audit and both screening states: publication still requires both
-checks to pass. A valid review may instead hold or reject the ad. Previously
-terminal safety decisions remain skipped, and retrying does not clear them.
+`pending` with `OpenAI policy review returned no output_text.` The parser-only
+repair at that checkpoint required redeploying only `scan-ad` to
+**adbattle-test**, preserving `verify_jwt=false` and the existing private
+`x-adbattle-scanner-secret` authentication. It required no migration or
+duplicate-scanner deployment. The recorded recovery instruction was to retry
+the same pending ad ID rather than upload another copy or manually change
+either screening status. Later ordinary-image staging evidence is recorded in
+`PRIVATE_PENDING_MEDIA.md`; it does not establish the old ad's final result.
+
+That parser-only deployment note is historical, not the procedure for the
+current branch. The claim/lease hardening below adds a new database dependency
+and must not be deployed as a function-only change.
 
 `tests/scanner_policy_response.test.mjs` executes the actual handler with mocked
 HTTP and database I/O, covering REST envelopes, reasoning-before-text, split
 text, review/rejection, refusals, incomplete results, invalid decisions, and
 unchanged authentication/terminal-state guards. Hosted retry results must be
 verified separately after deployment.
+
+### Pending safety claim/lease hardening
+
+This branch adds
+`20260924015352_safety_scan_claim_lease.sql` and corresponding `scan-ad`
+changes. They are **not applied or deployed** to staging or production at this
+checkpoint. The migration adds a service-only claim, a ten-minute lease,
+token-bound failure release, and transactional finalization. Only the worker
+holding the current fencing token may reach the paid OpenAI checks or write the
+final moderation evidence. A second delivery receives HTTP 202 with
+`status: "in_progress"` and `retry_after`; that response is not a terminal
+moderation result. A terminated worker can be replaced after its lease becomes
+stale. An ordinary handled failure releases its claim immediately.
+
+Deploy this hardening to **adbattle-test only**, in this order:
+
+1. Stop new local staging submissions, disable the safety `scan-ad` Database
+   Webhook without changing the duplicate webhook, and drain/inspect its
+   delivery log so no queued safety delivery remains. Hold manual scanner
+   redeliveries and confirm no invocation of the currently hosted scanner is
+   still running; an old worker does not know how to acquire the new lease.
+2. Apply the exact contents of
+   `20260924015352_safety_scan_claim_lease.sql` once through the Dashboard SQL
+   editor. Do not edit or rerun an earlier migration, and do **not** use a
+   generic `supabase db push`; the repository contains earlier intentionally
+   unhosted AI-video and age-entitlement migrations outside this rollout,
+   while hosted migration identifiers have already been remapped. Confirm the
+   Dashboard project ref is `nccqnrcdygujulrnwair` before executing the file.
+3. Verify `claim_ad_safety_scan`, `finalize_ad_safety_scan`, and
+   `record_ad_safety_scan_failure` are executable by `service_role` only, not by
+   `PUBLIC`, `anon`, or `authenticated`.
+4. Deploy the reviewed `scan-ad` source from the same commit. Preserve
+   `verify_jwt=false`; the function continues to authenticate the private
+   webhook header itself.
+5. Health-check the hardened worker, then re-enable the safety webhook and
+   resume submissions/deliveries. Exercise one controlled concurrent retry.
+   Exactly one worker should run provider checks; the other should return
+   `in_progress` or observe the terminal result. If the owner is terminated,
+   redeliver only at or after `retry_after` and verify stale-lease recovery. If
+   deployment fails after the migration, keep the webhook and submissions
+   paused and roll forward with the hardened worker; do not re-grant the legacy
+   unleased RPC to the old worker.
+
+Never deploy the hardened function before the migration: without its RPCs,
+every new safety scan fails closed. Finalization retries use the same claim
+token and exact payload, so a lost HTTP response can return the committed
+result without another transition or duplicate final audit event. Do not clear
+lease fields or rewrite scanner evidence manually to force a retry.
 
 The safety `scan-ad` function retains its SHA-256 only as moderation audit
 metadata. It does not query other ads, emit duplicate audit stages, or make a
@@ -137,3 +187,11 @@ common templates, shared source material, or genuinely different ads.
 Staging image uploads are enabled by the separately merged local-upload change.
 Enabling the browser does not install scanner webhooks, perform the required
 image backfill, or establish a successful end-to-end safety review by itself.
+
+## Human review page
+
+The optional [private moderation page](MODERATION_REVIEW.md) adds an explicitly
+granted moderator queue and audited safety-hold resolution. It also wraps the
+existing duplicate resolution RPC with verified Auth identity, version checks,
+and request replay protection. Both screening checks still must pass before
+publication. See that guide for the separate migration and staging rollout.

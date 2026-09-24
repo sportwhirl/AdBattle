@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import vm from 'node:vm';
+import { requireSupportedImage } from '../supabase/functions/_shared/storage-scan-policy.ts';
 
 // Execute the actual Edge handler with mocked I/O; no live keys or API calls.
 const source = readFileSync(new URL('../supabase/functions/scan-ad/index.ts', import.meta.url), 'utf8');
-const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/, '')));
+const script = new vm.Script(stripTypeScriptTypes(source.replace(/^import .*;\n/gm, '')));
 const image = readFileSync(new URL('./fixtures/images/valid.png', import.meta.url));
 const approval = {
   decision: 'approve', hard_violation: false, confidence: 0.99, risk_score: 1,
@@ -22,15 +23,23 @@ const completed = (decision = approval) => ({
   ],
 });
 
-function scanner(policyResponse, { policyHttpStatus = 200, safetyStatus = 'pending' } = {}) {
+function scanner(policyResponse, {
+  policyHttpStatus = 200, safetyStatus = 'pending',
+  loseClaimResponse = false, loseFinalizeResponse = false,
+} = {}) {
   const projectUrl = 'https://test-project.supabase.co';
   const ad = {
     id: 4, user_id: 'test-owner', title: 'Staging upload test', caption: 'A harmless image.',
-    image_url: `${projectUrl}/storage/v1/object/public/ad-images/test-owner/image.png`,
+    image_url: '', image_storage_path: 'test-owner/image.png',
     moderation_status: 'pending_scan', safety_status: safetyStatus, moderation_attempts: 1,
   };
   const audits = [], updates = [], rpcCalls = [], requests = [];
+  let activeClaim = null;
+  let claimResponseLost = false;
+  let finalResponseLost = false;
+  let finalRecord = null;
   const admin = {
+    storage: { from(bucket) { assert.equal(bucket, 'ad-pending-images'); return {}; } },
     from(table) {
       assert.ok(['ads', 'moderation_events'].includes(table), `unexpected table: ${table}`);
       let update;
@@ -53,7 +62,82 @@ function scanner(policyResponse, { policyHttpStatus = 200, safetyStatus = 'pendi
     },
     async rpc(name, args) {
       rpcCalls.push({ name, args });
-      return { error: null };
+      if (name === 'claim_ad_safety_scan') {
+        let data;
+        if (ad.safety_status !== 'pending') {
+          data = { result:'terminal', safety_status:ad.safety_status };
+        } else if (activeClaim === args.p_claim_token) {
+          data = { result:'claimed', replayed:true, lease_expires_at:'2099-01-01T00:00:00Z' };
+        } else if (activeClaim) {
+          data = { result:'busy', lease_expires_at:'2099-01-01T00:00:00Z' };
+        } else {
+          activeClaim = args.p_claim_token;
+          ad.moderation_attempts += 1;
+          ad.moderation_last_error = null;
+          ad.moderation_scan_version = args.p_scan_version;
+          data = { result:'claimed', replayed:false, lease_expires_at:'2099-01-01T00:00:00Z' };
+        }
+        if (loseClaimResponse && !claimResponseLost && data.result === 'claimed') {
+          claimResponseLost = true;
+          throw new Error('claim response connection reset');
+        }
+        return { data, error:null };
+      }
+      if (name === 'finalize_ad_safety_scan') {
+        const payload = JSON.stringify(args);
+        if (ad.safety_status !== 'pending') {
+          if (finalRecord?.token === args.p_claim_token && finalRecord.payload === payload) {
+            return { data:{ ...finalRecord.result, result:'replayed' }, error:null };
+          }
+          return { data:null, error:{ message:'SAFETY_FINALIZATION_CONFLICT' } };
+        }
+        if (activeClaim !== args.p_claim_token) {
+          return { data:null, error:{ message:'SAFETY_SCAN_CLAIM_LOST' } };
+        }
+        ad.safety_status = args.p_status;
+        ad.moderation_status = args.p_status === 'failed' ? 'rejected' :
+          args.p_status === 'held' ? 'pending_scan' : 'approved';
+        ad.moderation_reason = args.p_reason;
+        ad.moderation_details = args.p_details;
+        ad.moderation_risk_score = args.p_risk_score;
+        ad.moderation_image_sha256 = args.p_image_sha256;
+        ad.moderation_scan_version = args.p_scan_version;
+        const result = {
+          result:'finalized', safety_status:ad.safety_status,
+          moderation_status:ad.moderation_status,
+        };
+        finalRecord = { token:args.p_claim_token, payload, result };
+        audits.push({
+          ad_id:ad.id, stage:'final_decision',
+          outcome:args.p_status === 'passed' ? 'approved' :
+            args.p_status === 'held' ? 'manual_review' : 'rejected',
+          reason:args.p_reason,
+          details:{ risk_score:args.p_risk_score, image_sha256:args.p_image_sha256 },
+        });
+        if (loseFinalizeResponse && !finalResponseLost) {
+          finalResponseLost = true;
+          throw new Error('finalize response connection reset');
+        }
+        return { data:result, error:null };
+      }
+      if (name === 'record_ad_safety_scan_failure') {
+        let data;
+        if (ad.safety_status !== 'pending') {
+          data = { result:'terminal', safety_status:ad.safety_status };
+        } else if (activeClaim !== args.p_claim_token) {
+          data = { result:'claim_lost' };
+        } else {
+          ad.moderation_last_error = args.p_error;
+          activeClaim = null;
+          audits.push({
+            ad_id:ad.id, stage:'error', outcome:'temporary_error',
+            reason:args.p_error, details:null,
+          });
+          data = { result:'released' };
+        }
+        return { data, error:null };
+      }
+      assert.fail(`unexpected RPC: ${name}`);
     },
   };
   let handler;
@@ -64,10 +148,15 @@ function scanner(policyResponse, { policyHttpStatus = 200, safetyStatus = 'pendi
   const context = vm.createContext({
     Deno: { env: { get: (key) => env[key] }, serve: (fn) => { handler = fn; } },
     createClient: () => admin,
+    loadOwnedImage: async (_bucket, owner, path) => {
+      assert.equal(owner, ad.user_id);
+      assert.equal(path, ad.image_storage_path);
+      return new Uint8Array(image);
+    },
+    requireSupportedImage,
     Request, Response, URL, TextEncoder, AbortController, Uint8Array, crypto: globalThis.crypto,
     setTimeout, clearTimeout, btoa, console: { error() {} },
     fetch: async (url, options = {}) => {
-      if (url === ad.image_url) return new Response(image, { headers: { 'content-type': 'image/png' } });
       const body = JSON.parse(options.body);
       requests.push({ url, body });
       if (url === 'https://api.openai.com/v1/moderations') {
@@ -95,10 +184,10 @@ test('raw REST policy output reaches the existing safety gate after reasoning it
   const response = await s.run();
   assert.equal(response.status, 200);
   assert.equal(response.body.status, 'approved');
-  assert.equal(s.rpcCalls.length, 1);
-  assert.equal(s.rpcCalls[0].name, 'record_ad_safety_scan');
-  assert.equal(s.rpcCalls[0].args.p_ad_id, 4);
-  assert.equal(s.rpcCalls[0].args.p_status, 'passed');
+  const finalCall = s.rpcCalls.find(({ name }) => name === 'finalize_ad_safety_scan');
+  assert.ok(finalCall);
+  assert.equal(finalCall.args.p_ad_id, 4);
+  assert.equal(finalCall.args.p_status, 'passed');
   assert.ok(s.audits.some((row) => row.stage === 'ad_policy_review' && row.outcome === 'approve'));
   assert.ok(s.updates.every((row) => !('moderation_status' in row) && !('safety_status' in row)));
   const request = s.requests.find((row) => row.url.endsWith('/responses')).body;
@@ -120,7 +209,7 @@ test('valid manual review and high-confidence rejection retain their safety deci
   for (const [decision, expected] of [['manual_review', 'held'], ['reject', 'failed']]) {
     const s = scanner(completed({ ...approval, decision, hard_violation: decision === 'reject' }));
     assert.equal((await s.run()).status, 200);
-    assert.equal(s.rpcCalls[0].args.p_status, expected);
+    assert.equal(s.rpcCalls.find(({ name }) => name === 'finalize_ad_safety_scan').args.p_status, expected);
   }
 });
 
@@ -130,7 +219,9 @@ async function assertPending(body, pattern, options) {
   assert.equal(result.status, 502);
   assert.match(result.body.error, /remains unpublished/);
   assert.match(result.body.details, pattern);
-  assert.equal(s.rpcCalls.length, 0);
+  assert.ok(s.rpcCalls.some(({ name }) => name === 'claim_ad_safety_scan'));
+  assert.ok(s.rpcCalls.some(({ name }) => name === 'record_ad_safety_scan_failure'));
+  assert.ok(!s.rpcCalls.some(({ name }) => name === 'finalize_ad_safety_scan'));
   assert.equal(s.ad.safety_status, 'pending');
   assert.equal(s.ad.moderation_status, 'pending_scan');
   assert.ok(s.audits.some((row) => row.stage === 'error' && row.outcome === 'temporary_error'));
@@ -198,4 +289,30 @@ test('terminal decisions and invalid webhook credentials skip OpenAI', async () 
   assert.equal((await unauthorized.run('wrong-secret')).status, 401);
   assert.equal(unauthorized.requests.length, 0);
   assert.equal(unauthorized.rpcCalls.length, 0);
+});
+
+test('only the lease holder reaches either provider under concurrent delivery', async () => {
+  const s = scanner(completed());
+  const results = await Promise.all([s.run(),s.run()]);
+  assert.deepEqual(results.map(({ status }) => status).sort(),[200,202]);
+  assert.equal(results.find(({ status }) => status === 202).body.status,'in_progress');
+  assert.equal(s.requests.filter(({ url }) => url.endsWith('/moderations')).length,1);
+  assert.equal(s.requests.filter(({ url }) => url.endsWith('/responses')).length,1);
+  assert.equal(s.rpcCalls.filter(({ name }) => name === 'finalize_ad_safety_scan').length,1);
+});
+
+test('thrown lost claim and finalize responses replay the same token and payload safely', async () => {
+  const s = scanner(completed(), { loseClaimResponse:true, loseFinalizeResponse:true });
+  const result = await s.run();
+  assert.equal(result.status,200);
+  assert.equal(result.body.status,'approved');
+  const claims = s.rpcCalls.filter(({ name }) => name === 'claim_ad_safety_scan');
+  const finalizations = s.rpcCalls.filter(({ name }) => name === 'finalize_ad_safety_scan');
+  assert.equal(claims.length,2);
+  assert.equal(claims[0].args.p_claim_token,claims[1].args.p_claim_token);
+  assert.equal(s.ad.moderation_attempts,2);
+  assert.equal(finalizations.length,2);
+  assert.deepEqual(finalizations[0].args,finalizations[1].args);
+  assert.equal(s.audits.filter(({ stage }) => stage === 'final_decision').length,1);
+  assert.equal(s.requests.length,2);
 });

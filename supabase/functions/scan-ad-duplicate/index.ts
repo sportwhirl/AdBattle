@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
   }
 
   try {
-    const bytes = await loadOwnedImage(admin.storage.from("ad-images"), ad.user_id, ad.image_storage_path);
+    const bytes = await loadOwnedImage(admin.storage.from(legacyBackfill ? "ad-images" : "ad-pending-images"), ad.user_id, ad.image_storage_path);
     const decoded = await decode(bytes, true);
     // dHash deliberately normalizes dimensions; the source bytes and stored image are never modified.
     decoded.resize(9, 8);

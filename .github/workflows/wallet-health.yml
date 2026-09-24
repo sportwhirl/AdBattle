@@ -2,7 +2,7 @@ name: Wallet health report
 
 on:
   pull_request:
-    branches: [wallet-ledger-90-10]
+    branches: [main, wallet-ledger-90-10]
     paths:
       - '.github/workflows/wallet-health.yml'
       - 'supabase/staging/check_wallet_health.sql'

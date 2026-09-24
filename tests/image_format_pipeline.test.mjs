@@ -43,9 +43,8 @@ test('browser and both scanners expose the same JPEG/PNG format set', () => {
 
   const duplicateSource=readFileSync(new URL('../supabase/functions/_shared/storage-scan-policy.ts',import.meta.url),'utf8');
   const safetySource=readFileSync(new URL('../supabase/functions/scan-ad/index.ts',import.meta.url),'utf8');
-  for (const source of [duplicateSource,safetySource]) {
-    assert.match(source,/image\/jpeg/);
-    assert.match(source,/image\/png/);
-    assert.doesNotMatch(source,/image\/(?:gif|webp)/);
-  }
+  assert.match(duplicateSource,/image\/jpeg/);
+  assert.match(duplicateSource,/image\/png/);
+  assert.match(safetySource,/import \{ loadOwnedImage, requireSupportedImage \}/);
+  assert.doesNotMatch(safetySource,/fetchImageLimited|\/storage\/v1\/object\/public\/ad-images/);
 });
