@@ -95,6 +95,12 @@ rejected with 401. The deployed preview code checks verified Auth identity and
 ownership before signing a 60-second URL; a live owner/stranger preview pair
 has not yet been exercised.
 
+Live Storage policy inspection showed restrictive RLS rules deny ordinary
+clients INSERT, UPDATE, and DELETE on public `ad-images`, despite an older
+authenticated owner policy. Private `ad-pending-images` permits owner-scoped
+uploads and reads, while client updates and deletes are blocked. A live
+upload-denial HTTP request has not yet been exercised.
+
 On 2026-09-24, a temporary staging-only, secret-gated fixed-fixture probe ran
 the exact deployed JPEG processor in the hosted Deno runtime. Its pixel-art
 1280x720 input produced 640x360 JPEG (6,927 bytes, 56 ms); its smooth-style
@@ -109,7 +115,7 @@ provider response, high-entropy image, or end-to-end AI post.
 ## Remaining staging steps
 
 1. Keep production public posting unchanged. Verify public-bucket write
-   denial and owner/stranger signed previews over HTTP using authenticated
+   denial over HTTP and owner/stranger signed previews using authenticated
    clients. Confirm the staging frontend points only to the test project and
    renders the approved-only gallery RPC result.
 2. The installed staging-only `operations/staging_image_publication_dispatch.sql`
