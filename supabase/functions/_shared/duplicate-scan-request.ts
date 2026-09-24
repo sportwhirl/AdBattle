@@ -37,6 +37,13 @@ export function parseDuplicateScanRequest(
   }
 
   const payload = body as Record<string, unknown>;
+  if (Object.hasOwn(payload, "crop_backfill_ad_id")) {
+    requireSecret(backfillSecret, headers.get("x-adbattle-backfill-secret") || "");
+    if (Object.hasOwn(payload, "legacy_ad_id") || Object.hasOwn(payload, "record")) {
+      throw new DuplicateScanRequestError("INVALID_WEBHOOK_PAYLOAD", 400);
+    }
+    return { adId: requirePositiveId(payload.crop_backfill_ad_id), legacyBackfill: false, cropBackfill: true };
+  }
   if (Object.hasOwn(payload, "legacy_ad_id")) {
     requireSecret(
       backfillSecret,
