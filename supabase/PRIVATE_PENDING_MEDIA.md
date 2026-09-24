@@ -59,10 +59,10 @@ the Storage API; their `image_url` fields are now empty strings. Ad #5 remains
 `pending_scan` with `duplicate_same_creator`; ad #6 remains `rejected`.
 Approved public images were preserved.
 
-Hosted test-project functions are active: `scan-ad` v13 and
-`scan-ad-duplicate` v12 (`verify_jwt=false`), `publish-ad-image` v3
-(`verify_jwt=false`), `pending-ad-previews` v8 (`verify_jwt=true`), and
-`generate-ai-image` and `submit-ai-ad` v1 (`verify_jwt=true`). The existing
+Hosted test-project functions are active: `scan-ad` v14 and
+`scan-ad-duplicate` v13 (`verify_jwt=false`), `publish-ad-image` v3
+(`verify_jwt=false`), `pending-ad-previews` v9 (`verify_jwt=true`),
+`generate-ai-image` v4 and `submit-ai-ad` v2 (`verify_jwt=true`). The existing
 safety and duplicate scan webhooks remain active. The dedicated publisher
 secret is stored in staging Vault and Edge Secrets. The Dashboard saved one
 terminal newline with the Edge value, so the worker discards exactly that
@@ -86,11 +86,32 @@ The publisher POST returned HTTP 200. This verifies the ordinary image hold
 and success paths in hosted staging; it does not exercise paid AI generation,
 both possible scan completion orders, or fault/retry behavior.
 
+An anonymous HTTP call to `get_public_ads_with_ai` returned six approved ads:
+#10 was present and held #9 absent. This verifies the public gallery RPC, not
+browser rendering. For #9, the private bucket has no public copy or URL;
+read-only RLS probes showed its pending object to the owner, but not to an
+anonymous or other authenticated user. An anonymous HTTP preview request was
+rejected with 401. The deployed preview code checks verified Auth identity and
+ownership before signing a 60-second URL; a live owner/stranger preview pair
+has not yet been exercised.
+
+On 2026-09-24, a temporary staging-only, secret-gated fixed-fixture probe ran
+the exact deployed JPEG processor in the hosted Deno runtime. Its pixel-art
+1280x720 input produced 640x360 JPEG (6,927 bytes, 56 ms); its smooth-style
+1024x1024 input produced 640x640 JPEG (11,827 bytes, 95 ms). Both outputs
+decoded and met the 500 KiB bound. The original `generate-ai-image` files and
+`verify_jwt=true` were restored byte for byte (bundle SHA-256
+`cf16ccf50ddd0342606c8faf5c03173dfb44289d5a3e8dcf6468383c3051661c`).
+The restored endpoint returned 503 with generation disabled and 401 without
+authorization. This proves the hosted codec path for simple fixtures, not a
+provider response, high-entropy image, or end-to-end AI post.
+
 ## Remaining staging steps
 
-1. Keep public posting disabled. Verify private-bucket access, public-bucket
-   write denial, and owner/stranger previews using anon and authenticated
-   clients. Confirm the staging frontend points only to the test project.
+1. Keep production public posting unchanged. Verify public-bucket write
+   denial and owner/stranger signed previews over HTTP using authenticated
+   clients. Confirm the staging frontend points only to the test project and
+   renders the approved-only gallery RPC result.
 2. The installed staging-only `operations/staging_image_publication_dispatch.sql`
    reads the Vault secret at call time. Do not reapply it or apply it to
    production. Keep the existing safety/duplicate webhooks in place. The
@@ -102,8 +123,8 @@ both possible scan completion orders, or fault/retry behavior.
    changed private bytes, retry after upload, owner/stranger previews,
    public-bucket write denial, and a legacy approved ad. Test Seed/Support on
    an approved staging ad to check wallet behavior.
-4. Before an approved adult staging AI test, verify the hosted JPEG processor
-   and provider access, provision an adult test claim and the OpenAI key, and
+4. Before an approved adult staging AI test, verify provider access, provision
+   an adult test claim and the OpenAI key, and
    enable the separate server image generation and posting flags. Keep the
    browser flag off until the staging flow works. See `AI_IMAGE_DRAFTS.md`.
 
