@@ -1,5 +1,5 @@
--- Staging-only AI video draft bookkeeping. Apply ONLY to adbattle-test
--- (nccqnrcdygujulrnwair). No public media, ad, or promotion row is created.
+-- Staging-only Wan2.1 T2V draft queue. Unapplied; never use in production.
+-- No ad or public media is created. The GPU worker runs outside Edge Functions.
 create table public.ai_video_draft_jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -10,22 +10,26 @@ create table public.ai_video_draft_jobs (
   style text not null default 'freeform_simple'
     check (style in ('pixel_art', 'flat_illustration', 'simple_3d',
       'hand_drawn', 'freeform_simple')),
-  model text not null default 'ray-3.2'
-    check (model = 'ray-3.2'),
-  duration text not null default '10s' check (duration = '10s'),
-  resolution text not null default '360p' check (resolution = '360p'),
+  model text not null default 'Wan-AI/Wan2.1-T2V-1.3B'
+    check (model = 'Wan-AI/Wan2.1-T2V-1.3B'),
+  duration text not null default '5s' check (duration = '5s'),
+  resolution text not null default '480p' check (resolution = '480p'),
   status text not null default 'pending_review' check (status in (
     'pending_review', 'queued', 'dispatching', 'dispatch_unknown',
-    'in_progress', 'polling', 'ready_for_processing',
-    'failed', 'rejected', 'needs_review'
+    'ready_for_processing', 'failed', 'rejected', 'needs_review'
   )),
   reviewed_at timestamptz,
   reviewed_by text,
   reviewed_request_hash text,
-  provider_generation_id uuid unique,
-  provider_output_url text check (char_length(provider_output_url) <= 8192),
-  provider_deadline_at timestamptz,
-  next_poll_at timestamptz,
+  gpu_task_id text unique,
+  original_private_path text,
+  original_sha256 text check (original_sha256 ~ '^[0-9a-f]{64}$'),
+  full_private_path text,
+  full_sha256 text check (full_sha256 ~ '^[0-9a-f]{64}$'),
+  hover_private_path text,
+  hover_sha256 text check (hover_sha256 ~ '^[0-9a-f]{64}$'),
+  poster_private_path text,
+  poster_sha256 text check (poster_sha256 ~ '^[0-9a-f]{64}$'),
   error_code text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -37,22 +41,14 @@ create table public.ai_video_draft_jobs (
   constraint ai_video_approved_required check (
     status in ('pending_review', 'rejected') or reviewed_at is not null
   ),
-  constraint ai_video_provider_id_required check (
-    status not in ('in_progress', 'polling', 'ready_for_processing') or
-    provider_generation_id is not null
-  ),
   constraint ai_video_output_required check (
     status <> 'ready_for_processing' or
-    provider_output_url is not null
-  ),
-  constraint ai_video_poll_deadline_required check (
-    status not in ('in_progress', 'polling') or
-    provider_deadline_at is not null
+    (original_private_path is not null and original_sha256 is not null and full_private_path is not null and
+     full_sha256 is not null and poster_private_path is not null and
+     poster_sha256 is not null)
   )
 );
 
--- Count every attempt, including rejected/failed jobs. Browser roles cannot
--- delete them. All writers serialize against one fixed lock.
 create function public.enforce_ai_video_draft_insert()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
 declare day_start timestamptz;
@@ -61,8 +57,8 @@ begin
   new.created_at := now();
   new.updated_at := new.created_at;
   if new.status <> 'pending_review' or new.reviewed_at is not null or
-      new.provider_generation_id is not null or new.provider_output_url is not null or
-      new.provider_deadline_at is not null then
+     new.original_sha256 is not null or new.full_private_path is not null or
+     new.poster_private_path is not null then
     raise exception 'AI_VIDEO_INVALID_INITIAL_STATE' using errcode = 'P0001';
   end if;
   day_start := ((now() at time zone 'utc')::date)::timestamp at time zone 'utc';
@@ -90,32 +86,34 @@ begin
   return new;
 end $$;
 
-create trigger ai_video_draft_immutable_request
-before update on public.ai_video_draft_jobs
+create trigger ai_video_draft_immutable_request before update on public.ai_video_draft_jobs
 for each row execute function public.keep_ai_video_draft_request_immutable();
-
-create trigger ai_video_draft_insert_limit
-before insert on public.ai_video_draft_jobs
+create trigger ai_video_draft_insert_limit before insert on public.ai_video_draft_jobs
 for each row execute function public.enforce_ai_video_draft_insert();
 
-create unique index ai_video_draft_one_active_per_user
-on public.ai_video_draft_jobs(user_id)
-where status in ('pending_review', 'queued', 'dispatching',
-  'dispatch_unknown', 'in_progress', 'polling',
-  'needs_review');
-
+create unique index ai_video_draft_one_active_per_user on public.ai_video_draft_jobs(user_id)
+where status in ('pending_review', 'queued', 'dispatching', 'dispatch_unknown', 'needs_review');
 create index ai_video_draft_created_at on public.ai_video_draft_jobs(created_at);
-create index ai_video_draft_due_poll on public.ai_video_draft_jobs(next_poll_at)
-where status in ('in_progress', 'polling');
 create index ai_video_draft_queued on public.ai_video_draft_jobs(created_at)
 where status = 'queued';
 
--- The owner can see only safe metadata; prompt, review identity, provider IDs,
--- URI and error detail never become browser-readable table columns.
+-- One atomic claim per worker; a crashed worker is never automatically charged twice.
+create function public.claim_wan21_video_job()
+returns setof public.ai_video_draft_jobs
+language plpgsql security invoker set search_path = public, pg_temp as $$
+begin
+  return query
+  update public.ai_video_draft_jobs j set status = 'dispatching', updated_at = now()
+  where j.id = (
+    select id from public.ai_video_draft_jobs
+    where status = 'queued' and reviewed_request_hash = request_hash
+    order by created_at, id for update skip locked limit 1
+  ) returning j.*;
+end $$;
+
 alter table public.ai_video_draft_jobs enable row level security;
 create policy ai_video_draft_owner_read on public.ai_video_draft_jobs
 for select to authenticated using ((select auth.uid()) = user_id);
-
 revoke all on public.ai_video_draft_jobs from public, anon, authenticated;
 grant select (id, request_id, status, aspect_ratio, style, model, duration,
   resolution, error_code, created_at, updated_at)
@@ -123,3 +121,9 @@ grant select (id, request_id, status, aspect_ratio, style, model, duration,
 grant all on public.ai_video_draft_jobs to service_role;
 revoke all on function public.enforce_ai_video_draft_insert() from public, anon, authenticated;
 revoke all on function public.keep_ai_video_draft_request_immutable() from public, anon, authenticated;
+revoke all on function public.claim_wan21_video_job() from public, anon, authenticated;
+grant execute on function public.claim_wan21_video_job() to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ai-video-drafts', 'ai-video-drafts', false, 31457280,
+        array['video/mp4', 'image/jpeg']);

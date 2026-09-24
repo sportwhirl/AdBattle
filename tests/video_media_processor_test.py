@@ -16,9 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import process_video_media as media  # noqa: E402
 
 
-def fixture(path: Path, *, duration: int = 10, orientation: str = "landscape",
-            codec: str = "libx264") -> None:
-    width, height = media.DIMENSIONS[orientation]
+def fixture(path: Path, *, duration: float = 5, orientation: str = "landscape",
+            codec: str = "libx264", size: tuple[int, int] | None = None) -> None:
+    width, height = size or media.DIMENSIONS[orientation]
     subprocess.run([
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
         "-f", "lavfi", "-i", f"testsrc2=size={width}x{height}:rate=24",
@@ -68,7 +68,7 @@ class VideoMediaProcessorTests(unittest.TestCase):
                           ("poster.jpg", media.MAX_POSTER_BYTES)):
             self.assertLessEqual(result["files"][name]["bytes"], cap)
             self.assertEqual(result["files"][name]["bytes"], (destination / name).stat().st_size)
-        for name, seconds, fps in (("full.mp4", 10, 24), ("hover.mp4", 4, 13)):
+        for name, seconds, fps in (("full.mp4", 5, 24), ("hover.mp4", 3, 13)):
             info = media._probe(destination / name)
             self.assertEqual(1, len(info["streams"]))
             stream = info["streams"][0]
@@ -87,34 +87,45 @@ class VideoMediaProcessorTests(unittest.TestCase):
 
     def test_portrait(self) -> None:
         source = self.root / "portrait.mp4"
-        fixture(source, duration=8, orientation="portrait")
+        fixture(source, duration=4.5, orientation="portrait")
         destination = self.root / "portrait-output"
         media.process_video(source, destination, "portrait")
         for name in media.OUTPUT_NAMES:
             stream = media._probe(destination / name)["streams"][0]
             self.assertEqual((360, 640), (stream["width"], stream["height"]))
         full = media._probe(destination / "full.mp4")["streams"][0]
-        self.assertAlmostEqual(10, float(full["duration"]), delta=0.05)
-        # Last frame is retained to fill the final two seconds.
+        self.assertAlmostEqual(5, float(full["duration"]), delta=0.05)
+        # A slightly short model clip extends its last frame to five seconds.
         def raw_frame_at(seconds: float) -> bytes:
             return subprocess.run([
                 "ffmpeg", "-nostdin", "-v", "error", "-ss", str(seconds),
                 "-i", str(destination / "full.mp4"), "-frames:v", "1",
                 "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
             ], check=True, capture_output=True).stdout
-        earlier, later = raw_frame_at(8.5), raw_frame_at(9.5)
+        earlier, later = raw_frame_at(4.6), raw_frame_at(4.9)
         self.assertEqual(len(earlier), len(later))
         # Re-encoding a repeated frame can change a few pixel values.
         mean_difference = sum(abs(a - b) for a, b in zip(earlier, later)) / len(earlier)
         self.assertLess(mean_difference, 0.1)
 
-    def test_twelve_second_source_is_trimmed_to_ten_seconds(self) -> None:
+    def test_slightly_long_source_is_trimmed_to_five_seconds(self) -> None:
         source = self.root / "long.mp4"
-        fixture(source, duration=12)
+        fixture(source, duration=5.5)
         destination = self.root / "trimmed-output"
         media.process_video(source, destination, "landscape")
         full = media._probe(destination / "full.mp4")["streams"][0]
-        self.assertAlmostEqual(10, float(full["duration"]), delta=0.05)
+        self.assertAlmostEqual(5, float(full["duration"]), delta=0.05)
+
+    def test_native_wan_480p_aspects_fit_without_rejection(self) -> None:
+        for orientation, size in (("landscape", (832, 480)), ("portrait", (480, 832))):
+            source = self.root / f"wan-{orientation}.mp4"
+            fixture(source, orientation=orientation, size=size)
+            destination = self.root / f"wan-{orientation}-output"
+            media.process_video(source, destination, orientation)
+            for name in media.OUTPUT_NAMES:
+                stream = media._probe(destination / name)["streams"][0]
+                self.assertEqual(media.DIMENSIONS[orientation],
+                                 (stream["width"], stream["height"]))
 
     def test_wrong_duration_rejected_before_publication(self) -> None:
         source = self.root / "short.mp4"

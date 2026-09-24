@@ -27,7 +27,7 @@ MAX_STILL_BYTES = 10 * 1024 * 1024
 MAX_STILL_PIXELS = 2048 * 2048
 MAX_SIDE = 2048
 MIN_SIDE = 360
-FRAMES = 240
+FRAMES = 120
 FPS = 24
 MOTIONS = ("zoom-in", "zoom-out", "drift-left", "drift-right", "hold")
 TRANSITIONS = ("dissolve", "cut")
@@ -135,7 +135,7 @@ def _render(stills: list[Path], destination: Path, orientation: str,
             motion: str, transition: str, matte: str) -> None:
     width, height = DIMENSIONS[orientation]
     two = len(stills) == 2
-    frames_per_image = 132 if two and transition == "dissolve" else 120 if two else FRAMES
+    frames_per_image = 72 if two and transition == "dissolve" else 60 if two else FRAMES
     filters = []
     for index in range(len(stills)):
         filters.append(
@@ -146,7 +146,7 @@ def _render(stills: list[Path], destination: Path, orientation: str,
             f"format=yuv420p[v{index}]"
         )
     if two:
-        filters.append("[v0][v1]xfade=transition=fade:duration=1:offset=4.5[v]"
+        filters.append("[v0][v1]xfade=transition=fade:duration=1:offset=2[v]"
                        if transition == "dissolve" else "[v0][v1]concat=n=2:v=1:a=0[v]")
         output_label = "[v]"
     else:

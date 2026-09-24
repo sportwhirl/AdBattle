@@ -24,7 +24,7 @@ be suitable for its youngest intended audience.
 | Audience | Target access once gates pass | Until then |
 | --- | --- | --- |
 | Visitor of unknown age | View only approved, age-suitable gallery media with privacy-safe defaults. | Current site needs a tracking/content audit before claiming this is child-safe. |
-| Under 13, or below local digital-consent age | Parent-approved account can draft an image with an approved ZDR OpenAI project. AI-assisted motion from those images can be a lightweight 10-second option. Publication requires review and parent controls. | AI creation is off. Existing signup/post/wallet paths are **not yet age gated**; block or redesign those paths before inviting children to use them. Gallery privacy/content review is pending. |
+| Under 13, or below local digital-consent age | Parent-approved account can draft an image with an approved ZDR OpenAI project. AI-assisted motion from those images can be a lightweight five-second option. Publication requires review and parent controls. | AI creation is off. Existing signup/post/wallet paths are **not yet age gated**; block or redesign those paths before inviting children to use them. Gallery privacy/content review is pending. |
 | 13–17 | Parent/guardian permission for AI API use; server-verified creative entitlement, enhanced safeguards and publication review. Full model-video creation requires a provider agreement that covers this age band. | Restricted adult-tester staging only. |
 | 18+ | Normal creator path after the public media, abuse, and payment gates pass. | Restricted adult-tester staging only. |
 
@@ -47,15 +47,10 @@ accessed by under-18s, even when the API credential stays on the server.
 The standard [Google Cloud service terms](https://cloud.google.com/terms/service-terms)
 also restrict generative AI in applications likely accessed by under-18s;
 seek provider-specific written terms before reconsidering that route. The
-proposed Luma Ray 3.2 video adapter remains staging-only. Luma's
-[individual terms](https://lumalabs.ai/legal/terms-of-service) say under-13
-users are unauthorized, and its
-[API terms](https://lumalabs.ai/legal/api-terms-of-use) define downstream API users and
-bar prohibited data. Do not route a child's request through Luma on an
-assumption that stripping personal information cures the age restriction.
-Obtain written provider permission covering the actual ages, public commercial
-output, and 360p draft-tier publishing, or use an approved alternative. Its
-teen use also needs confirmation under the chosen account agreement.
+selected self-hosted Wan2.1 T2V 1.3B model remains adult-staging-only in this
+branch. Its Apache-2.0 license does not itself clear child-facing privacy,
+content safety, guardian controls or public publication. Evaluate those
+requirements for the actual product and infrastructure before any youth route.
 
 ## Child account and consent boundary
 
@@ -132,9 +127,9 @@ and [2025 amended rule summary](https://www.ftc.gov/news-events/news/press-relea
 
 ## Low-bandwidth all-ages video route
 
-The current Luma job scaffold must not serve children under 13. A useful
-near-term fallback is **AI-assisted animation**: generate one or two original
-stills via the approved ZDR image path, then make a deterministic ten-second
+The current Wan2.1 job scaffold has no youth entitlement or video publication
+gate. A useful near-term route is **AI-assisted animation**: generate one or two original
+stills via the approved ZDR image path, then make a deterministic five-second
 silent motion piece (pan, zoom, cut or dissolve). An [offline processor]
 (STILL_ANIMATION_PROCESSOR.md) now demonstrates this with bounded 360p
 MP4/poster/hover files. It is **not connected** to user accounts, generation,
@@ -142,23 +137,12 @@ review, or the gallery; a child-facing worker and final-video review are still
 to build. It lets a child choose a scene, look, and motion without a video
 model call. Exact title/caption text remains editable in the ad form. It will
 not create arbitrary model-directed motion.
-Full generative video becomes available to that age group only with a provider
-contract or another lawful, verified architecture; adult/teen model video may
-be enabled separately once its own provider and publication gates pass.
-
-One candidate for true generated motion is **self-hosted LTX-2.5** on
-AdBattle-controlled GPU infrastructure. Its
-[community license](https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x) expressly permits
-remote SaaS hosting and has no stated minimum end-user age, but requires
-enforceable downstream content restrictions and AI disclosures. Commercial
-use below $10 million in annual entity revenue is permitted without a model
-license fee; at or above that threshold a paid agreement is required. These
-are licensing observations, not a child-use clearance. Review the bundled
-model notices, parent agreement, and COPPA obligations before implementation.
-LTX's official model materials require substantial GPU memory and downloads;
-its actual ten-second latency, quality at 360p, and per-clip GPU cost have
-**not** been measured for AdBattle. Do not promise a cheap or fast child video
-model until a bounded staging benchmark proves it.
+Full generative video becomes available to that age group only after the
+jurisdiction, guardian, model-use, privacy and exact-video safety path is
+reviewed and implemented. The selected Wan2.1 checkpoint is lighter than a
+large video model, but its actual AdBattle latency and per-clip GPU cost have
+not been measured. Do not promise a cheap or fast child video route until a
+bounded staging benchmark and safety review prove it.
 
 ## Public release checklist
 

@@ -31,7 +31,7 @@ The grant key is action plus provider route. It intentionally has no wildcard:
 | Action scopes | Allowed provider routes |
 | --- | --- |
 | `ai_image_generate`, `ai_image_submit` | `openai_images` |
-| `ai_video_create`, `ai_video_dispatch`, `ai_video_publish` | `still_animation` or `luma_video`, each requiring its own grant |
+| `ai_video_create`, `ai_video_dispatch`, `ai_video_publish` | `still_animation` or `wan21_t2v`, each requiring its own grant |
 | `ordinary_upload`, `ordinary_post`, `creator_profile`, `financial_support`, `financial_seed`, `wallet_topup`, `connect_onboarding`, `payout` | `none` |
 
 `creator_profile` authorizes a public handle write independently of posting.
@@ -131,7 +131,7 @@ separate adult account may be evaluated under its own payment rules later.
 | Register and edit profile | Neutral age assessment first; unknown legacy account read-only | One-use age proof | Age proof; guardian permission before OpenAI use; age-safe public handle | Guardian-initiated setup and verified consent **before** child Auth account/profile data |
 | Upload, private draft, AI image | Deny | Auth + quota + private storage + scan | Active creation permission + youth controls | Verified account/draft and OpenAI scopes, approved ZDR project, private storage and all child-data safety calls eligible |
 | Submit or publish an ad | Deny | Exact-media scan and publication transition | Active permission + youth review | Active public-posting scope + parent approval of exact digest + human age-suitability review |
-| AI video | Deny | Existing staging gate until provider and media review pass | Provider agreement and safety gate first | Only approved local animation route after image/guardian gates; no Luma call under current terms |
+| AI video | Deny | Existing staging gate until model and media review pass | Age, provider and safety gates first | Only approved local animation route after image/guardian gates; model video requires a separately reviewed child-safety path |
 | Support, Seed, wallet top-up | Deny | Current payment checks plus entitlement | Disabled pending guardian-controlled payment design and payment-provider review | Disabled |
 | Stripe Connect/payout | Deny | Existing payment checks plus entitlement | Disabled until an adult representative and Stripe onboarding are implemented | Disabled: Stripe accounts require age 13+ |
 
@@ -208,7 +208,7 @@ assurances and retain only the minimum proof reference.
 | `saveCreatorHandle()` / `creator_profiles` | Any authenticated owner can write a publicly readable handle. | Age-safe handle defaults and policy; guardian/public identity scope and moderation. |
 | `scan-ad`, `scan-ad-duplicate`, `refresh_ad_moderation_status`, public gallery RPCs | Scanner sends title/caption/image to OpenAI and passes safety/duplicate; passing rows become public. | ZDR-eligible child-data scan path, youngest-audience review, current entitlement and parent exact-digest check at publication; public RPC includes only cleared state. |
 | `generate-ai-image`, `reserve_ai_image_draft`, `set_ad_ai_origin`, `submit-ai-ad` | Disabled staging functions check separate fixed adult generation and submission scopes before draft reservation/delivery or ad writes; the RPC is not yet applied. Submission verifies canonical bytes against the draft SHA-256, and publication preserves that hash. | Install a trusted proof issuer and ordered age migration, then add youth-specific consent and exact-content approval, current policy/version checks, and age-safe review through final publication. |
-| `ai-video-draft` / worker | Code-only create and paid dispatch checks use separate fixed Luma adult grants. No video jobs table or age RPC is hosted; async jobs could outlive the request in a future rollout. | Recheck consent/version before private delivery and final publication; no under-13 Luma path. |
+| `ai-video-draft` / worker | Code-only text-to-video create and GPU dispatch checks use separate fixed `wan21_t2v` adult grants. No video jobs table or age RPC is hosted; async jobs could outlive the request in a future rollout. | Recheck consent/version before private delivery and final publication; no youth model-video route is enabled. |
 | Wallet checkout, `support-from-wallet`, paid Seed, direct Support webhook, settlement | Auth/payment/ledger controls exist but no age restriction; delayed webhooks and payout worker continue independently. | Adult-only financial entitlement at entry and ledger transition; review pending payments, refunds, holds and payout when age state changes. |
 | Stripe Connect creation/status | Production has active `create-connect-account` and legacy `quick-responder` functions without age checks; frontend also invokes `sync-connect-status`, which is not deployed. | Gate both Connect creation paths with `connect_onboarding`, and recheck `payout` before transfer. Review guardian representative requirements before minor support is considered. |
 
@@ -249,5 +249,5 @@ assurances and retain only the minimum proof reference.
 - [FTC February 2026 age-verification policy](https://www.ftc.gov/news-events/news/press-releases/2026/02/ftc-issues-coppa-policy-statement-incentivize-use-age-verification-technologies-protect-children): narrow age-only processing conditions.
 - [OpenAI Services Agreement](https://openai.com/policies/services-agreement/), [under-18 API guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance), and [API data controls](https://developers.openai.com/api/docs/guides/your-data).
 - [Stripe Services Agreement](https://stripe.com/legal/ssa): Stripe account age and adult representative; this is about account/Connect eligibility, not a blanket statement about child consumer purchases.
-- [Luma individual terms](https://lumalabs.ai/legal/terms-of-service) and [API terms](https://lumalabs.ai/legal/api-terms-of-use): proposed staging video route, subject to separate provider review before youth use.
+- [Wan2.1 T2V 1.3B model card](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B): selected self-hosted staging video checkpoint; child-facing safety and privacy remain separate release work.
 - [Supabase RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security), [Before User Created hook](https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook), and [Data API grants change](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically).

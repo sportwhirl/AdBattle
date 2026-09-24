@@ -23,13 +23,13 @@ import tempfile
 
 MAX_INPUT_BYTES = 30 * 1024 * 1024
 MAX_FULL_BYTES = 5 * 1024 * 1024
-MAX_HOVER_BYTES = 500 * 1024
+MAX_HOVER_BYTES = 400 * 1024
 MAX_POSTER_BYTES = 100 * 1024
-MIN_DURATION = 8.0
-MAX_DURATION = 12.0
-HOVER_SECONDS = 4
+MIN_DURATION = 4.5
+MAX_DURATION = 5.5
+HOVER_SECONDS = 3
 HOVER_FPS = 13
-FULL_SECONDS = 10
+FULL_SECONDS = 5
 FULL_FPS = 24
 MAX_INPUT_PIXELS = 1920 * 1080
 MAX_INPUT_FPS = 60
@@ -111,15 +111,18 @@ def _check_input(probe: dict, orientation: str) -> float:
     if width < 1 or height < 1 or width * height > MAX_INPUT_PIXELS:
         raise VideoProcessingError("INVALID_MEDIA", "Input dimensions exceed limit")
     target_width, target_height = DIMENSIONS[orientation]
-    if min(width, height) < 360 or abs(width / height - target_width / target_height) > 0.01:
+    ratio = width / height
+    native_wan_ratio = (832 / 480) if orientation == "landscape" else (480 / 832)
+    if min(width, height) < 360 or min(abs(ratio - target_width / target_height),
+                                       abs(ratio - native_wan_ratio)) > 0.01:
         raise VideoProcessingError("WRONG_ASPECT", "Input must match the requested 16:9 or 9:16 shape")
     if video.get("sample_aspect_ratio") not in (None, "N/A", "1:1"):
         raise VideoProcessingError("WRONG_ASPECT", "Input must use square pixels")
     duration = _number(video.get("duration", fmt.get("duration")), "duration")
     if not MIN_DURATION <= duration <= MAX_DURATION:
-        raise VideoProcessingError("WRONG_DURATION", "Video must be between 8 and 12 seconds")
+        raise VideoProcessingError("WRONG_DURATION", "Video must be between 4.5 and 5.5 seconds")
     # A late starting video can have an apparently valid container duration while
-    # providing fewer actual seconds of video for the 4-second hover.
+    # providing fewer actual seconds of video for the three-second hover.
     if _number(video.get("start_time", 0), "start time") > 0.1:
         raise VideoProcessingError("INVALID_MEDIA", "Video must start near zero")
     return duration
@@ -171,11 +174,14 @@ def _check_size(path: Path, maximum: int) -> int:
 def _encode_video(source: Path, destination: Path, orientation: str, *, hover: bool) -> None:
     width, height = DIMENSIONS[orientation]
     fps = HOVER_FPS if hover else FULL_FPS
-    # tpad extends the final frame when a source is shorter than ten seconds.
-    # Sources longer than ten seconds are trimmed by the fixed frame count.
-    filters = f"scale={width}:{height}:flags=lanczos,setsar=1,fps={fps}"
+    # Wan's 81-frame output may be slightly shorter than five seconds. Pad only
+    # the last half second; the fixed frame count also trims small overruns.
+    # Wan's 832x480 is slightly narrower than exact 16:9. Fit and pad so
+    # neither the full file nor its poster stretches or crops source pixels.
+    filters = (f"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,"
+               f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps}")
     if not hover:
-        filters += ",tpad=stop_mode=clone:stop_duration=2"
+        filters += ",tpad=stop_mode=clone:stop_duration=0.5"
     command = [
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
         "-xerror", "-err_detect", "explode", "-threads", "2",
@@ -206,7 +212,8 @@ def _make_poster(source: Path, destination: Path, orientation: str) -> None:
             "-use_absolute_path", "0", "-ss", "0.5", "-i", str(source),
             "-map", "0:v:0", "-an", "-sn", "-dn", "-map_metadata", "-1",
             "-map_metadata:s:v:0", "-1", "-map_chapters", "-1", "-frames:v", "1",
-            "-vf", f"scale={width}:{height}:flags=lanczos,setsar=1",
+            "-vf", (f"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,"
+                    f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"),
             "-q:v", str(quality), "-f", "image2", str(destination),
         ], timeout=60)
         if 0 < destination.stat().st_size <= MAX_POSTER_BYTES:

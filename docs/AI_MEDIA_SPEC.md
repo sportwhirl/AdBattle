@@ -7,7 +7,7 @@ smoke. No real provider image has been generated or posted. Video publishing
 is a separate change. The target is creative access for **all ages**, with
 parent-controlled access for children. The [youth access plan](YOUTH_ACCESS_PLAN.md)
 is a public release gate. The disabled staging image functions check distinct
-adult generation/submission grants, while the Luma video scaffold checks
+adult generation/submission grants, while the Wan2.1 video scaffold checks
 adult create/dispatch grants in code. The age RPC and verified grant issuer
 are not hosted yet. Neither AI feature is enabled on the production site.
 
@@ -19,27 +19,26 @@ idea, title, caption, and whether to submit the finished ad. Posting remains
 irreversible under the existing product rule. Generation alone never posts an
 ad or spends the creator's promotion money or a supporter's wallet balance.
 
-The site has two different costs. Generation is charged by the provider's
-model, output settings, duration, and actual token use. Gallery bandwidth is
+The site has two different costs. Image generation has provider charges;
+self-hosted video generation consumes GPU time and infrastructure. Gallery bandwidth is
 controlled by the files AdBattle serves. Shorter prompts, fewer colors, pixel
 art, and downscaling after generation do **not** by themselves guarantee a
-lower model bill. Measure actual provider usage before public pricing.
+lower generation cost. Measure actual use before public pricing.
 
 ## Provider decision at this checkpoint
 
 | Task | Staging choice | Reason |
 | --- | --- | --- |
 | Image draft | OpenAI GPT Image 2.5 Flare, low quality | The Images API can use an approved Zero Data Retention project; downscale provider output to the site budget. Minor end users require parent/guardian consent. |
-| Exactly 10-second model video | Luma Agents Ray 3.2, 360p candidate | Staging job scaffold only. Published pay-as-you-go price is $0.18 for 10s standard 360p, subject to change. Under-13 access needs an explicit provider agreement or another backend. |
-| All-ages motion alternative | AI-assisted animation from generated stills | Offline processor implemented for one or two approved JPEG/PNG stills: fixed pan/zoom, cut/dissolve, 10-second 360p derivatives. No account/API/gallery integration yet. It is not freeform model-generated motion. |
-| All-ages true video research | Self-hosted LTX-2.5 candidate | Its community license permits SaaS within conditions and has no stated end-user age floor. GPU cost, latency, output quality, downstream terms, and child-safety operation need validation before choosing it. |
+| Five-second Standard Ad | Self-hosted [Wan2.1 T2V 1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | Text-only staging scaffold; fixed 480p generation with five-second 360p delivery. No GPU smoke or public video gate yet. |
+| Instant Draft motion | AI-assisted animation from generated stills | Offline processor implemented for one or two approved JPEG/PNG stills: fixed pan/zoom, cut/dissolve, five-second 360p derivatives. No account/API/gallery integration yet. |
+| Enhanced Ad | Two Wan2.1 scenes edited into one five-second ad | Design only; assess cost and safety before implementation. |
 | OpenAI video | Do not start a Sora integration | OpenAI lists the Videos API and Sora 2 shutdown for 2026-09-24 with no replacement. |
 
 Sources: [OpenAI image guide](https://developers.openai.com/api/docs/guides/image-generation),
 [OpenAI under-18 guidance](https://developers.openai.com/api/docs/guides/safety-checks/under-18-api-guidance),
 [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data),
-[Luma video pricing](https://docs.agents.lumalabs.ai/guides/pricing),
-[Luma API terms](https://lumalabs.ai/legal/api-terms-of-use),
+[Wan2.1 model card](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B),
 [OpenAI deprecations](https://developers.openai.com/api/docs/deprecations).
 Recheck model availability, price, and terms before deployment.
 
@@ -50,10 +49,9 @@ general-audience application under that wording. OpenAI requires guardian
 consent for minors; its under-18 guidance requires approved ZDR before
 processing under-13/applicable-age personal data. The current staging function
 is limited to approved adult testers, which is not a public youth entitlement.
-Luma's standard terms say under-13 users are unauthorized, and the API terms
-define downstream API users. Do not route a child's request to Luma on a
-presumed exception. Confirm teen access, commercial publishing, and 360p
-draft-tier output rights in writing before public model video creation.
+Wan2.1's Apache-2.0 model license does not establish child-facing safety,
+privacy or lawful operation for AdBattle. Keep model video adult-staging-only
+until the full age, guardian and output-review paths are implemented.
 
 ## Creative format
 
@@ -82,7 +80,7 @@ capacity, hosted verification, and provider approval.
 | Asset | Generation request | Public delivery limit | Behavior |
 | --- | --- | --- | --- |
 | Still image | One low-quality OpenAI image, 816×816 square or 1088×608 near-16:9 source | Canonical JPEG, 640×640 or 640×360, <= 500 KiB; gallery thumbnail target <= 100 KiB | Show a draft first. Publish only after creator chooses it and existing image safety and duplicate checks pass. Preserve the whole wide source frame in the canonical resize. |
-| Video | Request one 10-second 16:9 or 9:16 clip at 360p; verify actual duration and frame rate | Silent H.264 MP4, 360p, <= 5 MiB; separate poster <= 100 KiB; separate 3–5-second muted hover clip, 12–15 fps, target 150–400 KiB and hard cap 500 KiB | Poster loads first. Hover starts after a short delay, only one in view plays, and leaves stop playback. Touch requires a tap. Full clip loads only on opening. |
+| Video | Request one five-second 16:9 or 9:16 Wan2.1 scene at native 480p; verify actual duration and frame rate | Silent H.264 MP4, 360p, <= 5 MiB; separate poster <= 100 KiB; separate three-second 13 fps hover with a 400 KiB cap | Poster loads first. Hover starts after a short delay, only one in view plays, and leaves stop playback. Touch requires a tap. Full clip loads only on opening. |
 
 The video provider's original is kept private for provenance and processing;
 the public files are separate derivatives. A transcoded copy may not retain an
@@ -178,10 +176,9 @@ The AI-created page label is separate from both watermark versions.
 
 1. Stage image drafts behind a staging-only feature flag, private server key,
    server quota, mocked endpoint tests, and the existing post/scan path.
-2. Make a dedicated Luma candidate video job, storage, and moderation design
-   with an async worker/transcoder. Validate the REST generation ID, status,
-   expiring output URL, and media bytes. Test duration and actual 360p billing
-   with a real staging key under a small budget only after provider review.
+2. Review the dedicated Wan2.1 staging queue, private GPU worker and offline
+   processor. Validate the pinned runtime, actual model output and private
+   media bytes on a GPU before enabling even one approved adult job.
 3. Add video-specific schema/RLS, private source and public derivatives,
    gallery rendering, poster-first loading, frame review, and an independent
    publication gate. Test safe and held outputs before any public toggle.
@@ -190,7 +187,7 @@ The AI-created page label is separate from both watermark versions.
 4. Implement the all-ages account, guardian-consent, approved OpenAI ZDR,
    server-entitlement, child-safety, and privacy gates in
    [the youth plan](YOUTH_ACCESS_PLAN.md). A true model-video route for children
-   needs provider permission or a separate lawful architecture. Verify
+   needs a separately reviewed lawful and child-safe architecture. Verify
    accessibility, mobile playback, moderation staffing, production spend
    limits, and payment age rules. Production generation remains disabled until
    these gates and hosted checks pass.
