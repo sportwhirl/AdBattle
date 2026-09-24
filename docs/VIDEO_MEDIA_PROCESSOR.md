@@ -1,8 +1,9 @@
 # Local video media processor
 
-`scripts/process_video_media.py` converts a generated H.264 MP4 into a small,
-silent 360p video and poster, plus a hover clip when its size cap is met. It runs on a
-local worker. It does not generate video, perform content moderation, upload
+`scripts/process_video_media.py` converts a generated H.264/AAC MP4 into a
+small audiovisual 360p full clip and poster, plus a physically silent hover
+clip when its size cap is met. It runs on a local worker. It does not generate
+video or sound, perform content moderation, upload
 media, alter the original file, or publish an ad.
 
 ## Usage
@@ -26,17 +27,21 @@ code, and no output directory exists. Example errors include `WRONG_DURATION`,
 
 | File | Output | Hard size cap |
 | --- | --- | ---: |
-| `full.mp4` | 640×360 or 360×640, H.264, 24 fps, silent, exactly 10 seconds | 5 MiB |
+| `full.mp4` | 640×360 or 360×640, H.264, 24 fps, AAC stereo at 48 kHz/64 kbps, exactly 10 seconds | 5 MiB |
 | `hover.mp4` | Same dimensions, H.264, 13 fps, first four seconds, silent; optional | 500 KiB |
 | `poster.jpg` | Same dimensions, still frame at 0.5 seconds | 100 KiB |
 
 Input must be a regular, non-symlink MP4 file at most 30 MiB, with exactly one
-H.264 video stream, square pixels, an 8–12 second video duration, a frame rate
+H.264 video stream and one AAC mono/stereo stream and no other streams, square
+pixels, matching 8–12 second audio/video durations, and a video frame rate
 between 12 and 60 fps, and a 16:9 or 9:16 ratio within 1%. The shorter side must be
-at least 360 pixels; input resolution is capped at 2,073,600 pixels. Audio on
-the source is allowed but excluded from both output videos. Source metadata,
+at least 360 pixels; input resolution is capped at 2,073,600 pixels. Missing,
+extra, delayed, mismatched-duration, missing-timing, effectively silent,
+unsupported, or malformed audio fails closed. The full derivative retains the AI-generated soundtrack, normalizes it
+to -16 LUFS with a -1.5 dB true-peak target, and re-encodes it as AAC. The hover
+derivative always excludes audio. Source metadata,
 including title, comment, artist, chapters, and creation time, is excluded.
-The source is fully decoded before derivative generation. A corrupt, oversized,
+The source video and audio are fully decoded before derivative generation. A corrupt, oversized,
 or nonconforming file fails before publication. Sources shorter than 10 seconds
 hold the final frame to reach exactly 10 seconds; sources longer than 10 seconds
 are trimmed at 10 seconds. The first four source seconds form the hover clip.
@@ -52,8 +57,9 @@ fails closed without publishing files.
 
 The processor accepts a local path from an upstream job. Run it in a restricted
 worker with resource and concurrency limits when integrating it with untrusted
-uploads. A moderation and approval process must occur separately before any
-public use. These derivative caps describe delivery format and size; they do
+uploads. A separate scanner must sample the complete video, transcribe speech,
+review non-speech audio/music/voice risks, and bind those results to the exact
+full-file hash before any public use. These derivative caps describe delivery format and size; they do
 not define acceptable generated content or artistic style.
 
 Run its offline integration tests with:

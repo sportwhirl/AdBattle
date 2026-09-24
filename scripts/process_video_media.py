@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a generated MP4 and atomically publish small, silent derivatives.
+"""Validate a generated audiovisual MP4 and publish bounded derivatives.
 
 This is an offline media processor, not a content moderation or publishing step.
 It needs Python 3, ffmpeg, ffprobe, and Linux renameat2(2).
@@ -8,10 +8,12 @@ It needs Python 3, ffmpeg, ffprobe, and Linux renameat2(2).
 from __future__ import annotations
 
 import argparse
+from array import array
 import ctypes
 import errno
 from fractions import Fraction
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -35,6 +37,17 @@ MAX_INPUT_PIXELS = 1920 * 1080
 MAX_INPUT_FPS = 60
 DIMENSIONS = {"landscape": (640, 360), "portrait": (360, 640)}
 OUTPUT_NAMES = ("full.mp4", "hover.mp4", "poster.jpg")
+INPUT_AUDIO_CODEC = "aac"
+FULL_AUDIO_CODEC = "aac"
+FULL_AUDIO_SAMPLE_RATE = 48_000
+FULL_AUDIO_CHANNELS = 2
+FULL_AUDIO_BITRATE = "64k"
+FULL_AUDIO_FILTER = "apad=pad_dur=2,loudnorm=I=-16:LRA=11:TP=-1.5"
+AUDIBILITY_SAMPLE_RATE = 8_000
+AUDIBILITY_WINDOW_SAMPLES = 800
+AUDIBILITY_MIN_WINDOWS = 5
+AUDIBILITY_MIN_WINDOW_RMS = 16.0
+AUDIBILITY_MIN_PEAK = 64
 
 
 class VideoProcessingError(Exception):
@@ -64,7 +77,8 @@ def _probe(path: Path) -> dict:
         "-enable_drefs", "0", "-use_absolute_path", "0",
         "-show_entries", "format=format_name,duration:format_tags=title,comment,artist,creation_time"
         ":stream=index,codec_type,codec_name,width,height,pix_fmt,sample_aspect_ratio,"
-        "duration,start_time,avg_frame_rate:stream_tags=title,comment,artist,creation_time,handler_name",
+        "duration,start_time,avg_frame_rate,sample_rate,channels,channel_layout:"
+        "stream_tags=title,comment,artist,creation_time,handler_name",
         "-show_format", "-show_streams", "-of", "json", str(path),
     ], timeout=30)
     try:
@@ -96,6 +110,16 @@ def _video_stream(probe: dict, *, only_stream: bool = False) -> dict:
     return video
 
 
+def _audio_stream(probe: dict, *, require_exact_pair: bool = False) -> dict:
+    streams = probe.get("streams", [])
+    if not isinstance(streams, list):
+        raise VideoProcessingError("INVALID_MEDIA", "Invalid media streams")
+    audios = [stream for stream in streams if stream.get("codec_type") == "audio"]
+    if len(audios) != 1 or (require_exact_pair and len(streams) != 2):
+        raise VideoProcessingError("INVALID_MEDIA", "Expected exactly one audio stream")
+    return audios[0]
+
+
 def _check_input(probe: dict, orientation: str) -> float:
     fmt = probe.get("format", {})
     if "mp4" not in fmt.get("format_name", "").split(","):
@@ -115,14 +139,59 @@ def _check_input(probe: dict, orientation: str) -> float:
         raise VideoProcessingError("WRONG_ASPECT", "Input must match the requested 16:9 or 9:16 shape")
     if video.get("sample_aspect_ratio") not in (None, "N/A", "1:1"):
         raise VideoProcessingError("WRONG_ASPECT", "Input must use square pixels")
-    duration = _number(video.get("duration", fmt.get("duration")), "duration")
+    duration = _number(video.get("duration"), "video stream duration")
     if not MIN_DURATION <= duration <= MAX_DURATION:
         raise VideoProcessingError("WRONG_DURATION", "Video must be between 8 and 12 seconds")
     # A late starting video can have an apparently valid container duration while
     # providing fewer actual seconds of video for the 4-second hover.
     if _number(video.get("start_time", 0), "start time") > 0.1:
         raise VideoProcessingError("INVALID_MEDIA", "Video must start near zero")
+    audio = _audio_stream(probe, require_exact_pair=True)
+    if audio.get("codec_name") != INPUT_AUDIO_CODEC:
+        raise VideoProcessingError("UNSUPPORTED_AUDIO_CODEC", "Audio must be AAC")
+    try:
+        sample_rate = int(audio["sample_rate"])
+        channels = int(audio["channels"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise VideoProcessingError("INVALID_MEDIA", "Invalid audio format") from exc
+    if not 8_000 <= sample_rate <= 96_000 or channels not in (1, 2):
+        raise VideoProcessingError("INVALID_MEDIA", "Audio must be mono or stereo at 8–96 kHz")
+    audio_duration = _number(audio.get("duration"), "audio stream duration")
+    if abs(audio_duration - duration) > 0.5:
+        raise VideoProcessingError("WRONG_DURATION", "Audio and video durations must match")
+    if _number(audio.get("start_time", 0), "audio start time") > 0.1:
+        raise VideoProcessingError("INVALID_MEDIA", "Audio must start near zero")
     return duration
+
+
+def _check_audio_audible(path: Path) -> None:
+    """Reject empty/effectively silent tracks before padding or normalization."""
+    pcm = _run([
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-xerror", "-err_detect", "explode", "-threads", "1",
+        "-protocol_whitelist", "file", "-enable_drefs", "0",
+        "-use_absolute_path", "0", "-i", str(path),
+        "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "1",
+        "-ar", str(AUDIBILITY_SAMPLE_RATE), "-t", str(MAX_DURATION),
+        "-c:a", "pcm_s16le", "-f", "s16le", "-",
+    ], timeout=30)
+    if not pcm or len(pcm) % 2:
+        raise VideoProcessingError("INVALID_MEDIA", "Could not decode generated audio")
+    samples = array("h")
+    samples.frombytes(pcm)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    peak = max(abs(sample) for sample in samples)
+    audible_windows = 0
+    for start in range(0, len(samples), AUDIBILITY_WINDOW_SAMPLES):
+        window = samples[start:start + AUDIBILITY_WINDOW_SAMPLES]
+        if len(window) < AUDIBILITY_WINDOW_SAMPLES:
+            break
+        rms = math.sqrt(sum(sample * sample for sample in window) / len(window))
+        if rms >= AUDIBILITY_MIN_WINDOW_RMS:
+            audible_windows += 1
+    if peak < AUDIBILITY_MIN_PEAK or audible_windows < AUDIBILITY_MIN_WINDOWS:
+        raise VideoProcessingError("SILENT_AUDIO", "Generated soundtrack is silent")
 
 
 def _snapshot_input(source: Path, stage: Path) -> Path:
@@ -181,8 +250,15 @@ def _encode_video(source: Path, destination: Path, orientation: str, *, hover: b
         "-xerror", "-err_detect", "explode", "-threads", "2",
         "-protocol_whitelist", "file", "-enable_drefs", "0",
         "-use_absolute_path", "0", "-i", str(source),
-        "-map", "0:v:0", "-an", "-sn", "-dn",
-        "-map_metadata", "-1", "-map_metadata:s:v:0", "-1", "-map_chapters", "-1",
+        "-map", "0:v:0",
+    ]
+    if hover:
+        command += ["-an"]
+    else:
+        command += ["-map", "0:a:0"]
+    command += [
+        "-sn", "-dn", "-map_metadata", "-1", "-map_metadata:s:v:0", "-1",
+        "-map_metadata:s:a:0", "-1", "-map_chapters", "-1",
         "-vf", filters,
         "-c:v", "libx264", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-crf", "29" if hover else "26",
@@ -190,7 +266,15 @@ def _encode_video(source: Path, destination: Path, orientation: str, *, hover: b
         "-bufsize", "480k" if hover else "2400k",
         "-movflags", "+faststart",
     ]
+    if not hover:
+        # Preserve the generated soundtrack in the full clip. A short source is
+        # padded with silence in lockstep with the final held video frame.
+        command += ["-af", FULL_AUDIO_FILTER, "-c:a", FULL_AUDIO_CODEC,
+                    "-b:a", FULL_AUDIO_BITRATE, "-ar", str(FULL_AUDIO_SAMPLE_RATE),
+                    "-ac", str(FULL_AUDIO_CHANNELS)]
     command += ["-frames:v", str(HOVER_SECONDS * HOVER_FPS if hover else FULL_SECONDS * FULL_FPS)]
+    if not hover:
+        command += ["-t", str(FULL_SECONDS)]
     command += ["-f", "mp4", str(destination)]
     _run(command, timeout=120)
 
@@ -218,7 +302,7 @@ def _verify_video(path: Path, orientation: str, *, hover: bool) -> None:
     probe = _probe(path)
     if "mp4" not in probe.get("format", {}).get("format_name", "").split(","):
         raise VideoProcessingError("INVALID_OUTPUT", "Output must be MP4")
-    video = _video_stream(probe, only_stream=True)
+    video = _video_stream(probe, only_stream=hover)
     if tuple(video.get(dimension) for dimension in ("width", "height")) != DIMENSIONS[orientation]:
         raise VideoProcessingError("INVALID_OUTPUT", "Output dimensions do not match 360p")
     if video.get("pix_fmt") != "yuv420p":
@@ -233,6 +317,23 @@ def _verify_video(path: Path, orientation: str, *, hover: bool) -> None:
     expected = HOVER_SECONDS if hover else FULL_SECONDS
     if abs(actual_duration - expected) > 0.15:
         raise VideoProcessingError("INVALID_OUTPUT", "Output duration does not match input")
+    if not hover:
+        try:
+            audio = _audio_stream(probe, require_exact_pair=True)
+            sample_rate = int(audio["sample_rate"])
+            channels = int(audio["channels"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise VideoProcessingError("INVALID_OUTPUT", "Output audio format is invalid") from exc
+        if audio.get("codec_name") != FULL_AUDIO_CODEC or sample_rate != FULL_AUDIO_SAMPLE_RATE or \
+                channels != FULL_AUDIO_CHANNELS:
+            raise VideoProcessingError("INVALID_OUTPUT", "Output audio does not match target")
+        if _number(video.get("start_time", 0), "output video start time") > 0.1 or \
+                _number(audio.get("start_time", 0), "output audio start time") > 0.1:
+            raise VideoProcessingError("INVALID_OUTPUT", "Output audio and video must start near zero")
+        audio_duration = _number(audio.get("duration", probe.get("format", {}).get("duration")),
+                                 "output audio duration")
+        if abs(audio_duration - FULL_SECONDS) > 0.15:
+            raise VideoProcessingError("INVALID_OUTPUT", "Output audio duration does not match target")
 
 
 def _verify_poster(path: Path, orientation: str) -> None:
@@ -286,14 +387,15 @@ def process_video(source: Path, output_dir: Path, orientation: str) -> dict:
         snapshot = _snapshot_input(source, stage)
         metadata = _probe(snapshot)
         duration = _check_input(metadata, orientation)
-        # Decode every video frame before publishing, catching files whose header
-        # probes successfully but whose media payload is broken.
+        _check_audio_audible(snapshot)
+        # Decode every video frame and audio sample before publishing, catching
+        # files whose header probes successfully but whose payload is broken.
         _run([
             "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
             "-xerror", "-err_detect", "explode", "-threads", "2",
             "-protocol_whitelist", "file", "-enable_drefs", "0",
             "-use_absolute_path", "0", "-i", str(snapshot),
-            "-map", "0:v:0", "-an", "-sn", "-dn", "-f", "null", "-",
+            "-map", "0:v:0", "-map", "0:a:0", "-sn", "-dn", "-f", "null", "-",
         ], timeout=90)
         full, hover, poster = (stage / name for name in OUTPUT_NAMES)
         _encode_video(snapshot, full, orientation, hover=False)
@@ -317,6 +419,9 @@ def process_video(source: Path, output_dir: Path, orientation: str) -> dict:
         _publish_without_replacement(stage, destination)
         return {"orientation": orientation, "input_duration_seconds": duration,
                 "full_duration_seconds": FULL_SECONDS,
+                "full_audio": {"codec": FULL_AUDIO_CODEC,
+                               "sample_rate_hz": FULL_AUDIO_SAMPLE_RATE,
+                               "channels": FULL_AUDIO_CHANNELS},
                 "hover_fallback": "poster.jpg" if "hover.mp4" not in sizes else None,
                 "files": {name: {"path": str(destination / name), "bytes": size}
                           for name, size in sizes.items()}}

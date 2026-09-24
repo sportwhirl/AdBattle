@@ -5,7 +5,7 @@ import { isUuid } from '../_shared/http.ts';
 
 const JOBS = 'ai_video_draft_jobs';
 const REVIEW_ATTESTATION = 'I reviewed this exact prompt against the AdBattle video safety rules';
-const FIELDS = 'id,user_id,request_id,request_hash,prompt,aspect_ratio,style,status,reviewed_at,reviewed_request_hash,provider_generation_id,provider_output_url,provider_deadline_at,next_poll_at';
+const FIELDS = 'id,user_id,request_id,request_hash,prompt,aspect_ratio,style,audio_required,status,reviewed_at,reviewed_request_hash,provider_generation_id,provider_output_url,provider_deadline_at,next_poll_at';
 function response(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), { status,
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     if (error) return response({ error: 'Read failed.' }, 503);
     return data ? response({ job: { id: data.id, prompt: data.prompt,
       aspect_ratio: data.aspect_ratio, style: data.style, request_hash: data.request_hash,
-      status: data.status } }) : response({ error: 'Not found.' }, 404);
+      audio_required: data.audio_required, status: data.status } }) : response({ error: 'Not found.' }, 404);
   }
   if (body?.action === 'approve' || body?.action === 'reject') {
     if (!isUuid(body.job_id) || !/^[0-9a-f]{64}$/.test(String(body.request_hash)) ||
@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
     const job = jobs?.[0];
     if (!job) return response({ status: 'idle' });
     if (job.reviewed_request_hash !== job.request_hash) return response({ error: 'Review binding failed.' }, 409);
+    if (job.audio_required !== true) return response({ error: 'Audio contract is invalid.' }, 409);
     const { data: account, error: accountError } = await db.auth.admin.getUserById(job.user_id);
     if (accountError || !account?.user) return response({ error: 'Adult staging eligibility could not be checked.' }, 503);
     if (!adultTestApproved(account.user)) {

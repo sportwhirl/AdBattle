@@ -17,19 +17,39 @@ import process_video_media as media  # noqa: E402
 
 
 def fixture(path: Path, *, duration: int = 10, orientation: str = "landscape",
-            codec: str = "libx264") -> None:
+            codec: str = "libx264", with_audio: bool = True,
+            audio_codec: str = "aac", audio_duration: int | None = None,
+            extra_audio: bool = False, silent_audio: bool = False) -> None:
     width, height = media.DIMENSIONS[orientation]
-    subprocess.run([
+    command = [
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
         "-f", "lavfi", "-i", f"testsrc2=size={width}x{height}:rate=24",
-        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=8000",
-        "-t", str(duration), "-map", "0:v:0", "-map", "1:a:0",
+    ]
+    if with_audio:
+        source = "anullsrc=r=8000:cl=mono" if silent_audio else \
+            "sine=frequency=440:sample_rate=8000"
+        if audio_duration is not None:
+            source += f":duration={audio_duration}"
+        command += ["-f", "lavfi", "-i", source]
+        if extra_audio:
+            command += ["-f", "lavfi", "-i", "sine=frequency=660:sample_rate=8000"]
+    command += ["-t", str(duration), "-map", "0:v:0"]
+    if with_audio:
+        command += ["-map", "1:a:0"]
+        if extra_audio:
+            command += ["-map", "2:a:0"]
+    command += [
         "-c:v", codec, "-preset", "ultrafast" if codec == "libx264" else "medium",
-        "-pix_fmt", "yuv420p", "-c:a", "aac", "-metadata", "title=PRIVATE SOURCE TITLE",
+        "-pix_fmt", "yuv420p",
+    ]
+    if with_audio:
+        command += ["-c:a", audio_codec]
+    command += ["-metadata", "title=PRIVATE SOURCE TITLE",
         "-metadata", "comment=PRIVATE SOURCE COMMENT",
         "-metadata:s:v:0", "handler_name=PRIVATE SOURCE HANDLER",
         "-f", "mp4", str(path),
-    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40)
+    ]
+    subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40)
 
 
 class VideoMediaProcessorTests(unittest.TestCase):
@@ -56,7 +76,7 @@ class VideoMediaProcessorTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self._staging_is_clean()
 
-    def test_landscape_creates_three_bounded_silent_outputs_without_changing_input(self) -> None:
+    def test_landscape_keeps_audio_only_in_full_output_without_changing_input(self) -> None:
         initial_hash = hashlib.sha256(self.source.read_bytes()).hexdigest()
         destination = self.root / "landscape-output"
         result = media.process_video(self.source, destination, "landscape")
@@ -68,10 +88,13 @@ class VideoMediaProcessorTests(unittest.TestCase):
                           ("poster.jpg", media.MAX_POSTER_BYTES)):
             self.assertLessEqual(result["files"][name]["bytes"], cap)
             self.assertEqual(result["files"][name]["bytes"], (destination / name).stat().st_size)
+        self.assertEqual({"codec": "aac", "sample_rate_hz": 48_000, "channels": 2},
+                         result["full_audio"])
         for name, seconds, fps in (("full.mp4", 10, 24), ("hover.mp4", 4, 13)):
             info = media._probe(destination / name)
-            self.assertEqual(1, len(info["streams"]))
-            stream = info["streams"][0]
+            expected_streams = 2 if name == "full.mp4" else 1
+            self.assertEqual(expected_streams, len(info["streams"]))
+            stream = next(item for item in info["streams"] if item["codec_type"] == "video")
             self.assertEqual("h264", stream["codec_name"])
             self.assertEqual((640, 360), (stream["width"], stream["height"]))
             self.assertEqual(Fraction(fps), Fraction(stream["avg_frame_rate"]))
@@ -80,6 +103,14 @@ class VideoMediaProcessorTests(unittest.TestCase):
             for forbidden in ("title", "comment", "artist", "creation_time"):
                 self.assertNotIn(forbidden, tags)
             self.assertNotEqual("PRIVATE SOURCE HANDLER", stream.get("tags", {}).get("handler_name"))
+            if name == "full.mp4":
+                audio = next(item for item in info["streams"] if item["codec_type"] == "audio")
+                self.assertEqual("aac", audio["codec_name"])
+                self.assertEqual(48_000, int(audio["sample_rate"]))
+                self.assertEqual(2, int(audio["channels"]))
+                self.assertAlmostEqual(10, float(audio["duration"]), delta=0.15)
+            else:
+                self.assertFalse(any(item["codec_type"] == "audio" for item in info["streams"]))
         poster = media._probe(destination / "poster.jpg")["streams"][0]
         self.assertEqual("mjpeg", poster["codec_name"])
         self.assertEqual((640, 360), (poster["width"], poster["height"]))
@@ -120,6 +151,36 @@ class VideoMediaProcessorTests(unittest.TestCase):
         source = self.root / "short.mp4"
         fixture(source, duration=3)
         self._rejects_without_output(source, "short-output", "WRONG_DURATION")
+
+    def test_missing_generated_audio_is_rejected_before_publication(self) -> None:
+        source = self.root / "silent.mp4"
+        fixture(source, with_audio=False)
+        self._rejects_without_output(source, "silent-output", "INVALID_MEDIA")
+
+    def test_effectively_silent_generated_audio_is_rejected_before_publication(self) -> None:
+        source = self.root / "silent-track.mp4"
+        fixture(source, silent_audio=True)
+        self._rejects_without_output(source, "silent-track-output", "SILENT_AUDIO")
+
+    def test_missing_stream_duration_fails_closed(self) -> None:
+        probe = media._probe(self.source)
+        next(stream for stream in probe["streams"] if stream["codec_type"] == "audio").pop("duration")
+        with self.assertRaises(media.VideoProcessingError) as raised:
+            media._check_input(probe, "landscape")
+        self.assertEqual("INVALID_MEDIA", raised.exception.code)
+
+    def test_extra_or_mismatched_audio_is_rejected_before_publication(self) -> None:
+        extra = self.root / "extra-audio.mp4"
+        fixture(extra, extra_audio=True)
+        self._rejects_without_output(extra, "extra-audio-output", "INVALID_MEDIA")
+        short = self.root / "short-audio.mp4"
+        fixture(short, audio_duration=5)
+        self._rejects_without_output(short, "short-audio-output", "WRONG_DURATION")
+
+    def test_unsupported_audio_codec_is_rejected_before_publication(self) -> None:
+        source = self.root / "ac3-audio.mp4"
+        fixture(source, audio_codec="ac3")
+        self._rejects_without_output(source, "ac3-audio-output", "UNSUPPORTED_AUDIO_CODEC")
 
     def test_corrupt_file_rejected_before_publication(self) -> None:
         source = self.root / "corrupt.mp4"

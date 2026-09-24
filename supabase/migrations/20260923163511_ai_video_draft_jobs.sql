@@ -14,6 +14,7 @@ create table public.ai_video_draft_jobs (
     check (model = 'ray-3.2'),
   duration text not null default '10s' check (duration = '10s'),
   resolution text not null default '360p' check (resolution = '360p'),
+  audio_required boolean not null default true check (audio_required),
   status text not null default 'pending_review' check (status in (
     'pending_review', 'queued', 'dispatching', 'dispatch_unknown',
     'in_progress', 'polling', 'ready_for_processing',
@@ -81,10 +82,12 @@ create function public.keep_ai_video_draft_request_immutable()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
   if (new.user_id, new.request_id, new.request_hash, new.prompt,
-      new.aspect_ratio, new.style, new.model, new.duration, new.resolution, new.created_at)
+      new.aspect_ratio, new.style, new.model, new.duration, new.resolution,
+      new.audio_required, new.created_at)
       is distinct from
      (old.user_id, old.request_id, old.request_hash, old.prompt,
-      old.aspect_ratio, old.style, old.model, old.duration, old.resolution, old.created_at) then
+      old.aspect_ratio, old.style, old.model, old.duration, old.resolution,
+      old.audio_required, old.created_at) then
     raise exception 'AI_VIDEO_REQUEST_IMMUTABLE' using errcode = 'P0001';
   end if;
   return new;
@@ -118,7 +121,7 @@ for select to authenticated using ((select auth.uid()) = user_id);
 
 revoke all on public.ai_video_draft_jobs from public, anon, authenticated;
 grant select (id, request_id, status, aspect_ratio, style, model, duration,
-  resolution, error_code, created_at, updated_at)
+  resolution, audio_required, error_code, created_at, updated_at)
   on public.ai_video_draft_jobs to authenticated;
 grant all on public.ai_video_draft_jobs to service_role;
 revoke all on function public.enforce_ai_video_draft_insert() from public, anon, authenticated;

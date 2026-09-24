@@ -15,7 +15,8 @@ function reply(req: Request, body: Record<string, unknown>, status = 200) {
 
 function summary(row: Record<string, unknown>) {
   return { id: row.id, request_id: row.request_id, status: row.status,
-    aspect_ratio: row.aspect_ratio, style: row.style, error_code: row.error_code,
+    aspect_ratio: row.aspect_ratio, style: row.style, audio_required: row.audio_required,
+    error_code: row.error_code,
     created_at: row.created_at, updated_at: row.updated_at };
 }
 
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
   if (body?.action === 'status') {
     if (!isUuid(body.job_id)) return reply(req, { error: 'Invalid job ID.' }, 400);
     const { data, error } = await admin.from('ai_video_draft_jobs')
-      .select('id,request_id,status,aspect_ratio,style,error_code,created_at,updated_at')
+      .select('id,request_id,status,aspect_ratio,style,audio_required,error_code,created_at,updated_at')
       .eq('id', body.job_id).eq('user_id', user.id).maybeSingle();
     if (error) return reply(req, { error: 'Could not read draft.' }, 503);
     return data ? reply(req, { job: summary(data) }) : reply(req, { error: 'Draft not found.' }, 404);
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
   try { draft = normalizeDraft(body); }
   catch { return reply(req, { error: 'Prompt or output format is invalid.' }, 400); }
   const hash = await draftHash(draft);
-  const select = 'id,request_id,request_hash,status,aspect_ratio,style,error_code,created_at,updated_at';
+  const select = 'id,request_id,request_hash,status,aspect_ratio,style,audio_required,error_code,created_at,updated_at';
   const existing = async () => admin.from('ai_video_draft_jobs').select(select)
     .eq('user_id', user.id).eq('request_id', body.request_id).maybeSingle();
   const old = await existing();

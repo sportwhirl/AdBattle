@@ -3,6 +3,8 @@ export const STAGING_URL = 'https://nccqnrcdygujulrnwair.supabase.co';
 export const STAGING_ORIGIN = 'http://localhost:8000';
 export const MODEL = 'ray-3.2';
 export const API_BASE = 'https://agents.lumalabs.ai/v1';
+export const STAGING_FEATURE = 'video-audio-drafts-v2';
+export const AUDIO_REQUIRED = true;
 export const MAX_PROVIDER_JSON_BYTES = 128 * 1024;
 export const MAX_DOWNLOAD_URL_LENGTH = 8192;
 export const STYLES = Object.freeze({
@@ -15,7 +17,7 @@ export const STYLES = Object.freeze({
 
 export function assertStaging(env) {
   if (env.SUPABASE_URL !== STAGING_URL ||
-      env.ADBATTLE_AI_STAGING_ENABLED !== 'video-drafts-v1') {
+      env.ADBATTLE_AI_STAGING_ENABLED !== STAGING_FEATURE) {
     throw new Error('AI_VIDEO_STAGING_GUARD');
   }
 }
@@ -44,8 +46,9 @@ export function normalizeDraft(body) {
 }
 
 export async function draftHash(draft) {
-  const payload = JSON.stringify({ version: 2, model: MODEL, duration: '10s',
-    resolution: '360p', aspect_ratio: draft.aspect_ratio, style: draft.style, prompt: draft.prompt });
+  const payload = JSON.stringify({ version: 3, model: MODEL, duration: '10s',
+    resolution: '360p', audio_required: AUDIO_REQUIRED,
+    aspect_ratio: draft.aspect_ratio, style: draft.style, prompt: draft.prompt });
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -57,7 +60,9 @@ export function providerRequest(job) {
   return {
     model: MODEL,
     type: 'video',
-    prompt: `Create a ten-second ad draft. ${style} Keep the key subject legible at 360p. Creative direction: ${job.prompt}`,
+    prompt: `Create a ten-second ad draft with one synchronized, original AI-generated soundtrack. ` +
+      `${style} Keep the key subject legible at 360p. Do not imitate a named artist, celebrity, ` +
+      `copyrighted song, or real person's voice. Creative direction: ${job.prompt}`,
     aspect_ratio: job.aspect_ratio,
     video: { resolution: '360p', duration: '10s' },
     web_search: false,
