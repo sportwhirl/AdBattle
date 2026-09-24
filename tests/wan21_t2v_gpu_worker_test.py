@@ -14,7 +14,7 @@ import wan21_t2v_gpu_worker as worker  # noqa: E402
 
 OWNER = "00000000-0000-4000-8000-000000000001"
 JOB = "20000000-0000-4000-8000-000000000001"
-TASK = "30000000-0000-4000-8000-000000000001"
+TASK = JOB
 
 
 def job():
@@ -33,7 +33,8 @@ class FakeApi:
     def json(self, path, *, method="GET", body=None, local=False):
         if local:
             self.local_calls.append((path, body))
-            if path == "/v1/tasks/video":
+            if path == "/v1/tasks/video/":
+                assert body["task_id"] == JOB
                 Path(body["save_result_path"]).write_bytes(b"generated-video-fixture")
                 return {"task_id": TASK, "task_status": "pending"}
             return {"task_id": TASK, "status": "completed"}
@@ -85,9 +86,10 @@ class Wan21T2VGpuWorkerTests(unittest.TestCase):
         with mock.patch.object(worker, "process_video", side_effect=processed):
             result = worker.process_one(api, self.root, poll_seconds=0)
         self.assertEqual("ready_for_processing", result["status"])
-        self.assertEqual(1, len([path for path, _ in api.local_calls if path == "/v1/tasks/video"]))
+        self.assertEqual(1, len([path for path, _ in api.local_calls if path == "/v1/tasks/video/"]))
         submission = api.local_calls[0][1]
         self.assertEqual("t2v", submission["task"])
+        self.assertEqual(JOB, submission["task_id"])
         self.assertNotIn("image_path", submission)
         self.assertEqual([480, 832], submission["size"])
         self.assertEqual(81, submission["num_frames"])
@@ -95,12 +97,13 @@ class Wan21T2VGpuWorkerTests(unittest.TestCase):
         self.assertTrue(all("ai-video-drafts" in path for path, _, _ in api.uploads))
         self.assertEqual("ready_for_processing", self.patches[-1]["status"])
         self.assertEqual(TASK, self.patches[0]["gpu_task_id"])
+        self.assertEqual([], list(self.root.iterdir()))
 
     def test_uncertain_gpu_response_is_never_requeued(self):
         api = FakeApi()
         original = api.json
         def missing_id(path, **kwargs):
-            if path == "/v1/tasks/video":
+            if path == "/v1/tasks/video/":
                 api.local_calls.append((path, kwargs["body"]))
                 return {}
             return original(path, **kwargs)
@@ -109,6 +112,10 @@ class Wan21T2VGpuWorkerTests(unittest.TestCase):
             worker.process_one(api, self.root)
         self.assertEqual(1, len(api.local_calls))
         self.assertEqual("dispatch_unknown", self.patches[-1]["status"])
+        self.assertEqual(JOB, self.patches[0]["gpu_task_id"])
+        retained = Path(api.local_calls[0][1]["save_result_path"]).parent
+        self.assertTrue(retained.is_dir())
+        self.assertIn(JOB, retained.name)
 
 
 if __name__ == "__main__":

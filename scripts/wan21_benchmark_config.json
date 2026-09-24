@@ -1,0 +1,19 @@
+{
+  "infer_steps": 50,
+  "num_frames": 81,
+  "fps": 16,
+  "text_len": 512,
+  "size": [480, 832],
+  "self_attn_1_type": "torch_sdpa",
+  "cross_attn_1_type": "torch_sdpa",
+  "cross_attn_2_type": "torch_sdpa",
+  "sample_guide_scale": 6,
+  "sample_shift": 8,
+  "enable_cfg": true,
+  "cpu_offload": true,
+  "offload_granularity": "block",
+  "t5_cpu_offload": true,
+  "vae_cpu_offload": true,
+  "dit_quantized": false,
+  "t5_quantized": false
+}

@@ -64,11 +64,15 @@ the prompt and do not change the fixed checkpoint, steps, frames or quotas.
    rechecks the current Auth adult claim and `ai_video_dispatch`/
    `wan21_t2v` grant, submits **one T2V request without an image** to the
    loopback LightX2V server, polls, processes and privately uploads the media.
+   It persists the job UUID as the GPU task ID before the one submission to
+   `/v1/tasks/video/`. The runtime preserves this caller-supplied ID.
    Bind the native GPU API to `127.0.0.1`, with a filesystem root shared with
    the bridge. Pin and verify the exact checkpoint and runtime before use.
 5. An ambiguous submission leaves `dispatching` or `dispatch_unknown` and is
    never automatically requeued. Inspect GPU tasks, private objects and job
-   state before reconciliation. There is no scheduler, final video safety
+   state before reconciliation. The private local work folder is retained
+   under `WAN21_SHARED_ROOT`, with the job UUID in its name, if the outcome
+   is uncertain; the GPU may still be writing there. There is no scheduler, final video safety
    scan, creator preview, post RPC or public publication gate in this slice.
 
 The GPU worker needs `SUPABASE_SERVICE_ROLE_KEY`,
@@ -78,6 +82,10 @@ private host. `WAN21_SERVER` can set another loopback port; default is
 These credentials must never appear in frontend config or the repository.
 
 ## Capacity and release
+
+Use the [local GPU benchmark](../docs/WAN21_GPU_BENCHMARK.md) for the first
+fixed-prompt clip and serial/concurrent comparisons. Its offline tests do not
+measure GPU performance; the first real inference is still pending host access.
 
 20,000 videos/day averages 0.231 completed videos/second before peaks,
 moderation, retries and processing. At the published four-minute unoptimized

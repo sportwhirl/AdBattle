@@ -8,11 +8,13 @@ never automatically retried after an uncertain GPU submission.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -36,6 +38,19 @@ STYLES = {
 
 class WorkerError(Exception):
     pass
+
+
+@contextmanager
+def gpu_workspace(root: Path, job_id: str):
+    # Retain the exact path after a lost reply or timeout: the GPU may still
+    # be writing there, and the operator needs it to reconcile the known ID.
+    work = Path(tempfile.mkdtemp(prefix=f"adbattle-wan21-{job_id}-", dir=root))
+    try:
+        yield work
+    except BaseException:
+        raise
+    else:
+        shutil.rmtree(work)
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -120,21 +135,22 @@ def process_one(api: Api, shared_root: Path, *, poll_seconds: float = 5,
             patch_job(api, job, {"status": "needs_review", "error_code": "ADULT_ENTITLEMENT_UNAVAILABLE"})
             return {"status": "needs_review", "job_id": job["id"]}
         # The server and bridge must share this root. No prompt becomes a path.
-        with tempfile.TemporaryDirectory(prefix="adbattle-wan21-", dir=shared_root) as tmp:
-            work = Path(tmp)
+        with gpu_workspace(shared_root, job["id"]) as work:
             raw = work / "generated.mp4"
             style = STYLES[job["style"]]
             prompt = f"Five-second silent ad scene. {style} {job['prompt']}"
-            request = {"task": "t2v", "prompt": prompt,
+            request = {"task_id": job["id"], "task": "t2v", "prompt": prompt,
                        "save_result_path": str(raw), "num_frames": 81,
                        "size": [832, 480] if job["aspect_ratio"] == "9:16" else [480, 832]}
             # One GPU submission after the durable claim. Never retry on a lost response.
+            # Native LightX2V IDs are not UUIDs by default. Supply and persist our
+            # own stable ID before submission so a lost response can be reconciled.
+            patch_job(api, job, {"gpu_task_id": job["id"]})
             submitted = True
-            result = api.json("/v1/tasks/video", method="POST", body=request, local=True)
+            result = api.json("/v1/tasks/video/", method="POST", body=request, local=True)
             task_id = result.get("task_id")
-            if not isinstance(task_id, str) or not UUID.fullmatch(task_id):
-                raise WorkerError("GPU task ID missing")
-            patch_job(api, job, {"gpu_task_id": task_id})
+            if task_id != job["id"]:
+                raise WorkerError("GPU task identity changed")
             deadline = time.monotonic() + max_wait_seconds
             while time.monotonic() < deadline:
                 state = api.json("/v1/tasks/" + task_id + "/status", local=True)
