@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f5f0">
+  <meta name="description" content="A little notebook for the people in your life. Private notes saved on this device.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="People Notes">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+  <title>People Notes</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar"><a class="brand" href="./" aria-label="People Notes home"><span class="brand-mark" aria-hidden="true">p.</span> PEOPLE NOTES</a><span class="local-badge"><span aria-hidden="true">●</span> Just on this device</span></header>
+    <section class="intro"><p class="eyebrow">YOUR PERSONAL NOTEBOOK</p><h1>People worth<br><em>remembering.</em></h1><p class="subtitle">The little details that make a connection.</p></section>
+    <div class="actions"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search names, places, notes…" aria-label="Search people" autocomplete="off"></label><button id="add" class="primary"><span aria-hidden="true">＋</span> Add person</button></div>
+    <div id="load-error" class="error" role="alert" hidden></div>
+    <div class="section-heading"><h2>Your people <span id="count">0</span></h2><span>Little notes. Better connections.</span></div>
+    <div id="people" class="people"></div>
+    <section id="empty" class="empty"><div class="empty-mark" aria-hidden="true">✳</div><h2>A familiar face starts here.</h2><p>A name, a place, something to remember.<br>Make a little space for someone.</p><button id="first-add" class="text-button">Add your first person <span aria-hidden="true">↗</span></button></section>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <footer><details><summary>Your notebook, your way</summary><p>Notes stay in this browser on this device. Export a backup to keep them safe: clearing website data or using private browsing can remove them. There is no automatic sync.</p><div class="backup-actions"><button id="export" class="secondary">Export backup</button><button id="import" class="secondary">Import backup</button><button id="reload" class="text-button">Reload notes</button></div><input id="file" type="file" accept=".json,application/json" hidden><p>Import adds new people and keeps your existing version of matching people.</p><p id="offline">For iPhone: open this site in Safari, tap Share, then Add to Home Screen. Use an HTTPS address for offline support.</p></details><p class="footer-note">A little more thoughtful, one person at a time.</p></footer>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="form">
+      <div class="editor-heading"><p class="eyebrow">A LITTLE SOMETHING TO REMEMBER</p><button type="button" id="close" class="icon-button" aria-label="Close editor">×</button></div>
+      <h2 id="editor-title">New person</h2>
+      <label>Name <span class="required">required</span><input id="name" name="name" autocomplete="off" required maxlength="200" placeholder="What’s their name?"></label>
+      <label>Location<input id="location" name="location" autocomplete="off" maxlength="500" placeholder="A city, a café, where you met…"></label>
+      <label>Note<textarea id="note" name="note" rows="5" maxlength="20000" placeholder="Their favorite coffee. What they’re working on. A story to ask about next time."></textarea></label>
+      <p id="save-error" class="error" role="alert" hidden></p>
+      <div class="editor-buttons"><button id="delete" type="button" class="danger" hidden>Delete person</button><span></span><button id="cancel" type="button" class="secondary">Cancel</button><button type="submit" class="primary">Save person</button></div>
+    </form>
+  </dialog>
+  <noscript><p class="error">Enable JavaScript to use People Notes.</p></noscript>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
